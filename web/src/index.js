@@ -203,6 +203,7 @@ app.post('/device', (req, res) => {
             target_name: device.target_name,
             assigned_unit_id,
             status_slot,
+            status_start,
             reads: []
         });
         writeModel(model);

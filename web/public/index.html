@@ -315,6 +315,15 @@ async function api(method, path, body) {
   return { ok: res.ok, status: res.status, data };
 }
 
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // ── Model ────────────────────────────────────────────────────────────────────
 
 let _currentModel = null;
@@ -341,11 +350,11 @@ function renderTargetsList(data) {
     return;
   }
   const rows = targets.map(t => `<tr>
-    <td>${t.name}</td>
-    <td>${t.endpoint}</td>
-    <td>${t.status_unit_id}</td>
-    <td>${t.status_slot_size}</td>
-    <td><button class="btn-danger" onclick="deleteTarget(${JSON.stringify(t.name)})">✕ Remove</button></td>
+    <td>${escapeHtml(t.name)}</td>
+    <td>${escapeHtml(t.endpoint)}</td>
+    <td>${escapeHtml(t.status_unit_id)}</td>
+    <td>${escapeHtml(t.status_slot_size)}</td>
+    <td><button class="btn-danger btn-delete-target" data-name="${escapeHtml(t.name)}">✕ Remove</button></td>
   </tr>`).join('');
   el.innerHTML = `<table>
     <thead><tr>
@@ -368,11 +377,11 @@ function renderModel(data) {
     const sr = statusRange(d, data);
     const readsCount = (d.reads || []).length;
     return `<tr>
-      <td>${d.id}${d.name ? ` <span style="color:#64748b;font-size:.8rem">— ${d.name}</span>` : ''}</td>
-      <td>${d.host}:${d.port} (unit&nbsp;${d.source_unit_id})</td>
-      <td>unit&nbsp;${d.assigned_unit_id ?? '?'}</td>
-      <td>${d.target_name || '—'}</td>
-      <td>${sr || '—'}</td>
+      <td>${escapeHtml(d.id)}${d.name ? ` <span style="color:#64748b;font-size:.8rem">— ${escapeHtml(d.name)}</span>` : ''}</td>
+      <td>${escapeHtml(d.host)}:${escapeHtml(d.port)} (unit&nbsp;${escapeHtml(d.source_unit_id)})</td>
+      <td>unit&nbsp;${escapeHtml(d.assigned_unit_id ?? '?')}</td>
+      <td>${d.target_name ? escapeHtml(d.target_name) : '—'}</td>
+      <td>${sr ? escapeHtml(sr) : '—'}</td>
       <td>${readsCount}</td>
     </tr>`;
   }).join('');
@@ -433,6 +442,13 @@ async function loadModel() {
 }
 
 // ── Targets ──────────────────────────────────────────────────────────────────
+
+document.getElementById('targets-list').addEventListener('click', async e => {
+  const btn = e.target.closest('.btn-delete-target');
+  if (!btn) return;
+  const name = btn.dataset.name;
+  await deleteTarget(name);
+});
 
 document.getElementById('target-form').addEventListener('submit', async e => {
   e.preventDefault();
