@@ -79,3 +79,28 @@ DO NOT:
 - interpret values
 - scale values
 - apply control logic
+
+---
+
+## Configuration Compilation Pipeline
+
+The Web App is solely responsible for translating the human-friendly grouped model into a flat replicator config.
+
+### Flow
+
+```
+User edits grouped model (model.json)
+  → validate (schema + business rules)
+  → compile to flat routes
+  → write /data/replicator/config.yaml
+  → deploy (restart services)
+```
+
+### Rules
+
+- Compilation happens inside the Web App only.
+- Replicator consumes only the compiled flat output.
+- Groups, devices, and blocks do not exist at the runtime level.
+- Each compiled route retains `group_id`, `device_id`, and `block_id` reference fields for traceability.
+
+See [COMPILATION.md](./COMPILATION.md) for full mapping rules and examples.

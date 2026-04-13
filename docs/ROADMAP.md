@@ -46,3 +46,12 @@
 - Auth
 - Config versioning
 - Import/export
+
+---
+
+## Phase 6 — Configuration Modeling
+
+- [ ] Grouped model support
+- [ ] model.json storage
+- [ ] compilation engine
+- [ ] validation layer
