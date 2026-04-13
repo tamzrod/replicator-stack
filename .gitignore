@@ -1,0 +1,20 @@
+# Node
+node_modules/
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+
+# Data (optional — decide if configs should be tracked)
+data/*
+!data/mma/config.yaml
+!data/replicator/config.yaml
+
+# Docker
+*.pid
