@@ -29,16 +29,29 @@ function writeModel(model) {
 function atomicWrite(filePath, content) {
     const dir = path.dirname(filePath);
     fs.mkdirSync(dir, { recursive: true });
-    const tmp = path.join(os.tmpdir(), `atomic-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    const tmp = path.join(os.tmpdir(), `atomic-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     fs.writeFileSync(tmp, content, 'utf-8');
     fs.renameSync(tmp, filePath);
 }
 
 function blocksOverlap(a, b) {
     // Ranges [a.source_address, a.source_address + a.count) and the same for b
-    return a.source_area === b.source_area &&
-        a.source_address < b.source_address + b.count &&
-        b.source_address < a.source_address + a.count;
+    if (a.source_area !== b.source_area) return false;
+    const aStart = Number(a.source_address);
+    const aEnd = aStart + Number(a.count);
+    const bStart = Number(b.source_address);
+    const bEnd = bStart + Number(b.count);
+    if (!Number.isFinite(aStart) || !Number.isFinite(aEnd) ||
+        !Number.isFinite(bStart) || !Number.isFinite(bEnd)) return false;
+    return aStart < bEnd && bStart < aEnd;
+}
+
+function findDevice(model, deviceId) {
+    for (const group of model.groups) {
+        const device = group.devices.find(d => d.id === deviceId);
+        if (device) return { device, group };
+    }
+    return null;
 }
 
 function toYaml(routes) {
@@ -107,17 +120,12 @@ app.delete('/device/:id', (req, res) => {
         const { id } = req.params;
         const model = readModel();
 
-        let removed = false;
-        for (const group of model.groups) {
-            const before = group.devices.length;
-            group.devices = group.devices.filter(d => d.id !== id);
-            if (group.devices.length < before) removed = true;
-        }
-
-        if (!removed) {
+        const found = findDevice(model, id);
+        if (!found) {
             return res.status(404).json({ error: `Device ${id} not found` });
         }
 
+        found.group.devices = found.group.devices.filter(d => d.id !== id);
         writeModel(model);
         res.json({ ok: true });
     } catch (err) {
@@ -135,15 +143,11 @@ app.post('/block', (req, res) => {
 
         const model = readModel();
 
-        let targetDevice = null;
-        for (const group of model.groups) {
-            targetDevice = group.devices.find(d => d.id === device_id);
-            if (targetDevice) break;
-        }
-
-        if (!targetDevice) {
+        const found = findDevice(model, device_id);
+        if (!found) {
             return res.status(404).json({ error: `Device ${device_id} not found` });
         }
+        const targetDevice = found.device;
 
         const blockExists = targetDevice.blocks.some(b => b.id === block.id);
         if (blockExists) {
