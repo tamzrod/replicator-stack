@@ -92,6 +92,9 @@
     .btn-primary { background: #3b82f6; color: #fff; }
     .btn-primary:not(:disabled):hover { background: #2563eb; }
 
+    .btn-danger { background: #ef4444; color: #fff; font-size: 0.75rem; padding: 4px 10px; }
+    .btn-danger:not(:disabled):hover { background: #dc2626; }
+
     .btn-compile { background: #10b981; color: #fff; font-size: 1rem; padding: 12px 28px; }
     .btn-compile:not(:disabled):hover { background: #059669; }
 
@@ -143,6 +146,11 @@
       margin-top: 14px;
       font-size: 0.875rem;
     }
+
+    table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+    th { text-align: left; color: #64748b; border-bottom: 1px solid #e2e8f0; padding: 6px 8px; font-weight: 600; }
+    td { padding: 6px 8px; vertical-align: top; }
+    tbody tr:hover { background: #f8fafc; }
   </style>
 </head>
 <body>
@@ -165,32 +173,33 @@
     </div>
   </div>
 
-  <!-- ── System Settings ──────────────────────────────────────────────── -->
+  <!-- ── Targets ──────────────────────────────────────────────────── -->
   <div class="card">
-    <h2>System Settings</h2>
-    <form id="system-form">
+    <h2>Targets</h2>
+    <div id="targets-list" style="margin-bottom:16px"></div>
+    <form id="target-form">
       <div class="row">
         <div class="field">
-          <label>MMA Host</label>
-          <input id="s-host" type="text" placeholder="mma" required />
+          <label>Name</label>
+          <input id="t-name" type="text" placeholder="Main MMA" required />
         </div>
         <div class="field">
-          <label>MMA Port</label>
-          <input id="s-port" type="number" value="502" required />
+          <label>Endpoint (host:port)</label>
+          <input id="t-endpoint" type="text" placeholder="mma:502" required />
         </div>
       </div>
       <div class="row">
         <div class="field">
           <label>Status Unit ID</label>
-          <input id="s-status-unit" type="number" value="100" required />
+          <input id="t-status-unit" type="number" value="100" required />
         </div>
         <div class="field">
           <label>Status Slot Size</label>
-          <input id="s-slot-size" type="number" value="10" min="1" required />
+          <input id="t-slot-size" type="number" value="10" min="1" required />
         </div>
       </div>
-      <div id="system-banner" class="banner"></div>
-      <div><button type="submit" class="btn-primary">Save Settings</button></div>
+      <div id="target-banner" class="banner"></div>
+      <div><button type="submit" class="btn-primary">Add Target</button></div>
     </form>
   </div>
 
@@ -220,6 +229,14 @@
         <div class="field">
           <label>Source Unit ID</label>
           <input id="d-unit" type="number" value="1" required />
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Target</label>
+          <select id="d-target" required>
+            <option value="">— select target —</option>
+          </select>
         </div>
       </div>
       <div id="device-banner" class="banner"></div>
@@ -298,18 +315,53 @@ async function api(method, path, body) {
   return { ok: res.ok, status: res.status, data };
 }
 
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // ── Model ────────────────────────────────────────────────────────────────────
 
 let _currentModel = null;
 
+function findTarget(model, targetName) {
+  const targets = (model.system && model.system.targets) || [];
+  return targets.find(t => t.name === targetName) || null;
+}
+
 function statusRange(device, model) {
-  const slotSize = (model.system && model.system.mma && model.system.mma.status_slot_size) || 10;
-  const statusUnitId = (model.system && model.system.mma && model.system.mma.status_unit_id) || 100;
-  const slot = device.status_slot;
-  if (slot == null) return '';
-  const start = slot * slotSize;
+  const target = findTarget(model, device.target_name);
+  if (!target || device.status_slot == null) return '';
+  const slotSize = target.status_slot_size || 10;
+  const start = device.status_slot * slotSize;
   const end = start + slotSize - 1;
-  return `Status: unit ${statusUnitId} @ HR [${start}..${end}]`;
+  return `unit ${target.status_unit_id} @ HR[${start}..${end}]`;
+}
+
+function renderTargetsList(data) {
+  const el = document.getElementById('targets-list');
+  const targets = (data.system && data.system.targets) || [];
+  if (targets.length === 0) {
+    el.innerHTML = '<div class="empty-state" style="padding:12px 0">No targets defined yet.</div>';
+    return;
+  }
+  const rows = targets.map(t => `<tr>
+    <td>${escapeHtml(t.name)}</td>
+    <td>${escapeHtml(t.endpoint)}</td>
+    <td>${escapeHtml(t.status_unit_id)}</td>
+    <td>${escapeHtml(t.status_slot_size)}</td>
+    <td><button class="btn-danger btn-delete-target" data-name="${escapeHtml(t.name)}">✕ Remove</button></td>
+  </tr>`).join('');
+  el.innerHTML = `<table>
+    <thead><tr>
+      <th>Name</th><th>Endpoint</th><th>Status Unit ID</th><th>Slot Size</th><th></th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
 }
 
 function renderModel(data) {
@@ -325,22 +377,24 @@ function renderModel(data) {
     const sr = statusRange(d, data);
     const readsCount = (d.reads || []).length;
     return `<tr>
-      <td>${d.id}${d.name ? ` <span style="color:#64748b;font-size:.8rem">— ${d.name}</span>` : ''}</td>
-      <td>${d.host}:${d.port} (unit&nbsp;${d.source_unit_id})</td>
-      <td>unit&nbsp;${d.assigned_unit_id ?? '?'}</td>
-      <td>${sr}</td>
+      <td>${escapeHtml(d.id)}${d.name ? ` <span style="color:#64748b;font-size:.8rem">— ${escapeHtml(d.name)}</span>` : ''}</td>
+      <td>${escapeHtml(d.host)}:${escapeHtml(d.port)} (unit&nbsp;${escapeHtml(d.source_unit_id)})</td>
+      <td>unit&nbsp;${escapeHtml(d.assigned_unit_id ?? '?')}</td>
+      <td>${d.target_name ? escapeHtml(d.target_name) : '—'}</td>
+      <td>${sr ? escapeHtml(sr) : '—'}</td>
       <td>${readsCount}</td>
     </tr>`;
   }).join('');
 
-  el.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:.85rem">
+  el.innerHTML = `<table>
     <thead>
-      <tr style="text-align:left;color:#64748b;border-bottom:1px solid #e2e8f0">
-        <th style="padding:6px 8px">Device</th>
-        <th style="padding:6px 8px">Source</th>
-        <th style="padding:6px 8px">MMA Unit</th>
-        <th style="padding:6px 8px">Status Location</th>
-        <th style="padding:6px 8px">Reads</th>
+      <tr>
+        <th>Device</th>
+        <th>Source</th>
+        <th>Assigned Unit</th>
+        <th>Target</th>
+        <th>Status Location</th>
+        <th>Reads</th>
       </tr>
     </thead>
     <tbody>${rows}</tbody>
@@ -355,14 +409,22 @@ async function loadModel() {
     return;
   }
 
+  _currentModel = data;
   renderModel(data);
+  renderTargetsList(data);
 
-  // populate System Settings form from loaded model
-  const mma = (data.system && data.system.mma) || {};
-  if (mma.host != null)           document.getElementById('s-host').value = mma.host;
-  if (mma.port != null)           document.getElementById('s-port').value = mma.port;
-  if (mma.status_unit_id != null) document.getElementById('s-status-unit').value = mma.status_unit_id;
-  if (mma.status_slot_size != null) document.getElementById('s-slot-size').value = mma.status_slot_size;
+  // refresh target dropdown in device form
+  const targets = (data.system && data.system.targets) || [];
+  const tsel = document.getElementById('d-target');
+  const tprev = tsel.value;
+  tsel.innerHTML = '<option value="">— select target —</option>';
+  for (const t of targets) {
+    const opt = document.createElement('option');
+    opt.value = t.name;
+    opt.textContent = `${t.name} (${t.endpoint})`;
+    tsel.appendChild(opt);
+  }
+  if (tprev) tsel.value = tprev;
 
   // refresh device select in read form
   const sel = document.getElementById('r-device');
@@ -379,34 +441,55 @@ async function loadModel() {
   if (prev) sel.value = prev;
 }
 
-// ── System Settings ──────────────────────────────────────────────────────────
+// ── Targets ──────────────────────────────────────────────────────────────────
 
-document.getElementById('system-form').addEventListener('submit', async e => {
+document.getElementById('targets-list').addEventListener('click', async e => {
+  const btn = e.target.closest('.btn-delete-target');
+  if (!btn) return;
+  const name = btn.dataset.name;
+  await deleteTarget(name);
+});
+
+document.getElementById('target-form').addEventListener('submit', async e => {
   e.preventDefault();
-  const banner = document.getElementById('system-banner');
+  const banner = document.getElementById('target-banner');
   banner.className = 'banner';
 
   const payload = {
-    system: {
-      mma: {
-        host:           document.getElementById('s-host').value.trim(),
-        port:           Number(document.getElementById('s-port').value),
-        status_unit_id: Number(document.getElementById('s-status-unit').value),
-        status_slot_size: Number(document.getElementById('s-slot-size').value),
-      }
+    target: {
+      name:             document.getElementById('t-name').value.trim(),
+      endpoint:         document.getElementById('t-endpoint').value.trim(),
+      status_unit_id:   Number(document.getElementById('t-status-unit').value),
+      status_slot_size: Number(document.getElementById('t-slot-size').value),
     }
   };
 
-  const { ok, data } = await api('PUT', '/system', payload);
+  const { ok, data } = await api('POST', '/target', payload);
   if (ok) {
-    banner.textContent = '✓ System settings saved.';
+    banner.textContent = `✓ Target "${payload.target.name}" added.`;
     banner.className = 'banner show ok';
+    document.getElementById('target-form').reset();
+    document.getElementById('t-status-unit').value = '100';
+    document.getElementById('t-slot-size').value = '10';
     await loadModel();
   } else {
     banner.textContent = `✗ ${data.error || 'Unknown error'}`;
     banner.className = 'banner show err';
   }
 });
+
+async function deleteTarget(name) {
+  const { ok, data } = await api('DELETE', `/target/${encodeURIComponent(name)}`);
+  const banner = document.getElementById('target-banner');
+  if (ok) {
+    banner.textContent = `✓ Target "${name}" removed.`;
+    banner.className = 'banner show ok';
+    await loadModel();
+  } else {
+    banner.textContent = `✗ ${data.error || 'Unknown error'}`;
+    banner.className = 'banner show err';
+  }
+}
 
 // ── Add Device ───────────────────────────────────────────────────────────────
 
@@ -422,6 +505,7 @@ document.getElementById('device-form').addEventListener('submit', async e => {
       host:           document.getElementById('d-host').value.trim(),
       port:           Number(document.getElementById('d-port').value),
       source_unit_id: Number(document.getElementById('d-unit').value),
+      target_name:    document.getElementById('d-target').value,
     }
   };
 
@@ -429,8 +513,13 @@ document.getElementById('device-form').addEventListener('submit', async e => {
   if (ok) {
     await loadModel();
     const model = _currentModel || {};
-    const sr = statusRange({ status_slot: data.status_slot }, model);
-    banner.textContent = `✓ Device "${payload.device.id}" added — MMA unit ${data.assigned_unit_id}, status slot ${data.status_slot} — ${sr}`;
+    const target = findTarget(model, payload.device.target_name);
+    const slotSize = target ? target.status_slot_size : '?';
+    const statusEnd = (target && data.status_start != null)
+      ? data.status_start + target.status_slot_size - 1
+      : '?';
+    const statusUnitId = target ? target.status_unit_id : '?';
+    banner.textContent = `✓ Device "${payload.device.id}" added — unit ${data.assigned_unit_id}, status: unit ${statusUnitId} @ HR[${data.status_start}..${statusEnd}]`;
     banner.className = 'banner show ok';
     document.getElementById('device-form').reset();
     document.getElementById('d-port').value = '502';

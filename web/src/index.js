@@ -12,13 +12,7 @@ const REPLICATOR_CONFIG_PATH = path.join(DATA_DIR, 'replicator/config.yaml');
 const MMA_CONFIG_PATH = path.join(DATA_DIR, 'mma/config.yaml');
 
 const DEFAULT_SYSTEM = {
-    mma: {
-        host: 'mma',
-        port: 502,
-        unit_memory_size: 100,
-        status_unit_id: 100,
-        status_slot_size: 10
-    }
+    targets: []
 };
 
 // ---------------------------------------------------------------------------
@@ -33,6 +27,8 @@ function readModel() {
     }
     const model = JSON.parse(fs.readFileSync(MODEL_PATH, 'utf-8'));
     if (!Array.isArray(model.devices)) model.devices = [];
+    if (!model.system) model.system = {};
+    if (!Array.isArray(model.system.targets)) model.system.targets = [];
     return model;
 }
 
@@ -74,10 +70,11 @@ function findDevice(model, deviceId) {
 }
 
 function nextAssignedUnitId(model) {
-    const statusUnitId = (model.system && model.system.mma) ? model.system.mma.status_unit_id : 100;
+    const targets = (model.system && model.system.targets) || [];
+    const statusUnitIds = new Set(targets.map(t => Number(t.status_unit_id)).filter(Number.isFinite));
     const used = (model.devices || []).map(d => d.assigned_unit_id).filter(Number.isFinite);
     let next = 1;
-    while (used.includes(next) || next === statusUnitId) next++;
+    while (used.includes(next) || statusUnitIds.has(next)) next++;
     return next;
 }
 
@@ -89,9 +86,13 @@ function nextStatusSlot(model) {
 }
 
 function toReplicatorYaml(system, devices) {
-    const mma = (system && system.mma) || {};
-    const host = mma.host || 'mma';
-    const port = mma.port || 502;
+    // Uses the first target's endpoint for the global MMA connection.
+    // Multi-target routing requires replicator service support and will be addressed separately.
+    const targets = (system && system.targets) || [];
+    const firstTarget = targets[0] || {};
+    const endpointParts = (firstTarget.endpoint || 'mma:502').split(':');
+    const host = endpointParts[0] || 'mma';
+    const port = Number(endpointParts[1]) || 502;
     const indent = '  ';
     const lines = [
         'mma:',
@@ -125,12 +126,11 @@ function toReplicatorYaml(system, devices) {
 }
 
 function toMmaYaml(system, devices) {
-    const mma = (system && system.mma) || {};
-    const port = mma.port || 502;
-    const unitMemorySize = mma.unit_memory_size || 100;
-    const statusUnitId = mma.status_unit_id || 100;
-    const statusSlotSize = mma.status_slot_size || 10;
-    const statusSize = statusSlotSize * devices.length;
+    const targets = (system && system.targets) || [];
+    const firstTarget = targets[0] || {};
+    const endpointParts = (firstTarget.endpoint || 'mma:502').split(':');
+    const port = Number(endpointParts[1]) || 502;
+    const unitMemorySize = 100; // Fixed per-unit register space; configurable per-target support is a future enhancement.
     const indent = '  ';
     const lines = [
         `port: ${port}`,
@@ -141,9 +141,17 @@ function toMmaYaml(system, devices) {
         lines.push(`${indent}- id: ${device.assigned_unit_id}`);
         lines.push(`${indent}  size: ${unitMemorySize}`);
     }
-    if (devices.length > 0) {
-        lines.push(`${indent}- id: ${statusUnitId}`);
-        lines.push(`${indent}  size: ${statusSize}`);
+    const seenStatusUnitIds = new Set();
+    for (const target of targets) {
+        const statusUnitId = Number(target.status_unit_id);
+        if (!Number.isFinite(statusUnitId) || seenStatusUnitIds.has(statusUnitId)) continue;
+        const devCount = devices.filter(d => d.target_name === target.name).length;
+        if (devCount > 0) {
+            seenStatusUnitIds.add(statusUnitId);
+            const statusSize = (target.status_slot_size || 10) * devCount;
+            lines.push(`${indent}- id: ${statusUnitId}`);
+            lines.push(`${indent}  size: ${statusSize}`);
+        }
     }
     return lines.join('\n') + '\n';
 }
@@ -168,8 +176,16 @@ app.post('/device', (req, res) => {
         if (!device || !device.id) {
             return res.status(400).json({ error: 'device.id is required' });
         }
+        if (!device.target_name) {
+            return res.status(400).json({ error: 'device.target_name is required' });
+        }
 
         const model = readModel();
+
+        const target = model.system.targets.find(t => t.name === device.target_name);
+        if (!target) {
+            return res.status(400).json({ error: `Target "${device.target_name}" not found` });
+        }
 
         const exists = (model.devices || []).some(d => d.id === device.id);
         if (exists) {
@@ -178,6 +194,7 @@ app.post('/device', (req, res) => {
 
         const assigned_unit_id = nextAssignedUnitId(model);
         const status_slot = nextStatusSlot(model);
+        const status_start = status_slot * target.status_slot_size;
 
         model.devices.push({
             id: device.id,
@@ -185,13 +202,15 @@ app.post('/device', (req, res) => {
             host: device.host,
             port: device.port,
             source_unit_id: device.source_unit_id,
+            target_name: device.target_name,
             assigned_unit_id,
             status_slot,
+            status_start,
             reads: []
         });
         writeModel(model);
 
-        res.status(201).json({ ok: true, assigned_unit_id, status_slot });
+        res.status(201).json({ ok: true, assigned_unit_id, status_slot, status_start });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -216,18 +235,78 @@ app.delete('/device/:id', (req, res) => {
     }
 });
 
-// PUT /system — update system settings
+// PUT /system — update system settings (generic merge, targets preserved)
 app.put('/system', (req, res) => {
     try {
         const { system } = req.body;
-        if (!system || !system.mma) {
-            return res.status(400).json({ error: 'system.mma is required' });
+        if (!system) {
+            return res.status(400).json({ error: 'system is required' });
         }
         const model = readModel();
-        model.system = {
-            ...model.system,
-            mma: { ...((model.system && model.system.mma) || {}), ...system.mma }
-        };
+        model.system = { ...model.system, ...system };
+        if (!Array.isArray(model.system.targets)) model.system.targets = [];
+        writeModel(model);
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /target — add a target destination
+app.post('/target', (req, res) => {
+    try {
+        const { target } = req.body;
+        if (!target || !target.name) {
+            return res.status(400).json({ error: 'target.name is required' });
+        }
+        if (!target.endpoint) {
+            return res.status(400).json({ error: 'target.endpoint is required (format: host:port)' });
+        }
+        const statusUnitId = Number(target.status_unit_id);
+        if (!Number.isFinite(statusUnitId)) {
+            return res.status(400).json({ error: 'target.status_unit_id must be a number' });
+        }
+        const statusSlotSize = Number(target.status_slot_size);
+        if (!Number.isFinite(statusSlotSize) || statusSlotSize < 1) {
+            return res.status(400).json({ error: 'target.status_slot_size must be >= 1' });
+        }
+
+        const model = readModel();
+        const exists = model.system.targets.some(t => t.name === target.name);
+        if (exists) {
+            return res.status(409).json({ error: `Target "${target.name}" already exists` });
+        }
+
+        model.system.targets.push({
+            name: target.name,
+            endpoint: target.endpoint,
+            status_unit_id: statusUnitId,
+            status_slot_size: statusSlotSize
+        });
+        writeModel(model);
+        res.status(201).json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// DELETE /target/:name — remove a target (only if no devices reference it)
+app.delete('/target/:name', (req, res) => {
+    try {
+        const name = decodeURIComponent(req.params.name);
+        const model = readModel();
+
+        const idx = model.system.targets.findIndex(t => t.name === name);
+        if (idx === -1) {
+            return res.status(404).json({ error: `Target "${name}" not found` });
+        }
+
+        const inUse = (model.devices || []).some(d => d.target_name === name);
+        if (inUse) {
+            return res.status(409).json({ error: `Target "${name}" is in use by one or more devices` });
+        }
+
+        model.system.targets.splice(idx, 1);
         writeModel(model);
         res.json({ ok: true });
     } catch (err) {
