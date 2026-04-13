@@ -10,6 +10,17 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 const DATA_DIR = process.env.DATA_DIR || '/app/data';
 const MODEL_PATH = path.join(DATA_DIR, 'model.json');
 const REPLICATOR_CONFIG_PATH = path.join(DATA_DIR, 'replicator/config.yaml');
+const MMA_CONFIG_PATH = path.join(DATA_DIR, 'mma/config.yaml');
+
+const DEFAULT_SYSTEM = {
+    mma: {
+        host: 'mma',
+        port: 502,
+        unit_memory_size: 100,
+        status_unit_id: 100,
+        status_slot_size: 10
+    }
+};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -17,7 +28,7 @@ const REPLICATOR_CONFIG_PATH = path.join(DATA_DIR, 'replicator/config.yaml');
 
 function readModel() {
     if (!fs.existsSync(MODEL_PATH)) {
-        const initial = { groups: [] };
+        const initial = { system: DEFAULT_SYSTEM, devices: [] };
         writeModel(initial);
         return initial;
     }
@@ -36,39 +47,92 @@ function atomicWrite(filePath, content) {
     fs.renameSync(tmp, filePath);
 }
 
-function blocksOverlap(a, b) {
-    // Ranges [a.source_address, a.source_address + a.count) and the same for b
+function readsOverlap(a, b) {
     if (a.source_area !== b.source_area) return false;
     const aStart = Number(a.source_address);
-    const aEnd = aStart + Number(a.count);
+    const aEnd = aStart + Number(a.source_count);
     const bStart = Number(b.source_address);
-    const bEnd = bStart + Number(b.count);
+    const bEnd = bStart + Number(b.source_count);
     if (!Number.isFinite(aStart) || !Number.isFinite(aEnd) ||
         !Number.isFinite(bStart) || !Number.isFinite(bEnd)) return false;
     return aStart < bEnd && bStart < aEnd;
 }
 
 function findDevice(model, deviceId) {
-    for (const group of model.groups) {
-        const device = group.devices.find(d => d.id === deviceId);
-        if (device) return { device, group };
-    }
-    return null;
+    return (model.devices || []).find(d => d.id === deviceId) || null;
 }
 
-function toYaml(routes) {
+function nextAssignedUnitId(model) {
+    const statusUnitId = (model.system && model.system.mma) ? model.system.mma.status_unit_id : 100;
+    const used = (model.devices || []).map(d => d.assigned_unit_id).filter(Number.isFinite);
+    let next = 1;
+    while (used.includes(next) || next === statusUnitId) next++;
+    return next;
+}
+
+function nextStatusSlot(model) {
+    const used = (model.devices || []).map(d => d.status_slot).filter(n => typeof n === 'number');
+    let next = 0;
+    while (used.includes(next)) next++;
+    return next;
+}
+
+function toReplicatorYaml(system, devices) {
+    const mma = (system && system.mma) || {};
+    const host = mma.host || 'mma';
+    const port = mma.port || 502;
     const indent = '  ';
-    const lines = ['routes:'];
-    for (const r of routes) {
-        lines.push(`${indent}- id: ${r.id}`);
-        lines.push(`${indent}  host: ${r.host}`);
-        lines.push(`${indent}  port: ${r.port}`);
-        lines.push(`${indent}  unit_id: ${r.unit_id}`);
-        lines.push(`${indent}  source_area: ${r.source_area}`);
-        lines.push(`${indent}  source_address: ${r.source_address}`);
-        lines.push(`${indent}  count: ${r.count}`);
-        lines.push(`${indent}  target_area: ${r.target_area}`);
-        lines.push(`${indent}  target_address: ${r.target_address}`);
+    const lines = [
+        'mma:',
+        `${indent}host: ${host}`,
+        `${indent}port: ${port}`,
+        '',
+        'routes:'
+    ];
+    for (const device of devices) {
+        for (const read of (device.reads || [])) {
+            const routeId = `${device.id}__${read.id}`;
+            lines.push(`${indent}- id: ${routeId}`);
+            lines.push(`${indent}  source:`);
+            lines.push(`${indent}    host: ${device.host}`);
+            lines.push(`${indent}    port: ${device.port}`);
+            lines.push(`${indent}    unit_id: ${device.source_unit_id}`);
+            lines.push(`${indent}    area: ${read.source_area}`);
+            lines.push(`${indent}    address: ${read.source_address}`);
+            lines.push(`${indent}    count: ${read.source_count}`);
+            lines.push(`${indent}  target:`);
+            lines.push(`${indent}    unit: ${device.assigned_unit_id}`);
+            lines.push(`${indent}    area: ${read.target_area}`);
+            lines.push(`${indent}    address: ${read.target_address}`);
+            lines.push(`${indent}  poll_interval: ${read.poll_interval}`);
+            lines.push(`${indent}  ref:`);
+            lines.push(`${indent}    device_id: ${device.id}`);
+            lines.push(`${indent}    read_id: ${read.id}`);
+        }
+    }
+    return lines.join('\n') + '\n';
+}
+
+function toMmaYaml(system, devices) {
+    const mma = (system && system.mma) || {};
+    const port = mma.port || 502;
+    const unitMemorySize = mma.unit_memory_size || 100;
+    const statusUnitId = mma.status_unit_id || 100;
+    const statusSlotSize = mma.status_slot_size || 10;
+    const statusSize = statusSlotSize * devices.length;
+    const indent = '  ';
+    const lines = [
+        `port: ${port}`,
+        '',
+        'units:'
+    ];
+    for (const device of devices) {
+        lines.push(`${indent}- id: ${device.assigned_unit_id}`);
+        lines.push(`${indent}  size: ${unitMemorySize}`);
+    }
+    if (devices.length > 0) {
+        lines.push(`${indent}- id: ${statusUnitId}`);
+        lines.push(`${indent}  size: ${statusSize}`);
     }
     return lines.join('\n') + '\n';
 }
@@ -86,48 +150,54 @@ app.get('/model', (req, res) => {
     }
 });
 
-// POST /device — create group if not exists, add device with empty blocks
+// POST /device — add device with auto-assigned unit_id and status_slot
 app.post('/device', (req, res) => {
     try {
-        const { group: groupName, device } = req.body;
-        if (!groupName || !device || !device.id) {
-            return res.status(400).json({ error: 'group and device.id are required' });
+        const { device } = req.body;
+        if (!device || !device.id) {
+            return res.status(400).json({ error: 'device.id is required' });
         }
 
         const model = readModel();
 
-        let group = model.groups.find(g => g.name === groupName);
-        if (!group) {
-            group = { name: groupName, devices: [] };
-            model.groups.push(group);
-        }
-
-        const exists = group.devices.some(d => d.id === device.id);
+        const exists = (model.devices || []).some(d => d.id === device.id);
         if (exists) {
-            return res.status(409).json({ error: `Device ${device.id} already exists in group ${groupName}` });
+            return res.status(409).json({ error: `Device ${device.id} already exists` });
         }
 
-        group.devices.push({ ...device, blocks: [] });
+        const assigned_unit_id = nextAssignedUnitId(model);
+        const status_slot = nextStatusSlot(model);
+
+        model.devices.push({
+            id: device.id,
+            name: device.name || '',
+            host: device.host,
+            port: device.port,
+            source_unit_id: device.source_unit_id,
+            assigned_unit_id,
+            status_slot,
+            reads: []
+        });
         writeModel(model);
 
-        res.status(201).json({ ok: true });
+        res.status(201).json({ ok: true, assigned_unit_id, status_slot });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-// DELETE /device/:id — remove device from all groups
+// DELETE /device/:id — remove device
 app.delete('/device/:id', (req, res) => {
     try {
         const { id } = req.params;
         const model = readModel();
 
-        const found = findDevice(model, id);
-        if (!found) {
+        const idx = (model.devices || []).findIndex(d => d.id === id);
+        if (idx === -1) {
             return res.status(404).json({ error: `Device ${id} not found` });
         }
 
-        found.group.devices = found.group.devices.filter(d => d.id !== id);
+        model.devices.splice(idx, 1);
         writeModel(model);
         res.json({ ok: true });
     } catch (err) {
@@ -135,36 +205,35 @@ app.delete('/device/:id', (req, res) => {
     }
 });
 
-// POST /block — add block to device, validate no overlap in same area
-app.post('/block', (req, res) => {
+// POST /read — add read to device, validate no overlap in same area
+app.post('/read', (req, res) => {
     try {
-        const { device_id, block } = req.body;
-        if (!device_id || !block || !block.id) {
-            return res.status(400).json({ error: 'device_id and block.id are required' });
+        const { device_id, read } = req.body;
+        if (!device_id || !read || !read.id) {
+            return res.status(400).json({ error: 'device_id and read.id are required' });
         }
 
         const model = readModel();
 
-        const found = findDevice(model, device_id);
-        if (!found) {
+        const device = findDevice(model, device_id);
+        if (!device) {
             return res.status(404).json({ error: `Device ${device_id} not found` });
         }
-        const targetDevice = found.device;
 
-        const blockExists = targetDevice.blocks.some(b => b.id === block.id);
-        if (blockExists) {
-            return res.status(409).json({ error: `Block ${block.id} already exists on device ${device_id}` });
+        const readExists = device.reads.some(r => r.id === read.id);
+        if (readExists) {
+            return res.status(409).json({ error: `Read ${read.id} already exists on device ${device_id}` });
         }
 
-        for (const existing of targetDevice.blocks) {
-            if (blocksOverlap(existing, block)) {
+        for (const existing of device.reads) {
+            if (readsOverlap(existing, read)) {
                 return res.status(409).json({
-                    error: `Block overlaps with existing block ${existing.id} in area ${existing.source_area}`
+                    error: `Read overlaps with existing read ${existing.id} in area ${existing.source_area}`
                 });
             }
         }
 
-        targetDevice.blocks.push(block);
+        device.reads.push(read);
         writeModel(model);
 
         res.status(201).json({ ok: true });
@@ -173,32 +242,22 @@ app.post('/block', (req, res) => {
     }
 });
 
-// POST /compile — generate flat routes and write to replicator config.yaml
+// POST /compile — generate replicator/config.yaml and mma/config.yaml from model
 app.post('/compile', (req, res) => {
     try {
         const model = readModel();
-        const routes = [];
+        const system = model.system || DEFAULT_SYSTEM;
+        const devices = model.devices || [];
 
-        for (const group of model.groups) {
-            for (const device of group.devices) {
-                for (const block of device.blocks) {
-                    routes.push({
-                        id: block.id,
-                        host: device.host,
-                        port: device.port,
-                        unit_id: device.unit_id,
-                        source_area: block.source_area,
-                        source_address: block.source_address,
-                        count: block.count,
-                        target_area: block.target_area,
-                        target_address: block.target_address
-                    });
-                }
-            }
+        let routeCount = 0;
+        for (const device of devices) {
+            routeCount += (device.reads || []).length;
         }
 
-        atomicWrite(REPLICATOR_CONFIG_PATH, toYaml(routes));
-        res.json({ ok: true, routes: routes.length });
+        atomicWrite(REPLICATOR_CONFIG_PATH, toReplicatorYaml(system, devices));
+        atomicWrite(MMA_CONFIG_PATH, toMmaYaml(system, devices));
+
+        res.json({ ok: true, routes: routeCount });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
