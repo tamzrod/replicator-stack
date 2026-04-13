@@ -5,9 +5,11 @@ const os = require('os');
 
 const app = express();
 app.use(express.json());
+app.use(express.static(path.join(__dirname, '..', 'public')));
 
-const MODEL_PATH = '/app/data/model.json';
-const REPLICATOR_CONFIG_PATH = '/app/data/replicator/config.yaml';
+const DATA_DIR = process.env.DATA_DIR || '/app/data';
+const MODEL_PATH = path.join(DATA_DIR, 'model.json');
+const REPLICATOR_CONFIG_PATH = path.join(DATA_DIR, 'replicator/config.yaml');
 
 // ---------------------------------------------------------------------------
 // Helpers
