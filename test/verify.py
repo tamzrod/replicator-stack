@@ -33,8 +33,10 @@ for attempt in range(1, MAX_ATTEMPTS + 1):
     try:
         client = ModbusTcpClient(MMA_HOST, port=MMA_PORT)
         if client.connect():
-            result = client.read_holding_registers(ADDRESS, COUNT, slave=UNIT)
-            client.close()
+            try:
+                result = client.read_holding_registers(ADDRESS, COUNT, slave=UNIT)
+            finally:
+                client.close()
             if result.isError():
                 print(f"[verify] Modbus error: {result}")
             else:
