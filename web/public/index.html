@@ -740,6 +740,10 @@ const TREE_THRESHOLD = 3;
 let _selectedDeviceId = null;
 const _collapsedGroups = new Set();
 
+function findDeviceRow(deviceId) {
+  return document.querySelector(`#model-display tr[data-device-id="${CSS.escape(deviceId)}"]`);
+}
+
 function buildGroups(devices) {
   const map = {};
   for (const d of devices) {
@@ -836,7 +840,7 @@ document.getElementById('tree-panel').addEventListener('click', async e => {
   if (deviceRow) {
     _selectedDeviceId = deviceRow.dataset.deviceId;
     renderTree(_currentModel);
-    const tr = document.querySelector(`#model-display tr[data-device-id="${CSS.escape(_selectedDeviceId)}"]`);
+    const tr = findDeviceRow(_selectedDeviceId);
     if (tr) {
       tr.scrollIntoView({ behavior: 'smooth', block: 'center' });
       tr.classList.add('row-highlight');
@@ -848,10 +852,10 @@ document.getElementById('tree-panel').addEventListener('click', async e => {
 async function deleteGroup(groupName) {
   if (!_currentModel) return;
   const devices = (_currentModel.devices || []).filter(d => (d.group || 'Ungrouped') === groupName);
-  // Move all devices in this group to Ungrouped
-  for (const d of devices) {
-    await api('PUT', `/device/${encodeURIComponent(d.id)}`, { device: { group: '' } });
-  }
+  // Move all devices in this group to Ungrouped in parallel
+  await Promise.all(devices.map(d =>
+    api('PUT', `/device/${encodeURIComponent(d.id)}`, { device: { group: '' } })
+  ));
   await loadModel();
 }
 
