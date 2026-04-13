@@ -171,10 +171,6 @@
     <form id="device-form">
       <div class="row">
         <div class="field">
-          <label>Group Name</label>
-          <input id="d-group" type="text" value="Default" required />
-        </div>
-        <div class="field">
           <label>Device ID</label>
           <input id="d-id" type="text" placeholder="device-1" required />
         </div>
@@ -193,7 +189,7 @@
           <input id="d-port" type="number" value="502" required />
         </div>
         <div class="field">
-          <label>Unit ID</label>
+          <label>Source Unit ID</label>
           <input id="d-unit" type="number" value="1" required />
         </div>
       </div>
@@ -202,30 +198,30 @@
     </form>
   </div>
 
-  <!-- ── Add Block ──────────────────────────────────────────────────── -->
+  <!-- ── Add Read ───────────────────────────────────────────────────── -->
   <div class="card">
-    <h2>Add Block</h2>
-    <form id="block-form">
+    <h2>Add Read</h2>
+    <form id="read-form">
       <div class="row">
         <div class="field">
           <label>Device</label>
-          <select id="b-device" required>
+          <select id="r-device" required>
             <option value="">— select device —</option>
           </select>
         </div>
         <div class="field">
-          <label>Block ID</label>
-          <input id="b-id" type="text" placeholder="block-1" required />
+          <label>Read ID</label>
+          <input id="r-id" type="text" placeholder="read-1" required />
         </div>
         <div class="field">
           <label>Name</label>
-          <input id="b-name" type="text" placeholder="My Block" />
+          <input id="r-name" type="text" placeholder="My Read" />
         </div>
       </div>
       <div class="row">
         <div class="field">
           <label>Source Area</label>
-          <select id="b-src-area">
+          <select id="r-src-area">
             <option value="holding_registers">holding_registers</option>
             <option value="coils">coils</option>
             <option value="input_registers">input_registers</option>
@@ -234,17 +230,17 @@
         </div>
         <div class="field">
           <label>Source Address</label>
-          <input id="b-src-addr" type="number" value="0" required />
+          <input id="r-src-addr" type="number" value="0" required />
         </div>
         <div class="field">
           <label>Count</label>
-          <input id="b-count" type="number" value="1" min="1" required />
+          <input id="r-count" type="number" value="1" min="1" required />
         </div>
       </div>
       <div class="row">
         <div class="field">
           <label>Target Area</label>
-          <select id="b-tgt-area">
+          <select id="r-tgt-area">
             <option value="holding_registers">holding_registers</option>
             <option value="coils">coils</option>
             <option value="input_registers">input_registers</option>
@@ -253,18 +249,22 @@
         </div>
         <div class="field">
           <label>Target Address</label>
-          <input id="b-tgt-addr" type="number" value="0" required />
+          <input id="r-tgt-addr" type="number" value="0" required />
+        </div>
+        <div class="field">
+          <label>Poll Interval (ms)</label>
+          <input id="r-poll" type="number" value="2000" min="100" required />
         </div>
       </div>
-      <div id="block-banner" class="banner"></div>
-      <div><button type="submit" class="btn-primary">Add Block</button></div>
+      <div id="read-banner" class="banner"></div>
+      <div><button type="submit" class="btn-primary">Add Read</button></div>
     </form>
   </div>
 
   <!-- ── Compile ────────────────────────────────────────────────────── -->
   <div class="card compile-area">
     <h2>Compile Config</h2>
-    <p>Flatten all blocks into the Replicator config file (config.yaml). No services are restarted.</p>
+    <p>Generate Replicator and MMA config files from the model. No services are restarted.</p>
     <button class="btn-compile" id="btn-compile">⚙ Compile</button>
     <div id="compile-result"></div>
   </div>
@@ -292,25 +292,23 @@ async function loadModel() {
     return;
   }
 
-  const isEmpty = !data.groups || data.groups.length === 0;
+  const isEmpty = !data.devices || data.devices.length === 0;
   if (isEmpty) {
     el.innerHTML = `<div class="empty-state">No devices configured yet. Add a device below.</div>`;
   } else {
     el.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
   }
 
-  // refresh device select in block form
-  const sel = document.getElementById('b-device');
+  // refresh device select in read form
+  const sel = document.getElementById('r-device');
   const prev = sel.value;
   sel.innerHTML = '<option value="">— select device —</option>';
-  if (data.groups) {
-    for (const g of data.groups) {
-      for (const d of (g.devices || [])) {
-        const opt = document.createElement('option');
-        opt.value = d.id;
-        opt.textContent = `${d.id}${d.name ? ' — ' + d.name : ''}`;
-        sel.appendChild(opt);
-      }
+  if (data.devices) {
+    for (const d of data.devices) {
+      const opt = document.createElement('option');
+      opt.value = d.id;
+      opt.textContent = `${d.id}${d.name ? ' — ' + d.name : ''} (unit ${d.assigned_unit_id != null ? d.assigned_unit_id : '?'})`;
+      sel.appendChild(opt);
     }
   }
   if (prev) sel.value = prev;
@@ -324,22 +322,20 @@ document.getElementById('device-form').addEventListener('submit', async e => {
   banner.className = 'banner';
 
   const payload = {
-    group: document.getElementById('d-group').value.trim(),
     device: {
-      id:      document.getElementById('d-id').value.trim(),
-      name:    document.getElementById('d-name').value.trim(),
-      host:    document.getElementById('d-host').value.trim(),
-      port:    Number(document.getElementById('d-port').value),
-      unit_id: Number(document.getElementById('d-unit').value),
+      id:             document.getElementById('d-id').value.trim(),
+      name:           document.getElementById('d-name').value.trim(),
+      host:           document.getElementById('d-host').value.trim(),
+      port:           Number(document.getElementById('d-port').value),
+      source_unit_id: Number(document.getElementById('d-unit').value),
     }
   };
 
   const { ok, data } = await api('POST', '/device', payload);
   if (ok) {
-    banner.textContent = `✓ Device "${payload.device.id}" added to group "${payload.group}".`;
+    banner.textContent = `✓ Device "${payload.device.id}" added — assigned MMA unit ${data.assigned_unit_id}, status slot ${data.status_slot}.`;
     banner.className = 'banner show ok';
     document.getElementById('device-form').reset();
-    document.getElementById('d-group').value = 'Default';
     document.getElementById('d-port').value = '502';
     document.getElementById('d-unit').value = '1';
     await loadModel();
@@ -349,23 +345,24 @@ document.getElementById('device-form').addEventListener('submit', async e => {
   }
 });
 
-// ── Add Block ────────────────────────────────────────────────────────────────
+// ── Add Read ─────────────────────────────────────────────────────────────────
 
-document.getElementById('block-form').addEventListener('submit', async e => {
+document.getElementById('read-form').addEventListener('submit', async e => {
   e.preventDefault();
-  const banner = document.getElementById('block-banner');
+  const banner = document.getElementById('read-banner');
   banner.className = 'banner';
 
   const payload = {
-    device_id: document.getElementById('b-device').value,
-    block: {
-      id:             document.getElementById('b-id').value.trim(),
-      name:           document.getElementById('b-name').value.trim(),
-      source_area:    document.getElementById('b-src-area').value,
-      source_address: Number(document.getElementById('b-src-addr').value),
-      count:          Number(document.getElementById('b-count').value),
-      target_area:    document.getElementById('b-tgt-area').value,
-      target_address: Number(document.getElementById('b-tgt-addr').value),
+    device_id: document.getElementById('r-device').value,
+    read: {
+      id:             document.getElementById('r-id').value.trim(),
+      name:           document.getElementById('r-name').value.trim(),
+      source_area:    document.getElementById('r-src-area').value,
+      source_address: Number(document.getElementById('r-src-addr').value),
+      source_count:   Number(document.getElementById('r-count').value),
+      target_area:    document.getElementById('r-tgt-area').value,
+      target_address: Number(document.getElementById('r-tgt-addr').value),
+      poll_interval:  Number(document.getElementById('r-poll').value),
     }
   };
 
@@ -375,11 +372,12 @@ document.getElementById('block-form').addEventListener('submit', async e => {
     return;
   }
 
-  const { ok, data } = await api('POST', '/block', payload);
+  const { ok, data } = await api('POST', '/read', payload);
   if (ok) {
-    banner.textContent = `✓ Block "${payload.block.id}" added to device "${payload.device_id}".`;
+    banner.textContent = `✓ Read "${payload.read.id}" added to device "${payload.device_id}".`;
     banner.className = 'banner show ok';
-    document.getElementById('block-form').reset();
+    document.getElementById('read-form').reset();
+    document.getElementById('r-poll').value = '2000';
     await loadModel();
   } else {
     banner.textContent = `✗ ${data.error || 'Unknown error'}`;
@@ -394,7 +392,7 @@ async function compile() {
   el.textContent = '';
   const { ok, data } = await api('POST', '/compile');
   if (ok) {
-    el.innerHTML = `<div class="banner show ok">✓ Compiled successfully — ${data.routes} route(s) written to config.</div>`;
+    el.innerHTML = `<div class="banner show ok">✓ Compiled successfully — ${data.routes} route(s) written to replicator and MMA configs.</div>`;
   } else {
     el.innerHTML = `<div class="banner show err">✗ ${data.error || 'Compile failed'}</div>`;
   }
