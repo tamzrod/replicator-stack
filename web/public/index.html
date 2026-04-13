@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Replicator Stack</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #f0f2f5;
+      color: #1a1a2e;
+      min-height: 100vh;
+    }
+
+    header {
+      background: #16213e;
+      color: #e2e8f0;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    header h1 { font-size: 1.25rem; font-weight: 600; }
+    header span { font-size: 0.8rem; color: #94a3b8; }
+
+    main {
+      max-width: 960px;
+      margin: 32px auto;
+      padding: 0 16px;
+      display: grid;
+      gap: 24px;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+      padding: 20px 24px;
+    }
+    .card h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: #16213e;
+      border-bottom: 2px solid #e2e8f0;
+      padding-bottom: 8px;
+    }
+
+    form { display: grid; gap: 10px; }
+
+    .row { display: flex; gap: 10px; flex-wrap: wrap; }
+    .row .field { flex: 1; min-width: 120px; }
+
+    .field label {
+      display: block;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #64748b;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .field input, .field select {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 0.875rem;
+      background: #f8fafc;
+      color: #1a1a2e;
+      transition: border-color .15s;
+    }
+    .field input:focus, .field select:focus {
+      outline: none;
+      border-color: #3b82f6;
+      background: #fff;
+    }
+
+    button {
+      padding: 9px 18px;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .15s, opacity .15s;
+    }
+    button:disabled { opacity: .5; cursor: default; }
+
+    .btn-primary { background: #3b82f6; color: #fff; }
+    .btn-primary:not(:disabled):hover { background: #2563eb; }
+
+    .btn-compile { background: #10b981; color: #fff; font-size: 1rem; padding: 12px 28px; }
+    .btn-compile:not(:disabled):hover { background: #059669; }
+
+    .btn-refresh { background: #e2e8f0; color: #475569; font-size: 0.75rem; padding: 5px 12px; margin-left: auto; }
+    .btn-refresh:hover { background: #cbd5e1; }
+
+    .banner {
+      border-radius: 6px;
+      padding: 10px 14px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      display: none;
+    }
+    .banner.show { display: block; }
+    .banner.ok  { background: #d1fae5; color: #065f46; }
+    .banner.err { background: #fee2e2; color: #991b1b; }
+
+    .model-header {
+      display: flex;
+      align-items: center;
+      margin-bottom: 16px;
+      border-bottom: 2px solid #e2e8f0;
+      padding-bottom: 8px;
+    }
+    .model-header h2 { margin-bottom: 0; border: none; padding: 0; }
+
+    pre {
+      background: #f1f5f9;
+      border-radius: 6px;
+      padding: 14px;
+      font-size: 0.8rem;
+      line-height: 1.5;
+      overflow: auto;
+      max-height: 360px;
+      color: #334155;
+    }
+
+    .empty-state {
+      text-align: center;
+      color: #94a3b8;
+      padding: 32px 0;
+      font-size: 0.875rem;
+    }
+
+    .compile-area { text-align: center; }
+    .compile-area p { color: #64748b; font-size: 0.85rem; margin-bottom: 16px; }
+
+    #compile-result {
+      margin-top: 14px;
+      font-size: 0.875rem;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>⚡ Replicator Stack</h1>
+  <span>Control Plane</span>
+</header>
+
+<main>
+
+  <!-- ── Current Model ─────────────────────────────────────────────── -->
+  <div class="card">
+    <div class="model-header">
+      <h2>Current Model</h2>
+      <button class="btn-refresh" onclick="loadModel()">↻ Refresh</button>
+    </div>
+    <div id="model-display">
+      <div class="empty-state">Loading…</div>
+    </div>
+  </div>
+
+  <!-- ── Add Device ─────────────────────────────────────────────────── -->
+  <div class="card">
+    <h2>Add Device</h2>
+    <form id="device-form">
+      <div class="row">
+        <div class="field">
+          <label>Group Name</label>
+          <input id="d-group" type="text" value="Default" required />
+        </div>
+        <div class="field">
+          <label>Device ID</label>
+          <input id="d-id" type="text" placeholder="device-1" required />
+        </div>
+        <div class="field">
+          <label>Name</label>
+          <input id="d-name" type="text" placeholder="My Device" />
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Host</label>
+          <input id="d-host" type="text" placeholder="192.168.1.10" required />
+        </div>
+        <div class="field">
+          <label>Port</label>
+          <input id="d-port" type="number" value="502" required />
+        </div>
+        <div class="field">
+          <label>Unit ID</label>
+          <input id="d-unit" type="number" value="1" required />
+        </div>
+      </div>
+      <div id="device-banner" class="banner"></div>
+      <div><button type="submit" class="btn-primary">Add Device</button></div>
+    </form>
+  </div>
+
+  <!-- ── Add Block ──────────────────────────────────────────────────── -->
+  <div class="card">
+    <h2>Add Block</h2>
+    <form id="block-form">
+      <div class="row">
+        <div class="field">
+          <label>Device</label>
+          <select id="b-device" required>
+            <option value="">— select device —</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Block ID</label>
+          <input id="b-id" type="text" placeholder="block-1" required />
+        </div>
+        <div class="field">
+          <label>Name</label>
+          <input id="b-name" type="text" placeholder="My Block" />
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Source Area</label>
+          <select id="b-src-area">
+            <option value="holding_registers">holding_registers</option>
+            <option value="coils">coils</option>
+            <option value="input_registers">input_registers</option>
+            <option value="discrete_inputs">discrete_inputs</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Source Address</label>
+          <input id="b-src-addr" type="number" value="0" required />
+        </div>
+        <div class="field">
+          <label>Count</label>
+          <input id="b-count" type="number" value="1" min="1" required />
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Target Area</label>
+          <select id="b-tgt-area">
+            <option value="holding_registers">holding_registers</option>
+            <option value="coils">coils</option>
+            <option value="input_registers">input_registers</option>
+            <option value="discrete_inputs">discrete_inputs</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Target Address</label>
+          <input id="b-tgt-addr" type="number" value="0" required />
+        </div>
+      </div>
+      <div id="block-banner" class="banner"></div>
+      <div><button type="submit" class="btn-primary">Add Block</button></div>
+    </form>
+  </div>
+
+  <!-- ── Compile ────────────────────────────────────────────────────── -->
+  <div class="card compile-area">
+    <h2>Compile Config</h2>
+    <p>Flatten all blocks into the Replicator config file (config.yaml). No services are restarted.</p>
+    <button class="btn-compile" onclick="compile()">⚙ Compile</button>
+    <div id="compile-result"></div>
+  </div>
+
+</main>
+
+<script>
+// ── API helpers ──────────────────────────────────────────────────────────────
+
+async function api(method, path, body) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (body !== undefined) opts.body = JSON.stringify(body);
+  const res = await fetch(path, opts);
+  const data = await res.json().catch(() => ({}));
+  return { ok: res.ok, status: res.status, data };
+}
+
+// ── Model ────────────────────────────────────────────────────────────────────
+
+async function loadModel() {
+  const { ok, data } = await api('GET', '/model');
+  const el = document.getElementById('model-display');
+  if (!ok) {
+    el.innerHTML = `<div class="empty-state" style="color:#ef4444">Failed to load model</div>`;
+    return;
+  }
+
+  const isEmpty = !data.groups || data.groups.length === 0;
+  if (isEmpty) {
+    el.innerHTML = `<div class="empty-state">No devices configured yet. Add a device below.</div>`;
+  } else {
+    el.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+  }
+
+  // refresh device select in block form
+  const sel = document.getElementById('b-device');
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">— select device —</option>';
+  if (data.groups) {
+    for (const g of data.groups) {
+      for (const d of (g.devices || [])) {
+        const opt = document.createElement('option');
+        opt.value = d.id;
+        opt.textContent = `${d.id}${d.name ? ' — ' + d.name : ''}`;
+        sel.appendChild(opt);
+      }
+    }
+  }
+  if (prev) sel.value = prev;
+}
+
+// ── Add Device ───────────────────────────────────────────────────────────────
+
+document.getElementById('device-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const banner = document.getElementById('device-banner');
+  banner.className = 'banner';
+
+  const payload = {
+    group: document.getElementById('d-group').value.trim(),
+    device: {
+      id:      document.getElementById('d-id').value.trim(),
+      name:    document.getElementById('d-name').value.trim(),
+      host:    document.getElementById('d-host').value.trim(),
+      port:    Number(document.getElementById('d-port').value),
+      unit_id: Number(document.getElementById('d-unit').value),
+    }
+  };
+
+  const { ok, data } = await api('POST', '/device', payload);
+  if (ok) {
+    banner.textContent = `✓ Device "${payload.device.id}" added to group "${payload.group}".`;
+    banner.className = 'banner show ok';
+    document.getElementById('device-form').reset();
+    document.getElementById('d-group').value = 'Default';
+    document.getElementById('d-port').value = '502';
+    document.getElementById('d-unit').value = '1';
+    await loadModel();
+  } else {
+    banner.textContent = `✗ ${data.error || 'Unknown error'}`;
+    banner.className = 'banner show err';
+  }
+});
+
+// ── Add Block ────────────────────────────────────────────────────────────────
+
+document.getElementById('block-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const banner = document.getElementById('block-banner');
+  banner.className = 'banner';
+
+  const payload = {
+    device_id: document.getElementById('b-device').value,
+    block: {
+      id:             document.getElementById('b-id').value.trim(),
+      name:           document.getElementById('b-name').value.trim(),
+      source_area:    document.getElementById('b-src-area').value,
+      source_address: Number(document.getElementById('b-src-addr').value),
+      count:          Number(document.getElementById('b-count').value),
+      target_area:    document.getElementById('b-tgt-area').value,
+      target_address: Number(document.getElementById('b-tgt-addr').value),
+    }
+  };
+
+  if (!payload.device_id) {
+    banner.textContent = '✗ Please select a device first.';
+    banner.className = 'banner show err';
+    return;
+  }
+
+  const { ok, data } = await api('POST', '/block', payload);
+  if (ok) {
+    banner.textContent = `✓ Block "${payload.block.id}" added to device "${payload.device_id}".`;
+    banner.className = 'banner show ok';
+    document.getElementById('block-form').reset();
+    await loadModel();
+  } else {
+    banner.textContent = `✗ ${data.error || 'Unknown error'}`;
+    banner.className = 'banner show err';
+  }
+});
+
+// ── Compile ──────────────────────────────────────────────────────────────────
+
+async function compile() {
+  const el = document.getElementById('compile-result');
+  el.textContent = '';
+  const { ok, data } = await api('POST', '/compile');
+  if (ok) {
+    el.innerHTML = `<div class="banner show ok">✓ Compiled successfully — ${data.routes} route(s) written to config.</div>`;
+  } else {
+    el.innerHTML = `<div class="banner show err">✗ ${data.error || 'Compile failed'}</div>`;
+  }
+  await loadModel();
+}
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+loadModel();
+</script>
+</body>
+</html>
