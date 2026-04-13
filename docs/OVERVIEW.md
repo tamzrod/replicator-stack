@@ -64,6 +64,28 @@ Connection details for MMA and Replicator are always read from these config file
 
 ---
 
+## Immutable Configuration Model
+
+Configuration is loaded **only at startup**. There is no hot reload.
+
+- Config is read once when a service starts — never re-read while running
+- Any change to configuration requires a **full restart** of the affected services
+- The system rebuilds its entire runtime state on every deployment
+- The Web App is responsible for orchestrating the correct restart sequence
+
+### Restart Sequence
+
+When a config change is deployed:
+
+1. Stop Replicator
+2. Restart MMA (memory cleared)
+3. Start Replicator
+4. Replicator repopulates MMA memory from devices
+
+This sequence ensures MMA memory is always consistent with the current configuration.
+
+---
+
 ## Human Model vs Runtime Model
 
 The Web App operates with two distinct configuration representations:

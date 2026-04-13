@@ -41,6 +41,15 @@
 
 ---
 
+## Phase: Deployment Engine
+
+- [ ] restart orchestration (stop Replicator → restart MMA → start Replicator)
+- [ ] state tracking (DIRTY, DEPLOYING, SYNCING, READY)
+- [ ] deployment status exposed via API
+- [ ] Web App enforces restart sequence on every config change
+
+---
+
 ## Future (Optional)
 
 - Auth
