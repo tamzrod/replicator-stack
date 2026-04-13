@@ -329,6 +329,11 @@ function findTarget(model, targetName) {
   return targets.find(t => t.name === targetName) || null;
 }
 
+function targetPort(t) {
+  if (t.port != null) return t.port;
+  return (t.endpoint || '').split(':')[1] || '';
+}
+
 function statusRange(device, model) {
   const target = findTarget(model, device.target_name);
   if (!target || device.status_slot == null) return '';
@@ -347,7 +352,7 @@ function renderTargetsList(data) {
   }
   const rows = targets.map(t => `<tr>
     <td>${escapeHtml(t.name)}</td>
-    <td>${escapeHtml(t.port != null ? t.port : (t.endpoint || '').split(':')[1] || '')}</td>
+    <td>${escapeHtml(targetPort(t))}</td>
     <td>${escapeHtml(t.status_unit_id)}</td>
     <td>${escapeHtml(t.status_slot_size)}</td>
     <td><button class="btn-danger btn-delete-target" data-name="${escapeHtml(t.name)}">✕ Remove</button></td>
@@ -374,7 +379,7 @@ function renderModel(data) {
     const readsCount = (d.reads || []).length;
     return `<tr>
       <td>${escapeHtml(d.id)}${d.name ? ` <span style="color:#64748b;font-size:.8rem">— ${escapeHtml(d.name)}</span>` : ''}</td>
-      <td>port&nbsp;${escapeHtml(d.port)} (unit&nbsp;${escapeHtml(d.source_unit_id)})</td>
+      <td>Port&nbsp;${escapeHtml(d.port)} (unit&nbsp;${escapeHtml(d.source_unit_id)})</td>
       <td>unit&nbsp;${escapeHtml(d.assigned_unit_id ?? '?')}</td>
       <td>${d.target_name ? escapeHtml(d.target_name) : '—'}</td>
       <td>${sr ? escapeHtml(sr) : '—'}</td>
@@ -417,7 +422,7 @@ async function loadModel() {
   for (const t of targets) {
     const opt = document.createElement('option');
     opt.value = t.name;
-    opt.textContent = `${t.name} (port ${t.port != null ? t.port : (t.endpoint || '').split(':')[1] || ''})`;
+    opt.textContent = `${t.name} (port ${targetPort(t)})`;
     tsel.appendChild(opt);
   }
   if (tprev) tsel.value = tprev;

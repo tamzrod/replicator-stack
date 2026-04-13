@@ -285,6 +285,8 @@ app.post('/target', (req, res) => {
 
         model.system.targets.push({
             name: target.name,
+            // `endpoint` is kept for internal use by the YAML compiler (toReplicatorYaml / toMmaYaml).
+            // `port` is the canonical user-facing value.
             endpoint: `${TARGET_HOST}:${port}`,
             port,
             status_unit_id: statusUnitId,
