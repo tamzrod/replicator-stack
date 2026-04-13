@@ -48,6 +48,8 @@ The web app is the primary product.
 
 All configs must live here.
 
+Connection details for MMA and Replicator are always read from these config files — never assumed from hardcoded defaults.
+
 ---
 
 ## What This System Is

@@ -59,3 +59,13 @@ SHOULD NOT:
 - No grouping logic may exist in any runtime service
 - `model.json` is the human model; `config.yaml` is the runtime model
 - Only the Web App may write either file
+
+---
+
+## Connection Discovery Rules
+
+- Configuration files are the first source of truth for connection settings
+- The Web App must not hardcode MMA or Replicator ports as architectural truth
+- Service connection details (host, port, unit) must be read from config when available
+- Fallback defaults are allowed only for bootstrap or recovery workflows, and must be presented to the user — never silently assumed
+- If a config file is missing, the Web App must enter an uninitialized state and offer to create a starter config
