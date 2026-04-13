@@ -184,8 +184,8 @@
           <input id="t-name" type="text" placeholder="Main MMA" required />
         </div>
         <div class="field">
-          <label>Endpoint (host:port)</label>
-          <input id="t-endpoint" type="text" placeholder="mma:502" required />
+          <label>Port</label>
+          <input id="t-port" type="number" placeholder="502" min="1" max="65535" required />
         </div>
       </div>
       <div class="row">
@@ -219,12 +219,8 @@
       </div>
       <div class="row">
         <div class="field">
-          <label>Host</label>
-          <input id="d-host" type="text" placeholder="192.168.1.10" required />
-        </div>
-        <div class="field">
           <label>Port</label>
-          <input id="d-port" type="number" value="502" required />
+          <input id="d-port" type="number" value="502" min="1" max="65535" required />
         </div>
         <div class="field">
           <label>Source Unit ID</label>
@@ -333,6 +329,11 @@ function findTarget(model, targetName) {
   return targets.find(t => t.name === targetName) || null;
 }
 
+function targetPort(t) {
+  if (t.port != null) return t.port;
+  return (t.endpoint || '').split(':')[1] || '';
+}
+
 function statusRange(device, model) {
   const target = findTarget(model, device.target_name);
   if (!target || device.status_slot == null) return '';
@@ -351,14 +352,14 @@ function renderTargetsList(data) {
   }
   const rows = targets.map(t => `<tr>
     <td>${escapeHtml(t.name)}</td>
-    <td>${escapeHtml(t.endpoint)}</td>
+    <td>${escapeHtml(targetPort(t))}</td>
     <td>${escapeHtml(t.status_unit_id)}</td>
     <td>${escapeHtml(t.status_slot_size)}</td>
     <td><button class="btn-danger btn-delete-target" data-name="${escapeHtml(t.name)}">✕ Remove</button></td>
   </tr>`).join('');
   el.innerHTML = `<table>
     <thead><tr>
-      <th>Name</th><th>Endpoint</th><th>Status Unit ID</th><th>Slot Size</th><th></th>
+      <th>Name</th><th>Port</th><th>Status Unit ID</th><th>Slot Size</th><th></th>
     </tr></thead>
     <tbody>${rows}</tbody>
   </table>`;
@@ -378,7 +379,7 @@ function renderModel(data) {
     const readsCount = (d.reads || []).length;
     return `<tr>
       <td>${escapeHtml(d.id)}${d.name ? ` <span style="color:#64748b;font-size:.8rem">— ${escapeHtml(d.name)}</span>` : ''}</td>
-      <td>${escapeHtml(d.host)}:${escapeHtml(d.port)} (unit&nbsp;${escapeHtml(d.source_unit_id)})</td>
+      <td>Port&nbsp;${escapeHtml(d.port)} (unit&nbsp;${escapeHtml(d.source_unit_id)})</td>
       <td>unit&nbsp;${escapeHtml(d.assigned_unit_id ?? '?')}</td>
       <td>${d.target_name ? escapeHtml(d.target_name) : '—'}</td>
       <td>${sr ? escapeHtml(sr) : '—'}</td>
@@ -421,7 +422,7 @@ async function loadModel() {
   for (const t of targets) {
     const opt = document.createElement('option');
     opt.value = t.name;
-    opt.textContent = `${t.name} (${t.endpoint})`;
+    opt.textContent = `${t.name} (port ${targetPort(t)})`;
     tsel.appendChild(opt);
   }
   if (tprev) tsel.value = tprev;
@@ -458,7 +459,7 @@ document.getElementById('target-form').addEventListener('submit', async e => {
   const payload = {
     target: {
       name:             document.getElementById('t-name').value.trim(),
-      endpoint:         document.getElementById('t-endpoint').value.trim(),
+      port:             Number(document.getElementById('t-port').value),
       status_unit_id:   Number(document.getElementById('t-status-unit').value),
       status_slot_size: Number(document.getElementById('t-slot-size').value),
     }
@@ -502,7 +503,6 @@ document.getElementById('device-form').addEventListener('submit', async e => {
     device: {
       id:             document.getElementById('d-id').value.trim(),
       name:           document.getElementById('d-name').value.trim(),
-      host:           document.getElementById('d-host').value.trim(),
       port:           Number(document.getElementById('d-port').value),
       source_unit_id: Number(document.getElementById('d-unit').value),
       target_name:    document.getElementById('d-target').value,

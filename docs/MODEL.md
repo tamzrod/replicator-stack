@@ -30,10 +30,11 @@ A physical field device (e.g. a Modbus RTU/TCP instrument).
 |---|---|---|
 | `id` | string | Unique identifier |
 | `name` | string | Human-readable label |
-| `host` | string | IP address or hostname |
 | `port` | integer | Modbus TCP port |
 | `unit_id` | integer | Modbus unit/slave ID |
 | `blocks` | array | List of data blocks to poll |
+
+> **Note:** The device host is auto-assigned by the backend from the `DEVICE_HOST` environment variable (default: `localhost`). It is not exposed in the UI or API.
 
 ---
 

@@ -7,6 +7,8 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 const DATA_DIR = process.env.DATA_DIR || '/app/data';
+const TARGET_HOST = process.env.TARGET_HOST || 'mma';
+const DEVICE_HOST = process.env.DEVICE_HOST || 'localhost';
 const MODEL_PATH = path.join(DATA_DIR, 'model.json');
 const REPLICATOR_CONFIG_PATH = path.join(DATA_DIR, 'replicator/config.yaml');
 const MMA_CONFIG_PATH = path.join(DATA_DIR, 'mma/config.yaml');
@@ -179,7 +181,10 @@ app.post('/device', (req, res) => {
         if (!device.target_name) {
             return res.status(400).json({ error: 'device.target_name is required' });
         }
-
+        const port = Number(device.port);
+        if (!Number.isFinite(port) || port < 1 || port > 65535) {
+            return res.status(400).json({ error: 'device.port must be a valid port number (1–65535)' });
+        }
         const model = readModel();
 
         const target = model.system.targets.find(t => t.name === device.target_name);
@@ -199,8 +204,8 @@ app.post('/device', (req, res) => {
         model.devices.push({
             id: device.id,
             name: device.name || '',
-            host: device.host,
-            port: device.port,
+            host: DEVICE_HOST,
+            port,
             source_unit_id: device.source_unit_id,
             target_name: device.target_name,
             assigned_unit_id,
@@ -259,8 +264,9 @@ app.post('/target', (req, res) => {
         if (!target || !target.name) {
             return res.status(400).json({ error: 'target.name is required' });
         }
-        if (!target.endpoint) {
-            return res.status(400).json({ error: 'target.endpoint is required (format: host:port)' });
+        const port = Number(target.port);
+        if (!Number.isFinite(port) || port < 1 || port > 65535) {
+            return res.status(400).json({ error: 'target.port must be a valid port number (1–65535)' });
         }
         const statusUnitId = Number(target.status_unit_id);
         if (!Number.isFinite(statusUnitId)) {
@@ -279,7 +285,10 @@ app.post('/target', (req, res) => {
 
         model.system.targets.push({
             name: target.name,
-            endpoint: target.endpoint,
+            // `endpoint` is kept for internal use by the YAML compiler (toReplicatorYaml / toMmaYaml).
+            // `port` is the canonical user-facing value.
+            endpoint: `${TARGET_HOST}:${port}`,
+            port,
             status_unit_id: statusUnitId,
             status_slot_size: statusSlotSize
         });
