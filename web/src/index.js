@@ -1,7 +1,6 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
-const os = require('os');
 
 const app = express();
 app.use(express.json());
@@ -42,9 +41,19 @@ function writeModel(model) {
 function atomicWrite(filePath, content) {
     const dir = path.dirname(filePath);
     fs.mkdirSync(dir, { recursive: true });
-    const tmp = path.join(os.tmpdir(), `atomic-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    const unique = `${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const tmp = path.join(dir, `.tmp-${unique}`);
     fs.writeFileSync(tmp, content, 'utf-8');
-    fs.renameSync(tmp, filePath);
+    try {
+        fs.renameSync(tmp, filePath);
+    } catch (err) {
+        try {
+            if (fs.existsSync(tmp)) fs.unlinkSync(tmp);
+        } catch (_) {
+            // Best effort cleanup only.
+        }
+        throw err;
+    }
 }
 
 function readsOverlap(a, b) {
