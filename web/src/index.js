@@ -31,7 +31,9 @@ function readModel() {
         writeModel(initial);
         return initial;
     }
-    return JSON.parse(fs.readFileSync(MODEL_PATH, 'utf-8'));
+    const model = JSON.parse(fs.readFileSync(MODEL_PATH, 'utf-8'));
+    if (!Array.isArray(model.devices)) model.devices = [];
+    return model;
 }
 
 function writeModel(model) {
