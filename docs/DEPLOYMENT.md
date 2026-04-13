@@ -52,6 +52,30 @@ POST /deploy
 
 ---
 
+## Deployment Behavior
+
+A deployment is **required** after every configuration change. Configuration does not take effect until the system is restarted.
+
+- Deployment resets the entire runtime state
+- MMA memory is cleared on restart and rebuilt from scratch by the Replicator
+- The system derives all runtime state from the current config files — there is no persistent state
+
+### What Deployment Does
+
+1. Compiles `model.json` → `config.yaml`
+2. Stops the Replicator
+3. Restarts MMA (memory is cleared)
+4. Starts the Replicator with the new config
+5. Replicator polls devices and repopulates MMA memory
+
+### Rules
+
+- Never skip a deployment after editing config — changes have no effect until deployed
+- Never restart services out of sequence — MMA must be restarted before the Replicator
+- The system is always rebuilt from source (config files) on every deploy
+
+---
+
 ## Startup Behaviour
 
 When the web app starts:

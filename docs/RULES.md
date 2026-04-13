@@ -51,6 +51,20 @@ SHOULD NOT:
 
 ---
 
+## Runtime Configuration Rules
+
+- **No hot reload** — configuration is loaded once at startup and never re-read while a service is running
+- **All config changes require a full restart** — partial updates or live reloads are forbidden
+- **MMA memory is ephemeral** — it is cleared on every MMA restart and fully rebuilt by the Replicator
+- **Web App must orchestrate the restart sequence correctly**:
+  1. Stop Replicator
+  2. Restart MMA
+  3. Start Replicator
+- The Replicator is solely responsible for repopulating MMA memory after a restart
+- MMA memory must never be treated as persistent or managed manually
+
+---
+
 ## Configuration Rules
 
 - Replicator config must remain flat — no groups, no hierarchy

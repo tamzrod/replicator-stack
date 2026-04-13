@@ -55,6 +55,29 @@ A single Modbus read operation mapped to an MMA write target.
 
 ---
 
+## Memory Allocation Model
+
+MMA memory is allocated at the **block level**. Each block in the model defines a contiguous range of MMA registers that will be written by the Replicator.
+
+- Memory allocation is defined by blocks — devices alone do not allocate memory
+- Allocation is created on demand when the Replicator begins polling — there is no pre-allocation pool
+- Memory is **not persistent** — it is cleared on every MMA restart
+- Memory is **not managed manually** — it is rebuilt entirely by the Replicator after each restart
+- Deleting a device removes all of its blocks, which removes the corresponding memory allocation on next deployment
+- No cleanup logic is required — a restart always produces a clean, correct state
+
+### Summary
+
+| Rule | Behaviour |
+|---|---|
+| Allocation unit | Block |
+| Allocation trigger | Replicator polling |
+| Pre-allocation | None |
+| Persistence | None — cleared on restart |
+| Cleanup | None — restart resets all memory |
+
+---
+
 ## Example: model.json
 
 ```json

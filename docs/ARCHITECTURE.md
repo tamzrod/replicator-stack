@@ -83,6 +83,43 @@ DO NOT:
 
 ---
 
+## Deployment Lifecycle
+
+Every configuration change follows this pipeline before taking effect:
+
+```
+Edit → Save → Compile → Restart → Sync
+```
+
+| Step | Actor | Action |
+|---|---|---|
+| Edit | User | Modifies model via Web UI |
+| Save | Web App | Writes `model.json` to `/data/` |
+| Compile | Web App | Transforms `model.json` → `config.yaml` |
+| Restart | Web App | Orchestrates the restart sequence |
+| Sync | Replicator | Polls devices and repopulates MMA memory |
+
+### Restart Sequence
+
+```
+1. Stop Replicator
+2. Restart MMA         ← MMA memory is cleared
+3. Start Replicator    ← reads new config.yaml
+4. Replicator repopulates MMA from devices
+```
+
+- MMA memory is **ephemeral** — it is fully cleared on every restart
+- MMA memory is **rebuilt automatically** by the Replicator after each restart
+- No manual cleanup or memory management is required
+
+### Rules
+
+- Configuration takes effect **only on restart** — there is no hot reload
+- The Web App must always execute the full restart sequence in the correct order
+- Partial restarts (e.g. restarting only Replicator without clearing MMA) are not permitted for config changes
+
+---
+
 ## Configuration Compilation Pipeline
 
 The Web App is solely responsible for translating the human-friendly grouped model into a flat replicator config.
