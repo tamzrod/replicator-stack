@@ -216,6 +216,25 @@ app.delete('/device/:id', (req, res) => {
     }
 });
 
+// PUT /system — update system settings
+app.put('/system', (req, res) => {
+    try {
+        const { system } = req.body;
+        if (!system || !system.mma) {
+            return res.status(400).json({ error: 'system.mma is required' });
+        }
+        const model = readModel();
+        model.system = {
+            ...model.system,
+            mma: { ...((model.system && model.system.mma) || {}), ...system.mma }
+        };
+        writeModel(model);
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // POST /read — add read to device, validate no overlap in same area
 app.post('/read', (req, res) => {
     try {
@@ -235,6 +254,10 @@ app.post('/read', (req, res) => {
         if (readExists) {
             return res.status(409).json({ error: `Read ${read.id} already exists on device ${device_id}` });
         }
+
+        // Apply defaults for target fields — target is always MMA holding registers at address 0
+        if (!read.target_area) read.target_area = 'holding_registers';
+        if (read.target_address == null) read.target_address = 0;
 
         for (const existing of device.reads) {
             if (readsOverlap(existing, read)) {

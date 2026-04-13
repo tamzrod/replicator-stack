@@ -165,6 +165,35 @@
     </div>
   </div>
 
+  <!-- ── System Settings ──────────────────────────────────────────────── -->
+  <div class="card">
+    <h2>System Settings</h2>
+    <form id="system-form">
+      <div class="row">
+        <div class="field">
+          <label>MMA Host</label>
+          <input id="s-host" type="text" placeholder="mma" required />
+        </div>
+        <div class="field">
+          <label>MMA Port</label>
+          <input id="s-port" type="number" value="502" required />
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Status Unit ID</label>
+          <input id="s-status-unit" type="number" value="100" required />
+        </div>
+        <div class="field">
+          <label>Status Slot Size</label>
+          <input id="s-slot-size" type="number" value="10" min="1" required />
+        </div>
+      </div>
+      <div id="system-banner" class="banner"></div>
+      <div><button type="submit" class="btn-primary">Save Settings</button></div>
+    </form>
+  </div>
+
   <!-- ── Add Device ─────────────────────────────────────────────────── -->
   <div class="card">
     <h2>Add Device</h2>
@@ -239,19 +268,6 @@
       </div>
       <div class="row">
         <div class="field">
-          <label>Target Area</label>
-          <select id="r-tgt-area">
-            <option value="holding_registers">holding_registers</option>
-            <option value="coils">coils</option>
-            <option value="input_registers">input_registers</option>
-            <option value="discrete_inputs">discrete_inputs</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>Target Address</label>
-          <input id="r-tgt-addr" type="number" value="0" required />
-        </div>
-        <div class="field">
           <label>Poll Interval (ms)</label>
           <input id="r-poll" type="number" value="2000" min="100" required />
         </div>
@@ -284,6 +300,53 @@ async function api(method, path, body) {
 
 // ── Model ────────────────────────────────────────────────────────────────────
 
+let _currentModel = null;
+
+function statusRange(device, model) {
+  const slotSize = (model.system && model.system.mma && model.system.mma.status_slot_size) || 10;
+  const statusUnitId = (model.system && model.system.mma && model.system.mma.status_unit_id) || 100;
+  const slot = device.status_slot;
+  if (slot == null) return '';
+  const start = slot * slotSize;
+  const end = start + slotSize - 1;
+  return `Status: unit ${statusUnitId} @ HR [${start}..${end}]`;
+}
+
+function renderModel(data) {
+  const el = document.getElementById('model-display');
+  _currentModel = data;
+
+  if (!data.devices || data.devices.length === 0) {
+    el.innerHTML = `<div class="empty-state">No devices configured yet. Add a device below.</div>`;
+    return;
+  }
+
+  const rows = data.devices.map(d => {
+    const sr = statusRange(d, data);
+    const readsCount = (d.reads || []).length;
+    return `<tr>
+      <td>${d.id}${d.name ? ` <span style="color:#64748b;font-size:.8rem">— ${d.name}</span>` : ''}</td>
+      <td>${d.host}:${d.port} (unit&nbsp;${d.source_unit_id})</td>
+      <td>unit&nbsp;${d.assigned_unit_id ?? '?'}</td>
+      <td>${sr}</td>
+      <td>${readsCount}</td>
+    </tr>`;
+  }).join('');
+
+  el.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:.85rem">
+    <thead>
+      <tr style="text-align:left;color:#64748b;border-bottom:1px solid #e2e8f0">
+        <th style="padding:6px 8px">Device</th>
+        <th style="padding:6px 8px">Source</th>
+        <th style="padding:6px 8px">MMA Unit</th>
+        <th style="padding:6px 8px">Status Location</th>
+        <th style="padding:6px 8px">Reads</th>
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
 async function loadModel() {
   const { ok, data } = await api('GET', '/model');
   const el = document.getElementById('model-display');
@@ -292,12 +355,14 @@ async function loadModel() {
     return;
   }
 
-  const isEmpty = !data.devices || data.devices.length === 0;
-  if (isEmpty) {
-    el.innerHTML = `<div class="empty-state">No devices configured yet. Add a device below.</div>`;
-  } else {
-    el.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
-  }
+  renderModel(data);
+
+  // populate System Settings form from loaded model
+  const mma = (data.system && data.system.mma) || {};
+  if (mma.host != null)           document.getElementById('s-host').value = mma.host;
+  if (mma.port != null)           document.getElementById('s-port').value = mma.port;
+  if (mma.status_unit_id != null) document.getElementById('s-status-unit').value = mma.status_unit_id;
+  if (mma.status_slot_size != null) document.getElementById('s-slot-size').value = mma.status_slot_size;
 
   // refresh device select in read form
   const sel = document.getElementById('r-device');
@@ -313,6 +378,35 @@ async function loadModel() {
   }
   if (prev) sel.value = prev;
 }
+
+// ── System Settings ──────────────────────────────────────────────────────────
+
+document.getElementById('system-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const banner = document.getElementById('system-banner');
+  banner.className = 'banner';
+
+  const payload = {
+    system: {
+      mma: {
+        host:           document.getElementById('s-host').value.trim(),
+        port:           Number(document.getElementById('s-port').value),
+        status_unit_id: Number(document.getElementById('s-status-unit').value),
+        status_slot_size: Number(document.getElementById('s-slot-size').value),
+      }
+    }
+  };
+
+  const { ok, data } = await api('PUT', '/system', payload);
+  if (ok) {
+    banner.textContent = '✓ System settings saved.';
+    banner.className = 'banner show ok';
+    await loadModel();
+  } else {
+    banner.textContent = `✗ ${data.error || 'Unknown error'}`;
+    banner.className = 'banner show err';
+  }
+});
 
 // ── Add Device ───────────────────────────────────────────────────────────────
 
@@ -333,12 +427,14 @@ document.getElementById('device-form').addEventListener('submit', async e => {
 
   const { ok, data } = await api('POST', '/device', payload);
   if (ok) {
-    banner.textContent = `✓ Device "${payload.device.id}" added — assigned MMA unit ${data.assigned_unit_id}, status slot ${data.status_slot}.`;
+    await loadModel();
+    const model = _currentModel || {};
+    const sr = statusRange({ status_slot: data.status_slot }, model);
+    banner.textContent = `✓ Device "${payload.device.id}" added — MMA unit ${data.assigned_unit_id}, status slot ${data.status_slot} — ${sr}`;
     banner.className = 'banner show ok';
     document.getElementById('device-form').reset();
     document.getElementById('d-port').value = '502';
     document.getElementById('d-unit').value = '1';
-    await loadModel();
   } else {
     banner.textContent = `✗ ${data.error || 'Unknown error'}`;
     banner.className = 'banner show err';
@@ -360,8 +456,6 @@ document.getElementById('read-form').addEventListener('submit', async e => {
       source_area:    document.getElementById('r-src-area').value,
       source_address: Number(document.getElementById('r-src-addr').value),
       source_count:   Number(document.getElementById('r-count').value),
-      target_area:    document.getElementById('r-tgt-area').value,
-      target_address: Number(document.getElementById('r-tgt-addr').value),
       poll_interval:  Number(document.getElementById('r-poll').value),
     }
   };
