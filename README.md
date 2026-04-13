@@ -19,34 +19,59 @@ Minimal Docker environment for testing MMA2 and Replicator without the web app.
 data/
   mma/config.yaml         # MMA config — port 502, one unit
   replicator/config.yaml  # Replicator config — one device route
+test/
+  sim.py                  # Modbus TCP simulator (fake field device)
+  verify.py               # Reads MMA registers and checks they match expected values
 ```
 
-Update `data/replicator/config.yaml` to point `source.host` at your actual field device before starting.
+### Services
 
-### Start
+| Container    | Role |
+|---|---|
+| `mma`        | Modbus memory appliance (target) |
+| `modbus-sim` | Simulated field device (source) with known register values |
+| `replicator` | Polls `modbus-sim`, writes to `mma` |
+| `verify`     | One-shot: reads `mma` and asserts values match (exits 0=pass, 1=fail) |
+
+### Run end-to-end test
 
 ```bash
+# Start all services
 docker compose -f docker-compose.test.yaml up -d
+
+# Wait for the verify container to finish, then check its exit code
+docker wait verify
+
+# 0 = PASS, 1 = FAIL
 ```
 
-### Verify
+### View results
 
 ```bash
-# Check both containers are running
-docker ps
+# See verify output (PASS/FAIL + register values)
+docker logs verify
 
-# Expected output includes:
-#   mma         rodtamin/modbus-memory-appliance:2.3.4   ...   0.0.0.0:502->502/tcp
-#   replicator  rodtamin/modbus-replicator:latest        ...
+# See what the simulator is serving
+docker logs modbus-sim
 
-# Check MMA is accepting Modbus TCP connections on port 502
-docker logs mma
-
-# Check Replicator is polling
+# See replicator polling activity
 docker logs replicator
+
+# See MMA startup
+docker logs mma
 ```
 
-### Stop
+### Run test non-interactively (CI-friendly)
+
+```bash
+docker compose -f docker-compose.test.yaml up -d && \
+  docker wait verify && \
+  docker inspect verify --format='{{.State.ExitCode}}'
+```
+
+Exit code 0 = test passed. Any other value = test failed.
+
+### Stop and clean up
 
 ```bash
 docker compose -f docker-compose.test.yaml down
@@ -61,3 +86,4 @@ See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the full stack (MMA + Replicato
 ```bash
 docker compose up -d --build
 ```
+

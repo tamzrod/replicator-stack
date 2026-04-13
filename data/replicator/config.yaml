@@ -5,7 +5,7 @@ mma:
 routes:
   - id: group-test__device-test__block-registers
     source:
-      host: 192.168.1.10
+      host: modbus-sim
       port: 502
       unit_id: 1
       area: holding_registers
@@ -15,7 +15,7 @@ routes:
       unit: 1
       area: holding_registers
       address: 0
-    poll_interval: 5000
+    poll_interval: 2000
     ref:
       group_id: group-test
       device_id: device-test
