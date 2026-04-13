@@ -307,7 +307,7 @@ async function loadModel() {
     for (const d of data.devices) {
       const opt = document.createElement('option');
       opt.value = d.id;
-      opt.textContent = `${d.id}${d.name ? ' — ' + d.name : ''} (unit ${d.assigned_unit_id})`;
+      opt.textContent = `${d.id}${d.name ? ' — ' + d.name : ''} (unit ${d.assigned_unit_id != null ? d.assigned_unit_id : '?'})`;
       sel.appendChild(opt);
     }
   }

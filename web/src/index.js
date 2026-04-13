@@ -71,7 +71,7 @@ function nextAssignedUnitId(model) {
 }
 
 function nextStatusSlot(model) {
-    const used = (model.devices || []).map(d => d.status_slot).filter(n => typeof n === 'number');
+    const used = (model.devices || []).map(d => d.status_slot).filter(Number.isFinite);
     let next = 0;
     while (used.includes(next)) next++;
     return next;
