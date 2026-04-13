@@ -29,9 +29,12 @@ function readModel() {
     if (!Array.isArray(model.devices)) model.devices = [];
     if (!model.system) model.system = {};
     if (!model.system.mma || typeof model.system.mma !== 'object') model.system.mma = {};
-    if (!Number.isFinite(Number(model.system.mma.port))) model.system.mma.port = 502;
-    if (!Number.isFinite(Number(model.system.mma.status_unit_id))) model.system.mma.status_unit_id = 100;
-    if (!Number.isFinite(Number(model.system.mma.status_slot_size))) model.system.mma.status_slot_size = 10;
+    const mmaPort = Number(model.system.mma.port);
+    const mmaStatusUnitId = Number(model.system.mma.status_unit_id);
+    const mmaStatusSlotSize = Number(model.system.mma.status_slot_size);
+    if (!Number.isFinite(mmaPort)) model.system.mma.port = 502;
+    if (!Number.isFinite(mmaStatusUnitId)) model.system.mma.status_unit_id = 100;
+    if (!Number.isFinite(mmaStatusSlotSize)) model.system.mma.status_slot_size = 10;
     return model;
 }
 
