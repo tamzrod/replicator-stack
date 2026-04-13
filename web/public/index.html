@@ -173,33 +173,26 @@
     </div>
   </div>
 
-  <!-- ── Targets ──────────────────────────────────────────────────── -->
+  <!-- ── System Settings ──────────────────────────────────────────────── -->
   <div class="card">
-    <h2>Targets</h2>
-    <div id="targets-list" style="margin-bottom:16px"></div>
-    <form id="target-form">
+    <h2>System Settings</h2>
+    <form id="system-form">
       <div class="row">
         <div class="field">
-          <label>Name</label>
-          <input id="t-name" type="text" placeholder="Main MMA" required />
+          <label>MMA Port</label>
+          <input id="s-port" type="number" value="502" min="1" max="65535" required />
         </div>
-        <div class="field">
-          <label>Endpoint (host:port)</label>
-          <input id="t-endpoint" type="text" placeholder="mma:502" required />
-        </div>
-      </div>
-      <div class="row">
         <div class="field">
           <label>Status Unit ID</label>
-          <input id="t-status-unit" type="number" value="100" required />
+          <input id="s-status-unit" type="number" value="100" required />
         </div>
         <div class="field">
           <label>Status Slot Size</label>
-          <input id="t-slot-size" type="number" value="10" min="1" required />
+          <input id="s-slot-size" type="number" value="10" min="1" required />
         </div>
       </div>
-      <div id="target-banner" class="banner"></div>
-      <div><button type="submit" class="btn-primary">Add Target</button></div>
+      <div id="system-banner" class="banner"></div>
+      <div><button type="submit" class="btn-primary">Save Settings</button></div>
     </form>
   </div>
 
@@ -229,14 +222,6 @@
         <div class="field">
           <label>Source Unit ID</label>
           <input id="d-unit" type="number" value="1" required />
-        </div>
-      </div>
-      <div class="row">
-        <div class="field">
-          <label>Target</label>
-          <select id="d-target" required>
-            <option value="">— select target —</option>
-          </select>
         </div>
       </div>
       <div id="device-banner" class="banner"></div>
@@ -328,40 +313,20 @@ function escapeHtml(str) {
 
 let _currentModel = null;
 
-function findTarget(model, targetName) {
-  const targets = (model.system && model.system.targets) || [];
-  return targets.find(t => t.name === targetName) || null;
-}
-
 function statusRange(device, model) {
-  const target = findTarget(model, device.target_name);
-  if (!target || device.status_slot == null) return '';
-  const slotSize = target.status_slot_size || 10;
+  const mma = (model.system && model.system.mma) || {};
+  if (device.status_slot == null) return '';
+  const slotSize = mma.status_slot_size || 10;
   const start = device.status_slot * slotSize;
   const end = start + slotSize - 1;
-  return `unit ${target.status_unit_id} @ HR[${start}..${end}]`;
+  return `unit ${mma.status_unit_id} @ HR[${start}..${end}]`;
 }
 
-function renderTargetsList(data) {
-  const el = document.getElementById('targets-list');
-  const targets = (data.system && data.system.targets) || [];
-  if (targets.length === 0) {
-    el.innerHTML = '<div class="empty-state" style="padding:12px 0">No targets defined yet.</div>';
-    return;
-  }
-  const rows = targets.map(t => `<tr>
-    <td>${escapeHtml(t.name)}</td>
-    <td>${escapeHtml(t.endpoint)}</td>
-    <td>${escapeHtml(t.status_unit_id)}</td>
-    <td>${escapeHtml(t.status_slot_size)}</td>
-    <td><button class="btn-danger btn-delete-target" data-name="${escapeHtml(t.name)}">✕ Remove</button></td>
-  </tr>`).join('');
-  el.innerHTML = `<table>
-    <thead><tr>
-      <th>Name</th><th>Endpoint</th><th>Status Unit ID</th><th>Slot Size</th><th></th>
-    </tr></thead>
-    <tbody>${rows}</tbody>
-  </table>`;
+function renderSystemSettings(data) {
+  const mma = (data.system && data.system.mma) || {};
+  document.getElementById('s-port').value = mma.port != null ? mma.port : 502;
+  document.getElementById('s-status-unit').value = mma.status_unit_id != null ? mma.status_unit_id : 100;
+  document.getElementById('s-slot-size').value = mma.status_slot_size != null ? mma.status_slot_size : 10;
 }
 
 function renderModel(data) {
@@ -375,12 +340,13 @@ function renderModel(data) {
 
   const rows = data.devices.map(d => {
     const sr = statusRange(d, data);
+    const mma = (data.system && data.system.mma) || {};
     const readsCount = (d.reads || []).length;
     return `<tr>
       <td>${escapeHtml(d.id)}${d.name ? ` <span style="color:#64748b;font-size:.8rem">— ${escapeHtml(d.name)}</span>` : ''}</td>
       <td>${escapeHtml(d.host)}:${escapeHtml(d.port)} (unit&nbsp;${escapeHtml(d.source_unit_id)})</td>
       <td>unit&nbsp;${escapeHtml(d.assigned_unit_id ?? '?')}</td>
-      <td>${d.target_name ? escapeHtml(d.target_name) : '—'}</td>
+      <td>Port ${escapeHtml(mma.port ?? 502)}</td>
       <td>${sr ? escapeHtml(sr) : '—'}</td>
       <td>${readsCount}</td>
     </tr>`;
@@ -392,7 +358,7 @@ function renderModel(data) {
         <th>Device</th>
         <th>Source</th>
         <th>Assigned Unit</th>
-        <th>Target</th>
+        <th>MMA</th>
         <th>Status Location</th>
         <th>Reads</th>
       </tr>
@@ -411,20 +377,7 @@ async function loadModel() {
 
   _currentModel = data;
   renderModel(data);
-  renderTargetsList(data);
-
-  // refresh target dropdown in device form
-  const targets = (data.system && data.system.targets) || [];
-  const tsel = document.getElementById('d-target');
-  const tprev = tsel.value;
-  tsel.innerHTML = '<option value="">— select target —</option>';
-  for (const t of targets) {
-    const opt = document.createElement('option');
-    opt.value = t.name;
-    opt.textContent = `${t.name} (${t.endpoint})`;
-    tsel.appendChild(opt);
-  }
-  if (tprev) tsel.value = tprev;
+  renderSystemSettings(data);
 
   // refresh device select in read form
   const sel = document.getElementById('r-device');
@@ -441,55 +394,33 @@ async function loadModel() {
   if (prev) sel.value = prev;
 }
 
-// ── Targets ──────────────────────────────────────────────────────────────────
+// ── System Settings ──────────────────────────────────────────────────────────
 
-document.getElementById('targets-list').addEventListener('click', async e => {
-  const btn = e.target.closest('.btn-delete-target');
-  if (!btn) return;
-  const name = btn.dataset.name;
-  await deleteTarget(name);
-});
-
-document.getElementById('target-form').addEventListener('submit', async e => {
+document.getElementById('system-form').addEventListener('submit', async e => {
   e.preventDefault();
-  const banner = document.getElementById('target-banner');
+  const banner = document.getElementById('system-banner');
   banner.className = 'banner';
 
   const payload = {
-    target: {
-      name:             document.getElementById('t-name').value.trim(),
-      endpoint:         document.getElementById('t-endpoint').value.trim(),
-      status_unit_id:   Number(document.getElementById('t-status-unit').value),
-      status_slot_size: Number(document.getElementById('t-slot-size').value),
+    system: {
+      mma: {
+        port:             Number(document.getElementById('s-port').value),
+        status_unit_id:   Number(document.getElementById('s-status-unit').value),
+        status_slot_size: Number(document.getElementById('s-slot-size').value),
+      }
     }
   };
 
-  const { ok, data } = await api('POST', '/target', payload);
+  const { ok, data } = await api('PUT', '/system', payload);
   if (ok) {
-    banner.textContent = `✓ Target "${payload.target.name}" added.`;
+    banner.textContent = '✓ Settings saved.';
     banner.className = 'banner show ok';
-    document.getElementById('target-form').reset();
-    document.getElementById('t-status-unit').value = '100';
-    document.getElementById('t-slot-size').value = '10';
     await loadModel();
   } else {
     banner.textContent = `✗ ${data.error || 'Unknown error'}`;
     banner.className = 'banner show err';
   }
 });
-
-async function deleteTarget(name) {
-  const { ok, data } = await api('DELETE', `/target/${encodeURIComponent(name)}`);
-  const banner = document.getElementById('target-banner');
-  if (ok) {
-    banner.textContent = `✓ Target "${name}" removed.`;
-    banner.className = 'banner show ok';
-    await loadModel();
-  } else {
-    banner.textContent = `✗ ${data.error || 'Unknown error'}`;
-    banner.className = 'banner show err';
-  }
-}
 
 // ── Add Device ───────────────────────────────────────────────────────────────
 
@@ -505,7 +436,6 @@ document.getElementById('device-form').addEventListener('submit', async e => {
       host:           document.getElementById('d-host').value.trim(),
       port:           Number(document.getElementById('d-port').value),
       source_unit_id: Number(document.getElementById('d-unit').value),
-      target_name:    document.getElementById('d-target').value,
     }
   };
 
@@ -513,12 +443,10 @@ document.getElementById('device-form').addEventListener('submit', async e => {
   if (ok) {
     await loadModel();
     const model = _currentModel || {};
-    const target = findTarget(model, payload.device.target_name);
-    const slotSize = target ? target.status_slot_size : '?';
-    const statusEnd = (target && data.status_start != null)
-      ? data.status_start + target.status_slot_size - 1
-      : '?';
-    const statusUnitId = target ? target.status_unit_id : '?';
+    const mma = (model.system && model.system.mma) || {};
+    const slotSize = mma.status_slot_size || 10;
+    const statusEnd = data.status_start != null ? data.status_start + slotSize - 1 : '?';
+    const statusUnitId = mma.status_unit_id || '?';
     banner.textContent = `✓ Device "${payload.device.id}" added — unit ${data.assigned_unit_id}, status: unit ${statusUnitId} @ HR[${data.status_start}..${statusEnd}]`;
     banner.className = 'banner show ok';
     document.getElementById('device-form').reset();
