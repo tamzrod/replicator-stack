@@ -12,8 +12,10 @@ Thumbs.db
 .env
 
 # Data (optional — decide if configs should be tracked)
-data/*
+data/**
+!data/mma/
 !data/mma/config.yaml
+!data/replicator/
 !data/replicator/config.yaml
 
 # Docker
