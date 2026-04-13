@@ -158,7 +158,7 @@
   <div class="card">
     <div class="model-header">
       <h2>Current Model</h2>
-      <button class="btn-refresh" onclick="loadModel()">↻ Refresh</button>
+      <button class="btn-refresh" id="btn-refresh">↻ Refresh</button>
     </div>
     <div id="model-display">
       <div class="empty-state">Loading…</div>
@@ -265,7 +265,7 @@
   <div class="card compile-area">
     <h2>Compile Config</h2>
     <p>Flatten all blocks into the Replicator config file (config.yaml). No services are restarted.</p>
-    <button class="btn-compile" onclick="compile()">⚙ Compile</button>
+    <button class="btn-compile" id="btn-compile">⚙ Compile</button>
     <div id="compile-result"></div>
   </div>
 
@@ -402,6 +402,8 @@ async function compile() {
 }
 
 // ── Init ─────────────────────────────────────────────────────────────────────
+document.getElementById('btn-refresh').addEventListener('click', loadModel);
+document.getElementById('btn-compile').addEventListener('click', compile);
 loadModel();
 </script>
 </body>
