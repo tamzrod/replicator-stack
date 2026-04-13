@@ -86,6 +86,8 @@ function nextStatusSlot(model) {
 }
 
 function toReplicatorYaml(system, devices) {
+    // Uses the first target's endpoint for the global MMA connection.
+    // Multi-target routing requires replicator service support and will be addressed separately.
     const targets = (system && system.targets) || [];
     const firstTarget = targets[0] || {};
     const endpointParts = (firstTarget.endpoint || 'mma:502').split(':');
@@ -126,9 +128,9 @@ function toReplicatorYaml(system, devices) {
 function toMmaYaml(system, devices) {
     const targets = (system && system.targets) || [];
     const firstTarget = targets[0] || {};
-    const endpointParts = (firstTarget.endpoint || ':502').split(':');
+    const endpointParts = (firstTarget.endpoint || 'mma:502').split(':');
     const port = Number(endpointParts[1]) || 502;
-    const unitMemorySize = 100;
+    const unitMemorySize = 100; // Fixed per-unit register space; configurable per-target support is a future enhancement.
     const indent = '  ';
     const lines = [
         `port: ${port}`,
