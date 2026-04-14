@@ -1,6 +1,7 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const { randomUUID } = require('crypto');
 
 const app = express();
 app.use(express.json());
@@ -23,15 +24,32 @@ const DEFAULT_SYSTEM = {
 
 function readModel() {
     if (!fs.existsSync(MODEL_PATH)) {
-        const initial = { system: DEFAULT_SYSTEM, devices: [] };
+        const initial = { system: DEFAULT_SYSTEM, groups: [], devices: [] };
         writeModel(initial);
         return initial;
     }
     const model = JSON.parse(fs.readFileSync(MODEL_PATH, 'utf-8'));
     if (!Array.isArray(model.devices)) model.devices = [];
+    if (!Array.isArray(model.groups)) model.groups = [];
     if (!model.system) model.system = {};
     if (!Array.isArray(model.system.targets)) model.system.targets = [];
+    // Migrate old free-text device.group → device.groupId using group entities
+    for (const device of model.devices) {
+        if (device.group && !device.groupId) {
+            let grp = model.groups.find(g => g.name === device.group);
+            if (!grp) {
+                grp = { id: randomUUID(), name: device.group };
+                model.groups.push(grp);
+            }
+            device.groupId = grp.id;
+            delete device.group;
+        }
+    }
     return model;
+}
+
+function findGroup(model, groupId) {
+    return (model.groups || []).find(g => g.id === groupId) || null;
 }
 
 function writeModel(model) {
@@ -192,6 +210,12 @@ app.post('/device', (req, res) => {
             return res.status(400).json({ error: `Target "${device.target_name}" not found` });
         }
 
+        if (device.groupId) {
+            if (!findGroup(model, device.groupId)) {
+                return res.status(400).json({ error: `Group "${device.groupId}" not found` });
+            }
+        }
+
         const exists = (model.devices || []).some(d => d.id === device.id);
         if (exists) {
             return res.status(409).json({ error: `Device ${device.id} already exists` });
@@ -204,7 +228,7 @@ app.post('/device', (req, res) => {
         model.devices.push({
             id: device.id,
             name: device.name || '',
-            group: device.group || '',
+            groupId: device.groupId || null,
             host: DEVICE_HOST,
             port,
             source_unit_id: device.source_unit_id,
@@ -243,7 +267,12 @@ app.put('/device/:id', (req, res) => {
             existing.port = port;
         }
         if (device.name !== undefined) existing.name = device.name;
-        if (device.group !== undefined) existing.group = device.group;
+        if (device.groupId !== undefined) {
+            if (device.groupId && !findGroup(model, device.groupId)) {
+                return res.status(400).json({ error: `Group "${device.groupId}" not found` });
+            }
+            existing.groupId = device.groupId || null;
+        }
         if (device.source_unit_id !== undefined) existing.source_unit_id = Number(device.source_unit_id);
         if (device.target_name !== undefined) {
             const target = model.system.targets.find(t => t.name === device.target_name);
@@ -402,7 +431,133 @@ app.post('/read', (req, res) => {
     }
 });
 
-// POST /compile — generate replicator/config.yaml and mma/config.yaml from model
+// POST /group — add a device group
+app.post('/group', (req, res) => {
+    try {
+        const { group } = req.body;
+        if (!group || !group.name || !group.name.trim()) {
+            return res.status(400).json({ error: 'group.name is required' });
+        }
+        const model = readModel();
+        const exists = model.groups.some(g => g.name === group.name.trim());
+        if (exists) {
+            return res.status(409).json({ error: `Group "${group.name.trim()}" already exists` });
+        }
+        const newGroup = { id: randomUUID(), name: group.name.trim() };
+        model.groups.push(newGroup);
+        writeModel(model);
+        res.status(201).json({ ok: true, group: newGroup });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// PUT /group/:id — rename a group
+app.put('/group/:id', (req, res) => {
+    try {
+        const { id } = req.params;
+        const { group } = req.body;
+        if (!group || !group.name || !group.name.trim()) {
+            return res.status(400).json({ error: 'group.name is required' });
+        }
+        const model = readModel();
+        const existing = findGroup(model, id);
+        if (!existing) {
+            return res.status(404).json({ error: `Group "${id}" not found` });
+        }
+        const nameConflict = model.groups.some(g => g.name === group.name.trim() && g.id !== id);
+        if (nameConflict) {
+            return res.status(409).json({ error: `Group "${group.name.trim()}" already exists` });
+        }
+        existing.name = group.name.trim();
+        writeModel(model);
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// DELETE /group/:id — remove group; devices in this group become ungrouped
+app.delete('/group/:id', (req, res) => {
+    try {
+        const { id } = req.params;
+        const model = readModel();
+        const idx = model.groups.findIndex(g => g.id === id);
+        if (idx === -1) {
+            return res.status(404).json({ error: `Group "${id}" not found` });
+        }
+        model.groups.splice(idx, 1);
+        for (const device of model.devices) {
+            if (device.groupId === id) device.groupId = null;
+        }
+        writeModel(model);
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// PUT /read/:deviceId/:readId — update an existing read
+app.put('/read/:deviceId/:readId', (req, res) => {
+    try {
+        const { deviceId, readId } = req.params;
+        const { read } = req.body;
+        if (!read) {
+            return res.status(400).json({ error: 'read is required' });
+        }
+        const model = readModel();
+        const device = findDevice(model, deviceId);
+        if (!device) {
+            return res.status(404).json({ error: `Device ${deviceId} not found` });
+        }
+        const existing = (device.reads || []).find(r => r.id === readId);
+        if (!existing) {
+            return res.status(404).json({ error: `Read ${readId} not found on device ${deviceId}` });
+        }
+        // Check overlap against other reads (not including itself)
+        const candidate = { ...existing, ...read };
+        for (const r of device.reads) {
+            if (r.id === readId) continue;
+            if (readsOverlap(r, candidate)) {
+                return res.status(409).json({
+                    error: `Read overlaps with existing read ${r.id} in area ${r.source_area}`
+                });
+            }
+        }
+        if (read.name !== undefined) existing.name = read.name;
+        if (read.source_area !== undefined) existing.source_area = read.source_area;
+        if (read.source_address !== undefined) existing.source_address = Number(read.source_address);
+        if (read.source_count !== undefined) existing.source_count = Number(read.source_count);
+        if (read.poll_interval !== undefined) existing.poll_interval = Number(read.poll_interval);
+        writeModel(model);
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// DELETE /read/:deviceId/:readId — remove a read from a device
+app.delete('/read/:deviceId/:readId', (req, res) => {
+    try {
+        const { deviceId, readId } = req.params;
+        const model = readModel();
+        const device = findDevice(model, deviceId);
+        if (!device) {
+            return res.status(404).json({ error: `Device ${deviceId} not found` });
+        }
+        const idx = (device.reads || []).findIndex(r => r.id === readId);
+        if (idx === -1) {
+            return res.status(404).json({ error: `Read ${readId} not found on device ${deviceId}` });
+        }
+        device.reads.splice(idx, 1);
+        writeModel(model);
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+
 app.post('/compile', (req, res) => {
     try {
         const model = readModel();

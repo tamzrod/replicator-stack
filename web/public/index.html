@@ -168,11 +168,20 @@
     body.tree-active main { max-width: none; }
 
     /* ── Tree Panel ─────────────────────────────────────────────────── */
+    .tree-panel-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 14px 10px; border-bottom: 1px solid #e2e8f0;
+    }
     .tree-panel-title {
       font-size: .7rem; font-weight: 700; color: #64748b;
       text-transform: uppercase; letter-spacing: .06em;
-      padding: 14px 14px 10px; border-bottom: 1px solid #e2e8f0;
     }
+    .tree-add-group-btn {
+      background: none; border: 1px dashed #cbd5e1; border-radius: 4px;
+      color: #64748b; font-size: .65rem; padding: 2px 7px; cursor: pointer;
+      font-weight: 600;
+    }
+    .tree-add-group-btn:hover { background: #f1f5f9; border-color: #94a3b8; }
     .tree-group-header {
       display: flex; align-items: center;
       padding: 6px 10px; cursor: pointer; user-select: none; gap: 4px;
@@ -194,8 +203,18 @@
     }
     .tree-device-actions { display: flex; gap: 2px; opacity: 0; transition: opacity .15s; }
     .tree-device:hover .tree-device-actions { opacity: 1; }
-    .tree-read { padding: 2px 10px 2px 38px; font-size: .72rem; color: #94a3b8; }
-    .tree-read::before { content: '└ '; color: #cbd5e1; }
+    .tree-device-toggle { font-size: .6rem; width: 10px; color: #cbd5e1; flex-shrink: 0; }
+    .tree-read {
+      padding: 3px 10px 3px 42px;
+      display: flex; align-items: center; gap: 4px; cursor: pointer;
+    }
+    .tree-read:hover { background: #f8fafc; }
+    .tree-read.selected { background: #f0fdf4; border-left: 3px solid #10b981; padding-left: 39px; }
+    .tree-read-name { font-size: .72rem; color: #475569; flex: 1;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tree-read::before { content: '└ '; color: #cbd5e1; font-size: .7rem; flex-shrink: 0; }
+    .tree-read-actions { display: flex; gap: 2px; opacity: 0; transition: opacity .15s; }
+    .tree-read:hover .tree-read-actions { opacity: 1; }
     .tree-btn {
       background: none; border: none; padding: 2px 5px;
       font-size: .7rem; cursor: pointer; border-radius: 3px;
@@ -205,10 +224,12 @@
     .tree-btn-edit:hover { background: #dbeafe; }
     .tree-btn-del { color: #ef4444; }
     .tree-btn-del:hover { background: #fee2e2; }
+    .tree-btn-grp-edit { color: #64748b; font-size: .65rem; }
+    .tree-btn-grp-edit:hover { background: #f1f5f9; }
     .tree-btn-grp-del { color: #f59e0b; font-size: .65rem; }
     .tree-btn-grp-del:hover { background: #fef3c7; }
 
-    /* ── Edit Device Dialog ─────────────────────────────────────────── */
+    /* ── Dialogs ─────────────────────────────────────────────────────── */
     dialog {
       border: none; border-radius: 10px;
       box-shadow: 0 8px 32px rgba(0,0,0,.18); padding: 0;
@@ -309,7 +330,9 @@
         </div>
         <div class="field">
           <label>Group <span style="color:#94a3b8;font-weight:400">(optional)</span></label>
-          <input id="d-group" type="text" placeholder="e.g. Inverters" />
+          <select id="d-group">
+            <option value="">— Ungrouped —</option>
+          </select>
         </div>
       </div>
       <div id="device-banner" class="banner"></div>
@@ -393,7 +416,9 @@
         </div>
         <div class="field">
           <label>Group <span style="color:#94a3b8;font-weight:400">(optional)</span></label>
-          <input id="ed-group" type="text" placeholder="e.g. Inverters" />
+          <select id="ed-group">
+            <option value="">— Ungrouped —</option>
+          </select>
         </div>
       </div>
       <div class="row">
@@ -415,6 +440,76 @@
       <div id="edit-device-banner" class="banner"></div>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
         <button type="button" id="ed-cancel" class="btn-refresh">Cancel</button>
+        <button type="submit" class="btn-primary">Save</button>
+      </div>
+    </form>
+  </div>
+</dialog>
+
+<!-- ── Add / Edit Group Dialog ───────────────────────────────────── -->
+<dialog id="group-dialog">
+  <div class="card" style="margin:0;min-width:300px;max-width:400px">
+    <h2 id="group-dialog-title">Add Group</h2>
+    <form id="group-form">
+      <input type="hidden" id="grp-id" />
+      <div class="field">
+        <label>Group Name</label>
+        <input id="grp-name" type="text" placeholder="e.g. Inverters" required />
+      </div>
+      <div id="group-banner" class="banner"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+        <button type="button" id="grp-cancel" class="btn-refresh">Cancel</button>
+        <button type="submit" class="btn-primary" id="grp-submit">Add</button>
+      </div>
+    </form>
+  </div>
+</dialog>
+
+<!-- ── Edit Read Dialog ──────────────────────────────────────────── -->
+<dialog id="edit-read-dialog">
+  <div class="card" style="margin:0;min-width:340px;max-width:480px">
+    <h2>Edit Read</h2>
+    <form id="edit-read-form">
+      <input type="hidden" id="er-device-id" />
+      <input type="hidden" id="er-read-id" />
+      <div class="row">
+        <div class="field">
+          <label>Read ID</label>
+          <input id="er-id-display" type="text" disabled style="background:#f1f5f9;color:#94a3b8" />
+        </div>
+        <div class="field">
+          <label>Name</label>
+          <input id="er-name" type="text" placeholder="My Read" />
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Source Area</label>
+          <select id="er-src-area">
+            <option value="holding_registers">holding_registers</option>
+            <option value="coils">coils</option>
+            <option value="input_registers">input_registers</option>
+            <option value="discrete_inputs">discrete_inputs</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Source Address</label>
+          <input id="er-src-addr" type="number" value="0" required />
+        </div>
+        <div class="field">
+          <label>Count</label>
+          <input id="er-count" type="number" value="1" min="1" required />
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Poll Interval (ms)</label>
+          <input id="er-poll" type="number" value="2000" min="100" required />
+        </div>
+      </div>
+      <div id="edit-read-banner" class="banner"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+        <button type="button" id="er-cancel" class="btn-refresh">Cancel</button>
         <button type="submit" class="btn-primary">Save</button>
       </div>
     </form>
@@ -448,6 +543,17 @@ let _currentModel = null;
 function findTarget(model, targetName) {
   const targets = (model.system && model.system.targets) || [];
   return targets.find(t => t.name === targetName) || null;
+}
+
+function findGroupById(model, groupId) {
+  const groups = (model && model.groups) || [];
+  return groups.find(g => g.id === groupId) || null;
+}
+
+function groupName(model, groupId) {
+  if (!groupId) return null;
+  const g = findGroupById(model, groupId);
+  return g ? g.name : null;
 }
 
 function targetPort(t) {
@@ -498,9 +604,10 @@ function renderModel(data) {
   const rows = data.devices.map(d => {
     const sr = statusRange(d, data);
     const readsCount = (d.reads || []).length;
+    const grpName = groupName(data, d.groupId);
     return `<tr data-device-id="${escapeHtml(d.id)}">
       <td>${escapeHtml(d.id)}${d.name ? ` <span style="color:#64748b;font-size:.8rem">— ${escapeHtml(d.name)}</span>` : ''}</td>
-      <td>${d.group ? escapeHtml(d.group) : '<span style="color:#cbd5e1">—</span>'}</td>
+      <td>${grpName ? escapeHtml(grpName) : '<span style="color:#cbd5e1">—</span>'}</td>
       <td>Port&nbsp;${escapeHtml(d.port)} (unit&nbsp;${escapeHtml(d.source_unit_id)})</td>
       <td>unit&nbsp;${escapeHtml(d.assigned_unit_id ?? '?')}</td>
       <td>${d.target_name ? escapeHtml(d.target_name) : '—'}</td>
@@ -530,6 +637,34 @@ function renderModel(data) {
   </table>`;
 }
 
+function refreshGroupDropdowns(data) {
+  const groups = (data && data.groups) || [];
+
+  // Add Device form group select
+  const dSel = document.getElementById('d-group');
+  const dPrev = dSel.value;
+  dSel.innerHTML = '<option value="">— Ungrouped —</option>';
+  for (const g of groups) {
+    const opt = document.createElement('option');
+    opt.value = g.id;
+    opt.textContent = g.name;
+    dSel.appendChild(opt);
+  }
+  if (dPrev) dSel.value = dPrev;
+
+  // Edit Device dialog group select
+  const edSel = document.getElementById('ed-group');
+  const edPrev = edSel.value;
+  edSel.innerHTML = '<option value="">— Ungrouped —</option>';
+  for (const g of groups) {
+    const opt = document.createElement('option');
+    opt.value = g.id;
+    opt.textContent = g.name;
+    edSel.appendChild(opt);
+  }
+  if (edPrev) edSel.value = edPrev;
+}
+
 async function loadModel() {
   const { ok, data } = await api('GET', '/model');
   const el = document.getElementById('model-display');
@@ -542,6 +677,7 @@ async function loadModel() {
   renderModel(data);
   renderTargetsList(data);
   renderTree(data);
+  refreshGroupDropdowns(data);
 
   // refresh target dropdown in device form
   const targets = (data.system && data.system.targets) || [];
@@ -632,7 +768,7 @@ document.getElementById('device-form').addEventListener('submit', async e => {
     device: {
       id:             document.getElementById('d-id').value.trim(),
       name:           document.getElementById('d-name').value.trim(),
-      group:          document.getElementById('d-group').value.trim(),
+      groupId:        document.getElementById('d-group').value || null,
       port:           Number(document.getElementById('d-port').value),
       source_unit_id: Number(document.getElementById('d-unit').value),
       target_name:    document.getElementById('d-target').value,
@@ -738,32 +874,45 @@ async function deleteDevice(id) {
 
 const TREE_THRESHOLD = 3;
 let _selectedDeviceId = null;
+let _selectedReadKey = null; // "deviceId::readId"
 const _collapsedGroups = new Set();
+const _collapsedDevices = new Set();
 
 function findDeviceRow(deviceId) {
   return document.querySelector(`#model-display tr[data-device-id="${CSS.escape(deviceId)}"]`);
 }
 
-function buildGroups(devices) {
-  const map = {};
+function buildTreeGroups(data) {
+  const groups = (data && data.groups) || [];
+  const devices = (data && data.devices) || [];
+
+  // Map groupId → devices
+  const grouped = {};
   for (const d of devices) {
-    const g = d.group || 'Ungrouped';
-    if (!map[g]) map[g] = [];
-    map[g].push(d);
+    const key = d.groupId || '__ungrouped__';
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push(d);
   }
-  const keys = Object.keys(map).sort((a, b) => {
-    if (a === 'Ungrouped') return 1;
-    if (b === 'Ungrouped') return -1;
-    return a.localeCompare(b);
-  });
-  return keys.map(k => ({ name: k, devices: map[k] }));
+
+  const result = [];
+  // Named groups (sorted by name)
+  for (const g of [...groups].sort((a, b) => a.name.localeCompare(b.name))) {
+    result.push({ id: g.id, name: g.name, devices: grouped[g.id] || [], isUngrouped: false });
+  }
+  // Ungrouped
+  if (grouped['__ungrouped__'] && grouped['__ungrouped__'].length > 0) {
+    result.push({ id: '__ungrouped__', name: 'Ungrouped', devices: grouped['__ungrouped__'], isUngrouped: true });
+  }
+  return result;
 }
 
 function renderTree(data) {
   const panel = document.getElementById('tree-panel');
   const devices = (data && data.devices) || [];
+  const groups = (data && data.groups) || [];
 
-  if (devices.length <= TREE_THRESHOLD) {
+  // Show tree when there are groups defined OR device count exceeds threshold
+  if (groups.length === 0 && devices.length <= TREE_THRESHOLD) {
     panel.classList.remove('active');
     document.body.classList.remove('tree-active');
     return;
@@ -772,18 +921,23 @@ function renderTree(data) {
   panel.classList.add('active');
   document.body.classList.add('tree-active');
 
-  const groups = buildGroups(devices);
-  let html = '<div class="tree-panel-title">Devices</div>';
+  const treeGroups = buildTreeGroups(data);
+  let html = `<div class="tree-panel-header">
+    <span class="tree-panel-title">Devices</span>
+    <button class="tree-add-group-btn" id="btn-add-group" title="Add new group">+ Group</button>
+  </div>`;
 
-  for (const group of groups) {
-    const collapsed = _collapsedGroups.has(group.name);
+  for (const group of treeGroups) {
+    const collapsed = _collapsedGroups.has(group.id);
     const toggle = collapsed ? '▶' : '▼';
-    const isUngrouped = group.name === 'Ungrouped';
-    const grpActions = isUngrouped ? '' :
-      `<span class="tree-group-actions"><button class="tree-btn tree-btn-grp-del" data-del-group="${escapeHtml(group.name)}" title="Remove group — devices move to Ungrouped">✕ group</button></span>`;
+    const grpActions = group.isUngrouped ? '' :
+      `<span class="tree-group-actions">
+        <button class="tree-btn tree-btn-grp-edit" data-edit-group="${escapeHtml(group.id)}" title="Rename group">✎</button>
+        <button class="tree-btn tree-btn-grp-del" data-del-group="${escapeHtml(group.id)}" title="Remove group — devices move to Ungrouped">✕</button>
+      </span>`;
 
     html += `<div class="tree-group">`;
-    html += `<div class="tree-group-header" data-toggle-group="${escapeHtml(group.name)}">
+    html += `<div class="tree-group-header" data-toggle-group="${escapeHtml(group.id)}">
       <span class="tree-toggle">${toggle}</span>
       <span class="tree-group-name">${escapeHtml(group.name)}</span>
       ${grpActions}
@@ -792,38 +946,84 @@ function renderTree(data) {
     if (!collapsed) {
       for (const d of group.devices) {
         const sel = d.id === _selectedDeviceId ? ' selected' : '';
+        const devCollapsed = _collapsedDevices.has(d.id);
+        const devToggle = (d.reads && d.reads.length > 0) ? (devCollapsed ? '▶' : '▼') : '·';
         const label = d.name
           ? `${escapeHtml(d.id)} <span style="color:#94a3b8;font-size:.72rem">— ${escapeHtml(d.name)}</span>`
           : escapeHtml(d.id);
         html += `<div class="tree-device${sel}" data-device-id="${escapeHtml(d.id)}">
+          <span class="tree-device-toggle" data-toggle-device="${escapeHtml(d.id)}">${devToggle}</span>
           <span class="tree-device-name">${label}</span>
           <span class="tree-device-actions">
             <button class="tree-btn tree-btn-edit" data-edit-device="${escapeHtml(d.id)}" title="Edit">✎</button>
             <button class="tree-btn tree-btn-del" data-delete-device="${escapeHtml(d.id)}" title="Delete">✕</button>
           </span>
         </div>`;
-        for (const r of (d.reads || [])) {
-          html += `<div class="tree-read">${escapeHtml(r.id)}${r.name ? ` — ${escapeHtml(r.name)}` : ''}</div>`;
+        if (!devCollapsed) {
+          for (const r of (d.reads || [])) {
+            const readKey = `${d.id}::${r.id}`;
+            const readSel = readKey === _selectedReadKey ? ' selected' : '';
+            html += `<div class="tree-read${readSel}" data-device-id="${escapeHtml(d.id)}" data-read-id="${escapeHtml(r.id)}">
+              <span class="tree-read-name">${escapeHtml(r.id)}${r.name ? ` — ${escapeHtml(r.name)}` : ''}</span>
+              <span class="tree-read-actions">
+                <button class="tree-btn tree-btn-edit" data-edit-read="${escapeHtml(r.id)}" data-read-device="${escapeHtml(d.id)}" title="Edit read">✎</button>
+                <button class="tree-btn tree-btn-del" data-delete-read="${escapeHtml(r.id)}" data-read-device="${escapeHtml(d.id)}" title="Delete read">✕</button>
+              </span>
+            </div>`;
+          }
         }
       }
     }
     html += `</div>`;
   }
   panel.innerHTML = html;
+
+  // Attach add-group button
+  const addGrpBtn = panel.querySelector('#btn-add-group');
+  if (addGrpBtn) addGrpBtn.addEventListener('click', openAddGroup);
 }
 
 document.getElementById('tree-panel').addEventListener('click', async e => {
-  // Delete group button (check before toggle so it doesn't also collapse)
+  // Delete group button
   const delGroup = e.target.closest('[data-del-group]');
   if (delGroup) { await deleteGroup(delGroup.dataset.delGroup); return; }
 
+  // Edit group button
+  const editGroup = e.target.closest('[data-edit-group]');
+  if (editGroup) { openEditGroup(editGroup.dataset.editGroup); return; }
+
   // Toggle group collapse
-  const toggleBtn = e.target.closest('[data-toggle-group]');
-  if (toggleBtn) {
-    const g = toggleBtn.dataset.toggleGroup;
+  const toggleGrp = e.target.closest('[data-toggle-group]');
+  if (toggleGrp && !e.target.closest('[data-del-group]') && !e.target.closest('[data-edit-group]')) {
+    const g = toggleGrp.dataset.toggleGroup;
     if (_collapsedGroups.has(g)) _collapsedGroups.delete(g);
     else _collapsedGroups.add(g);
     renderTree(_currentModel);
+    return;
+  }
+
+  // Toggle device reads collapse
+  const toggleDev = e.target.closest('[data-toggle-device]');
+  if (toggleDev) {
+    e.stopPropagation();
+    const id = toggleDev.dataset.toggleDevice;
+    if (_collapsedDevices.has(id)) _collapsedDevices.delete(id);
+    else _collapsedDevices.add(id);
+    renderTree(_currentModel);
+    return;
+  }
+
+  // Edit read
+  const editRead = e.target.closest('[data-edit-read]');
+  if (editRead) {
+    openEditRead(editRead.dataset.readDevice, editRead.dataset.editRead);
+    return;
+  }
+
+  // Delete read
+  const delRead = e.target.closest('[data-delete-read]');
+  if (delRead) {
+    await deleteRead(delRead.dataset.readDevice, delRead.dataset.deleteRead);
     return;
   }
 
@@ -835,10 +1035,26 @@ document.getElementById('tree-panel').addEventListener('click', async e => {
   const delBtn = e.target.closest('[data-delete-device]');
   if (delBtn) { await deleteDevice(delBtn.dataset.deleteDevice); return; }
 
+  // Select read node
+  const readRow = e.target.closest('.tree-read[data-read-id]');
+  if (readRow) {
+    _selectedReadKey = `${readRow.dataset.deviceId}::${readRow.dataset.readId}`;
+    _selectedDeviceId = readRow.dataset.deviceId;
+    renderTree(_currentModel);
+    const tr = findDeviceRow(_selectedDeviceId);
+    if (tr) {
+      tr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      tr.classList.add('row-highlight');
+      setTimeout(() => tr.classList.remove('row-highlight'), 2000);
+    }
+    return;
+  }
+
   // Select device — highlight in main table
-  const deviceRow = e.target.closest('[data-device-id]');
+  const deviceRow = e.target.closest('.tree-device[data-device-id]');
   if (deviceRow) {
     _selectedDeviceId = deviceRow.dataset.deviceId;
+    _selectedReadKey = null;
     renderTree(_currentModel);
     const tr = findDeviceRow(_selectedDeviceId);
     if (tr) {
@@ -849,14 +1065,125 @@ document.getElementById('tree-panel').addEventListener('click', async e => {
   }
 });
 
-async function deleteGroup(groupName) {
-  if (!_currentModel) return;
-  const devices = (_currentModel.devices || []).filter(d => (d.group || 'Ungrouped') === groupName);
-  // Move all devices in this group to Ungrouped in parallel
-  await Promise.all(devices.map(d =>
-    api('PUT', `/device/${encodeURIComponent(d.id)}`, { device: { group: '' } })
-  ));
+async function deleteGroup(groupId) {
+  const model = _currentModel || {};
+  const group = (model.groups || []).find(g => g.id === groupId);
+  const name = group ? group.name : groupId;
+  if (!confirm(`Remove group "${name}"? Devices in this group will become Ungrouped.`)) return;
+  const { ok, data } = await api('DELETE', `/group/${encodeURIComponent(groupId)}`);
+  if (!ok) { alert(`Error: ${data.error || 'Unknown error'}`); return; }
   await loadModel();
+}
+
+// ── Group CRUD ───────────────────────────────────────────────────────────────
+
+function openAddGroup() {
+  document.getElementById('grp-id').value = '';
+  document.getElementById('grp-name').value = '';
+  document.getElementById('group-dialog-title').textContent = 'Add Group';
+  document.getElementById('grp-submit').textContent = 'Add';
+  document.getElementById('group-banner').className = 'banner';
+  document.getElementById('group-dialog').showModal();
+}
+
+function openEditGroup(groupId) {
+  const model = _currentModel || {};
+  const group = (model.groups || []).find(g => g.id === groupId);
+  if (!group) return;
+  document.getElementById('grp-id').value = group.id;
+  document.getElementById('grp-name').value = group.name;
+  document.getElementById('group-dialog-title').textContent = 'Rename Group';
+  document.getElementById('grp-submit').textContent = 'Save';
+  document.getElementById('group-banner').className = 'banner';
+  document.getElementById('group-dialog').showModal();
+}
+
+document.getElementById('group-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const banner = document.getElementById('group-banner');
+  banner.className = 'banner';
+  const id = document.getElementById('grp-id').value;
+  const name = document.getElementById('grp-name').value.trim();
+
+  let result;
+  if (id) {
+    result = await api('PUT', `/group/${encodeURIComponent(id)}`, { group: { name } });
+  } else {
+    result = await api('POST', '/group', { group: { name } });
+  }
+
+  if (result.ok) {
+    document.getElementById('group-dialog').close();
+    await loadModel();
+  } else {
+    banner.textContent = `✗ ${result.data.error || 'Unknown error'}`;
+    banner.className = 'banner show err';
+  }
+});
+
+document.getElementById('grp-cancel').addEventListener('click', () => {
+  document.getElementById('group-dialog').close();
+});
+
+// ── Read CRUD ────────────────────────────────────────────────────────────────
+
+function openEditRead(deviceId, readId) {
+  const model = _currentModel || {};
+  const device = (model.devices || []).find(d => d.id === deviceId);
+  if (!device) return;
+  const read = (device.reads || []).find(r => r.id === readId);
+  if (!read) return;
+
+  document.getElementById('er-device-id').value = deviceId;
+  document.getElementById('er-read-id').value = readId;
+  document.getElementById('er-id-display').value = readId;
+  document.getElementById('er-name').value = read.name || '';
+  document.getElementById('er-src-area').value = read.source_area || 'holding_registers';
+  document.getElementById('er-src-addr').value = read.source_address ?? 0;
+  document.getElementById('er-count').value = read.source_count ?? 1;
+  document.getElementById('er-poll').value = read.poll_interval ?? 2000;
+  document.getElementById('edit-read-banner').className = 'banner';
+  document.getElementById('edit-read-dialog').showModal();
+}
+
+document.getElementById('edit-read-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const banner = document.getElementById('edit-read-banner');
+  banner.className = 'banner';
+  const deviceId = document.getElementById('er-device-id').value;
+  const readId = document.getElementById('er-read-id').value;
+  const payload = {
+    read: {
+      name:           document.getElementById('er-name').value.trim(),
+      source_area:    document.getElementById('er-src-area').value,
+      source_address: Number(document.getElementById('er-src-addr').value),
+      source_count:   Number(document.getElementById('er-count').value),
+      poll_interval:  Number(document.getElementById('er-poll').value),
+    }
+  };
+  const { ok, data } = await api('PUT', `/read/${encodeURIComponent(deviceId)}/${encodeURIComponent(readId)}`, payload);
+  if (ok) {
+    document.getElementById('edit-read-dialog').close();
+    await loadModel();
+  } else {
+    banner.textContent = `✗ ${data.error || 'Unknown error'}`;
+    banner.className = 'banner show err';
+  }
+});
+
+document.getElementById('er-cancel').addEventListener('click', () => {
+  document.getElementById('edit-read-dialog').close();
+});
+
+async function deleteRead(deviceId, readId) {
+  if (!confirm(`Delete read "${readId}" from device "${deviceId}"?`)) return;
+  const { ok, data } = await api('DELETE', `/read/${encodeURIComponent(deviceId)}/${encodeURIComponent(readId)}`);
+  if (ok) {
+    if (_selectedReadKey === `${deviceId}::${readId}`) _selectedReadKey = null;
+    await loadModel();
+  } else {
+    alert(`Error: ${data.error || 'Unknown error'}`);
+  }
 }
 
 // ── Edit Device ──────────────────────────────────────────────────────────────
@@ -868,9 +1195,12 @@ function openEditDevice(deviceId) {
 
   document.getElementById('ed-id').value = device.id;
   document.getElementById('ed-name').value = device.name || '';
-  document.getElementById('ed-group').value = device.group || '';
   document.getElementById('ed-port').value = device.port || '';
   document.getElementById('ed-unit').value = device.source_unit_id || '';
+
+  // Populate group dropdown and select current
+  refreshGroupDropdowns(model);
+  document.getElementById('ed-group').value = device.groupId || '';
 
   const targets = (model.system && model.system.targets) || [];
   const tsel = document.getElementById('ed-target');
@@ -896,7 +1226,7 @@ document.getElementById('edit-device-form').addEventListener('submit', async e =
   const payload = {
     device: {
       name:           document.getElementById('ed-name').value.trim(),
-      group:          document.getElementById('ed-group').value.trim(),
+      groupId:        document.getElementById('ed-group').value || null,
       port:           Number(document.getElementById('ed-port').value),
       source_unit_id: Number(document.getElementById('ed-unit').value),
       target_name:    document.getElementById('ed-target').value,
