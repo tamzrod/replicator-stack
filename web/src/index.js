@@ -122,22 +122,20 @@ function findDevice(model, deviceId) {
 
 
 function toReplicatorYaml(system, devices) {
-    // Uses the first target's endpoint for the global MMA connection.
-    // Multi-target routing requires replicator service support and will be addressed separately.
+    // Replicator orchestration config: routes only.
+    // MMA is referenced by port only (no hostnames) via target.mma_port per route.
     const targets = (system && system.targets) || [];
-    const firstTarget = targets[0] || {};
-    const endpointParts = (firstTarget.endpoint || 'mma:502').split(':');
-    const host = endpointParts[0] || 'mma';
-    const port = Number(endpointParts[1]) || 502;
+    const targetByName = {};
+    for (const t of targets) {
+        targetByName[t.name] = t;
+    }
+
     const indent = '  ';
-    const lines = [
-        'mma:',
-        `${indent}host: ${host}`,
-        `${indent}port: ${port}`,
-        '',
-        'routes:'
-    ];
+    const lines = ['routes:'];
     for (const device of devices) {
+        // Resolve this device's MMA port from its assigned target.
+        const target = targetByName[device.target_name] || {};
+        const mmaPort = target.port || Number((target.endpoint || ':502').split(':')[1]) || 502;
         for (const read of (device.reads || [])) {
             const routeId = `${device.id}__${read.id}`;
             lines.push(`${indent}- id: ${routeId}`);
@@ -149,6 +147,7 @@ function toReplicatorYaml(system, devices) {
             lines.push(`${indent}    address: ${read.source_address}`);
             lines.push(`${indent}    count: ${read.source_count}`);
             lines.push(`${indent}  target:`);
+            lines.push(`${indent}    mma_port: ${mmaPort}`);
             lines.push(`${indent}    unit: ${device.unitId}`);
             lines.push(`${indent}    area: ${read.target_area}`);
             lines.push(`${indent}    address: ${read.target_address}`);
@@ -184,6 +183,52 @@ function toMmaYaml(system, devices) {
         }
     }
     return lines.join('\n') + '\n';
+}
+
+// ---------------------------------------------------------------------------
+// Config validation
+// ---------------------------------------------------------------------------
+
+// MMA config must contain ONLY runtime listener definitions — no orchestration data.
+function validateMmaConfig(yaml) {
+    const errors = [];
+    if (/^routes\s*:/m.test(yaml)) {
+        errors.push('MMA config must not contain routes — routes belong in Replicator config');
+    }
+    if (/\bdevice_id\s*:/m.test(yaml)) {
+        errors.push('MMA config must not contain device_id — device references belong in Replicator config');
+    }
+    if (/\bread_id\s*:/m.test(yaml)) {
+        errors.push('MMA config must not contain read_id — read references belong in Replicator config');
+    }
+    return errors;
+}
+
+// Replicator config must contain routes only — no MMA listener/memory definitions,
+// and MMA must be referenced by port only (no hostnames).
+function validateReplicatorConfig(yaml) {
+    const errors = [];
+    if (/^listeners\s*:/m.test(yaml)) {
+        errors.push('Replicator config must not contain a top-level listeners block — listeners belong in MMA config');
+    }
+    if (/^memory\s*:/m.test(yaml)) {
+        errors.push('Replicator config must not contain a top-level memory block — memory definitions belong in MMA config');
+    }
+    // Detect hostname inside a root-level mma: block (reference by port only is required).
+    const lines = yaml.split('\n');
+    let inMmaBlock = false;
+    for (const line of lines) {
+        if (/^mma\s*:/.test(line)) { inMmaBlock = true; continue; }
+        if (inMmaBlock) {
+            // Non-indented non-empty line ends the mma block.
+            if (/^\S/.test(line) && line.trim() !== '') { inMmaBlock = false; break; }
+            if (/^\s+host\s*:/.test(line)) {
+                errors.push('Replicator config must not reference MMA by hostname — use mma_port in route targets instead');
+                break;
+            }
+        }
+    }
+    return errors;
 }
 
 // ---------------------------------------------------------------------------
@@ -598,10 +643,58 @@ app.post('/compile', (req, res) => {
             routeCount += (device.reads || []).length;
         }
 
-        atomicWrite(REPLICATOR_CONFIG_PATH, toReplicatorYaml(system, devices));
-        atomicWrite(MMA_CONFIG_PATH, toMmaYaml(system, devices));
+        const replicatorYaml = toReplicatorYaml(system, devices);
+        const mmaYaml = toMmaYaml(system, devices);
+
+        // Validate generated configs before writing to disk.
+        const mmaErrors = validateMmaConfig(mmaYaml);
+        const replicatorErrors = validateReplicatorConfig(replicatorYaml);
+        if (mmaErrors.length > 0 || replicatorErrors.length > 0) {
+            return res.status(400).json({
+                error: 'Config validation failed — generated configs violate separation rules',
+                mma_errors: mmaErrors,
+                replicator_errors: replicatorErrors,
+            });
+        }
+
+        atomicWrite(REPLICATOR_CONFIG_PATH, replicatorYaml);
+        atomicWrite(MMA_CONFIG_PATH, mmaYaml);
 
         res.json({ ok: true, routes: routeCount });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /validate — validate the current on-disk config files against separation rules
+app.get('/validate', (req, res) => {
+    try {
+        const result = {
+            mma: { valid: true, errors: [] },
+            replicator: { valid: true, errors: [] },
+        };
+
+        if (fs.existsSync(MMA_CONFIG_PATH)) {
+            const yaml = fs.readFileSync(MMA_CONFIG_PATH, 'utf-8');
+            const errors = validateMmaConfig(yaml);
+            result.mma.valid = errors.length === 0;
+            result.mma.errors = errors;
+        } else {
+            result.mma.valid = false;
+            result.mma.errors = ['Config file not found — run Compile to generate it'];
+        }
+
+        if (fs.existsSync(REPLICATOR_CONFIG_PATH)) {
+            const yaml = fs.readFileSync(REPLICATOR_CONFIG_PATH, 'utf-8');
+            const errors = validateReplicatorConfig(yaml);
+            result.replicator.valid = errors.length === 0;
+            result.replicator.errors = errors;
+        } else {
+            result.replicator.valid = false;
+            result.replicator.errors = ['Config file not found — run Compile to generate it'];
+        }
+
+        res.json(result);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

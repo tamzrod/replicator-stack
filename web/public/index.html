@@ -395,6 +395,43 @@
       font-weight: 600;
     }
     .btn-cv-refresh:hover { background: #cbd5e1; }
+
+    /* ── Validation bar ─────────────────────────────────────────────── */
+    .cv-validation-bar {
+      padding: 8px 20px;
+      font-size: 0.8rem;
+      font-weight: 500;
+      border-top: 1px solid #e2e8f0;
+      display: none;
+    }
+    .cv-validation-bar.show { display: block; }
+    .cv-validation-bar.valid {
+      background: #f0fdf4;
+      color: #166534;
+      border-color: #bbf7d0;
+    }
+    .cv-validation-bar.invalid {
+      background: #fef2f2;
+      color: #991b1b;
+      border-color: #fecaca;
+    }
+    .cv-validation-errors {
+      margin-top: 4px;
+      padding-left: 16px;
+      list-style: disc;
+    }
+    .cv-validation-errors li { margin-top: 2px; }
+
+    .cv-valid-badge {
+      font-size: 0.65rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 99px;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+    }
+    .cv-valid-badge.valid { background: #d1fae5; color: #065f46; }
+    .cv-valid-badge.invalid { background: #fee2e2; color: #991b1b; }
   </style>
 </head>
 <body>
@@ -574,6 +611,7 @@
       <div style="display:flex;align-items:center;gap:10px">
         <h2>Replicator Config</h2>
         <span class="cv-badge">READ-ONLY</span>
+        <span class="cv-valid-badge" id="cv-valid-badge-replicator" style="display:none"></span>
       </div>
       <div class="cv-actions">
         <div class="cv-search-wrap">
@@ -583,6 +621,7 @@
         <button class="btn-copy" id="btn-copy-replicator" data-target="replicator">⎘ Copy</button>
       </div>
     </div>
+    <div class="cv-validation-bar" id="cv-validation-bar-replicator"></div>
     <div class="cv-pre-wrap">
       <pre class="cv-pre" id="cv-pre-replicator"><span style="color:#64748b;font-style:italic">Loading…</span></pre>
     </div>
@@ -594,6 +633,7 @@
       <div style="display:flex;align-items:center;gap:10px">
         <h2>MMA Config</h2>
         <span class="cv-badge">READ-ONLY</span>
+        <span class="cv-valid-badge" id="cv-valid-badge-mma" style="display:none"></span>
       </div>
       <div class="cv-actions">
         <div class="cv-search-wrap">
@@ -603,6 +643,7 @@
         <button class="btn-copy" id="btn-copy-mma" data-target="mma">⎘ Copy</button>
       </div>
     </div>
+    <div class="cv-validation-bar" id="cv-validation-bar-mma"></div>
     <div class="cv-pre-wrap">
       <pre class="cv-pre" id="cv-pre-mma"><span style="color:#64748b;font-style:italic">Loading…</span></pre>
     </div>
@@ -1036,7 +1077,14 @@ async function compile() {
   el.textContent = '';
   const { ok, data } = await api('POST', '/compile');
   if (ok) {
-    el.innerHTML = `<div class="banner show ok">✓ Compiled successfully — ${data.routes} route(s) written to replicator and MMA configs.</div>`;
+    el.innerHTML = `<div class="banner show ok">✓ Compiled successfully — ${data.routes} route(s) written to Replicator and MMA configs.</div>`;
+  } else if (data.mma_errors || data.replicator_errors) {
+    const mmaItems = (data.mma_errors || []).map(e => `<li>${escapeHtml(e)}</li>`).join('');
+    const repItems = (data.replicator_errors || []).map(e => `<li>${escapeHtml(e)}</li>`).join('');
+    let detail = '';
+    if (mmaItems) detail += `<strong>MMA:</strong><ul style="margin:4px 0 0 16px">${mmaItems}</ul>`;
+    if (repItems) detail += `<strong>Replicator:</strong><ul style="margin:4px 0 0 16px">${repItems}</ul>`;
+    el.innerHTML = `<div class="banner show err">✗ Compile blocked — config separation violation:<br/>${detail}</div>`;
   } else {
     el.innerHTML = `<div class="banner show err">✗ ${data.error || 'Compile failed'}</div>`;
   }
@@ -1599,6 +1647,33 @@ async function loadConfigs() {
   statusEl.textContent = `Snapshot loaded at ${now} — read-only`;
   renderCvPanel('replicator', data.replicator);
   renderCvPanel('mma', data.mma);
+
+  // Load and render validation results for both configs.
+  const valRes = await api('GET', '/validate');
+  if (valRes.ok) {
+    renderValidation('replicator', valRes.data.replicator);
+    renderValidation('mma', valRes.data.mma);
+  }
+}
+
+function renderValidation(panelId, result) {
+  const bar = document.getElementById(`cv-validation-bar-${panelId}`);
+  const badge = document.getElementById(`cv-valid-badge-${panelId}`);
+  if (!bar || !badge || !result) return;
+
+  badge.style.display = '';
+  if (result.valid) {
+    badge.textContent = '✓ Valid';
+    badge.className = 'cv-valid-badge valid';
+    bar.className = 'cv-validation-bar show valid';
+    bar.innerHTML = '✓ Config passes separation rules — no contamination detected.';
+  } else {
+    badge.textContent = '✗ Invalid';
+    badge.className = 'cv-valid-badge invalid';
+    bar.className = 'cv-validation-bar show invalid';
+    const items = (result.errors || []).map(e => `<li>${escapeHtml(e)}</li>`).join('');
+    bar.innerHTML = `✗ Config violates separation rules:<ul class="cv-validation-errors">${items}</ul>`;
+  }
 }
 
 // Copy to clipboard
