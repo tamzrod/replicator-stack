@@ -16,6 +16,9 @@ const MMA_CONFIG_PATH = path.join(DATA_DIR, 'mma/config.yaml');
 
 const DEFAULT_SYSTEM = {};
 
+// Number of holding registers consumed by each device's status slot.
+const STATUS_SLOT_SIZE = 1;
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -212,6 +215,43 @@ function findDevice(model, deviceId) {
 
 
 
+/**
+ * Recompile status slot assignments for all devices.
+ *
+ * Devices sharing the same status_unit_id are sorted deterministically by
+ * device.id and assigned sequential slots (0, 1, 2, …).  Any existing
+ * status_slot values are overwritten.  Devices without a status_unit_id are
+ * left unchanged.
+ *
+ * @param {object} model
+ * @returns {{ modified: boolean }}
+ */
+function recompileStatusSlots(model) {
+    const devices = model.devices || [];
+
+    // Group devices by status_unit_id (skip devices that don't use status memory)
+    const groups = {};
+    for (const device of devices) {
+        if (device.status_unit_id == null) continue;
+        const key = String(device.status_unit_id);
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(device);
+    }
+
+    let modified = false;
+    for (const groupDevices of Object.values(groups)) {
+        // Sort deterministically by device ID so every compile produces the same mapping
+        groupDevices.sort((a, b) => String(a.id).localeCompare(String(b.id)));
+        for (let i = 0; i < groupDevices.length; i++) {
+            if (groupDevices[i].status_slot !== i) {
+                groupDevices[i].status_slot = i;
+                modified = true;
+            }
+        }
+    }
+    return { modified };
+}
+
 // Maps Modbus area names to function codes (per Modbus protocol spec).
 const AREA_TO_FC = {
     holding_registers: 3,
@@ -291,6 +331,19 @@ function toMmaYaml(model) {
         return 'listeners: []\n';
     }
 
+    // Pre-compute status memory requirements from devices:
+    //   statusByPort: portNum → Map<statusUnitId, deviceCount>
+    // Status blocks are sized as device_count × STATUS_SLOT_SIZE registers, starting at address 0.
+    const statusByPort = {};
+    for (const device of (model.devices || [])) {
+        if (device.status_unit_id == null) continue;
+        const targetPort = endpointPort(device.target_endpoint);
+        if (!targetPort) continue;
+        if (!statusByPort[targetPort]) statusByPort[targetPort] = new Map();
+        const suid = Number(device.status_unit_id);
+        statusByPort[targetPort].set(suid, (statusByPort[targetPort].get(suid) || 0) + 1);
+    }
+
     const lines = ['listeners:'];
 
     for (let pi = 0; pi < memoryPorts.length; pi++) {
@@ -303,7 +356,9 @@ function toMmaYaml(model) {
         lines.push(`    listen: ":${portNum}"`);
         lines.push(`    memory:`);
         const blocks = port.blocks || [];
-        if (blocks.length === 0) {
+        const statusMap = statusByPort[portNum] || new Map();
+
+        if (blocks.length === 0 && statusMap.size === 0) {
             lines.push(`      []`);
         } else {
             for (const block of blocks) {
@@ -321,6 +376,22 @@ function toMmaYaml(model) {
                     lines.push(`                - ::/0`);
                     lines.push(`              allow_fc: [3]`);
                 }
+            }
+            // Emit dynamically-sized status memory blocks, sorted by unit_id for determinism.
+            // Size = device_count × STATUS_SLOT_SIZE (one slot per active device, no gaps).
+            for (const [suid, deviceCount] of [...statusMap.entries()].sort((a, b) => a[0] - b[0])) {
+                const count = deviceCount * STATUS_SLOT_SIZE;
+                lines.push(`      - unit_id: ${suid}`);
+                lines.push(`        holding_registers:`);
+                lines.push(`          start: 0`);
+                lines.push(`          count: ${count}`);
+                lines.push(`        policy:`);
+                lines.push(`          rules:`);
+                lines.push(`            - id: read-write`);
+                lines.push(`              source_ip:`);
+                lines.push(`                - 0.0.0.0/0`);
+                lines.push(`                - ::/0`);
+                lines.push(`              allow_fc: [3, 16]`);
             }
         }
     }
@@ -1110,16 +1181,34 @@ function ensureMemoryCoverage(model) {
  * @param {Set<number>} [excludedPortNums] - port numbers whose devices should be omitted from replicator YAML
  */
 function compileAndWrite(model, excludedPortNums = new Set()) {
+    // Step 0: recompile status slot assignments — deterministic sequential allocation per status_unit_id
+    const statusSlots = recompileStatusSlots(model);
+    if (statusSlots.modified) {
+        writeModel(model);
+    }
+
     // Step 1: ensure every read has a backing memory block (auto-create blocks if missing, but never auto-create ports)
     const coverage = ensureMemoryCoverage(model);
     if (coverage.modified) {
         writeModel(model);
     }
 
-    // Validate that no included port has an empty memory block list.
-    // A port with no blocks is invalid — it cannot serve any Replicator target.
+    // Validate that no included port has an empty memory block list AND no status devices.
+    // A port with no regular blocks is still valid if devices with status_unit_id target it
+    // (status blocks are generated dynamically in toMmaYaml).
     const emptyPorts = (model.memory.ports || [])
-        .filter(p => !excludedPortNums.has(Number(p.port)) && (p.blocks || []).length === 0)
+        .filter(p => {
+            const portNum = Number(p.port);
+            if (excludedPortNums.has(portNum)) return false;
+            if ((p.blocks || []).length > 0) return false;
+            // Port is non-empty if any non-excluded device uses it for status memory
+            const hasStatusContent = (model.devices || []).some(d =>
+                d.status_unit_id != null &&
+                endpointPort(d.target_endpoint) === portNum &&
+                !excludedPortNums.has(portNum)
+            );
+            return !hasStatusContent;
+        })
         .map(p => Number(p.port));
     if (emptyPorts.length > 0) {
         return {
