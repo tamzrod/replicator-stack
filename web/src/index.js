@@ -183,7 +183,8 @@ function toReplicatorYaml(model) {
         const targetPortNum = (device.unitId != null && unitToPort[Number(device.unitId)] != null)
             ? unitToPort[Number(device.unitId)]
             : defaultPort;
-        const targetEndpoint = `${TARGET_HOST}:${targetPortNum}`;
+        const mmaHost = (model.system && model.system.mma_endpoint) || TARGET_HOST;
+        const targetEndpoint = `${mmaHost}:${targetPortNum}`;
 
         lines.push(`    - id: "${device.id}"`);
         lines.push(`      source:`);
@@ -440,6 +441,16 @@ app.delete('/device/:id', (req, res) => {
         writeModel(model);
         autoCompile(model);
         res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /system — return current system settings
+app.get('/system', (req, res) => {
+    try {
+        const model = readModel();
+        res.json({ system: model.system || {}, defaultMmaEndpoint: TARGET_HOST });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
