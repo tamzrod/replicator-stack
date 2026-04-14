@@ -470,8 +470,8 @@ app.get('/model', (req, res) => {
 app.post('/device', (req, res) => {
     try {
         const { device } = req.body;
-        if (!device || !device.id) {
-            return res.status(400).json({ error: 'device.id is required' });
+        if (!device) {
+            return res.status(400).json({ error: 'device is required' });
         }
         if (!isValidEndpoint(device.source_endpoint)) {
             return res.status(400).json({ error: 'device.source_endpoint must be a valid endpoint (e.g. 10.0.0.1:502 or mydevice:502)' });
@@ -495,13 +495,10 @@ app.post('/device', (req, res) => {
             }
         }
 
-        const exists = (model.devices || []).some(d => d.id === device.id);
-        if (exists) {
-            return res.status(409).json({ error: `Device ${device.id} already exists` });
-        }
+        const generatedId = `device_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
 
         model.devices.push({
-            id: device.id,
+            id: generatedId,
             name: device.name || '',
             groupId: device.groupId || null,
             source_endpoint: device.source_endpoint.trim(),
@@ -515,7 +512,7 @@ app.post('/device', (req, res) => {
         writeModel(model);
         autoCompile(model);
 
-        res.status(201).json({ ok: true, unitId });
+        res.status(201).json({ ok: true, id: generatedId, unitId });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

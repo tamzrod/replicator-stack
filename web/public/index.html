@@ -872,10 +872,6 @@
     <form id="add-device-form">
       <div class="row">
         <div class="field">
-          <label>Device ID</label>
-          <input id="ad-id" type="text" placeholder="device-1" required />
-        </div>
-        <div class="field">
           <label>Name</label>
           <input id="ad-name" type="text" placeholder="My Device" />
         </div>
@@ -1345,7 +1341,6 @@ document.getElementById('add-device-form').addEventListener('submit', async e =>
 
   const payload = {
     device: {
-      id:             document.getElementById('ad-id').value.trim(),
       name:           document.getElementById('ad-name').value.trim(),
       groupId:        document.getElementById('ad-group').value || null,
       source_endpoint: document.getElementById('ad-src-endpoint').value.trim(),
@@ -1362,7 +1357,7 @@ document.getElementById('add-device-form').addEventListener('submit', async e =>
   const { ok, data } = await api('POST', '/device', payload);
   if (ok) {
     document.getElementById('add-device-dialog').close();
-    _selectedDeviceId = payload.device.id;
+    _selectedDeviceId = data.id;
     await loadModel();
   } else {
     banner.textContent = `✗ ${data.error || 'Unknown error'}`;
