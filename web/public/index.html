@@ -1295,7 +1295,7 @@ async function compile() {
   if (ok) {
     const blocksMsg = data.blocksCreated > 0 ? ` (${data.blocksCreated} memory block(s) auto-created)` : '';
     const excludedMsg = excludedPorts.length > 0
-      ? ` — ${excludedPorts.length} port(s) skipped (port ${excludedPorts.join(', ')})`
+      ? ` — ${excludedPorts.length} port(s) skipped (port${excludedPorts.length > 1 ? 's' : ''} ${excludedPorts.join(', ')})`
       : '';
     el.innerHTML = `<div class="banner show ok">✓ Compiled successfully — ${escapeHtml(String(data.routes))} route(s) written to Replicator and MMA configs${blocksMsg}${excludedMsg}.</div>`;
     await refreshConfigViewerIfActive();
