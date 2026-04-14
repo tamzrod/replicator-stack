@@ -597,6 +597,19 @@
   <!-- ── Device Workspace (driven by tree selection) ─────────────────── -->
   <div id="device-workspace"></div>
 
+  <!-- ── MMA Endpoint Settings ──────────────────────────────────────── -->
+  <div class="card" id="mma-endpoint-card">
+    <h2>MMA Endpoint</h2>
+    <p>Hostname or IP address of the MMA service used as the Replicator write target. Supports local, Docker, or remote deployments.</p>
+    <div class="field" style="max-width:320px;margin-bottom:12px">
+      <label for="mma-endpoint-input">MMA Endpoint</label>
+      <input id="mma-endpoint-input" type="text" placeholder="mma" style="width:100%" />
+      <small id="mma-endpoint-hint" style="color:#64748b;font-size:.75rem"></small>
+    </div>
+    <button class="btn-primary" id="btn-save-mma-endpoint">Save</button>
+    <span id="mma-endpoint-status" style="margin-left:10px;font-size:.85rem"></span>
+  </div>
+
   <!-- ── Compile ────────────────────────────────────────────────────── -->
   <div class="card compile-area">
     <h2>Compile Config</h2>
@@ -1103,6 +1116,33 @@ function refreshGroupDropdowns(data) {
   if (adPrev) adSel.value = adPrev;
 }
 
+// ── MMA Endpoint Settings ────────────────────────────────────────────────────
+
+async function loadMmaEndpoint() {
+  const { ok, data } = await api('GET', '/system');
+  if (!ok) return;
+  const input = document.getElementById('mma-endpoint-input');
+  const hint = document.getElementById('mma-endpoint-hint');
+  input.value = (data.system && data.system.mma_endpoint) || '';
+  hint.textContent = `Default (env): ${data.defaultMmaEndpoint || 'mma'}`;
+}
+
+document.getElementById('btn-save-mma-endpoint').addEventListener('click', async () => {
+  const status = document.getElementById('mma-endpoint-status');
+  const value = document.getElementById('mma-endpoint-input').value.trim();
+  const payload = { system: { mma_endpoint: value || null } };
+  const { ok, data } = await api('PUT', '/system', payload);
+  if (ok) {
+    status.textContent = '✓ Saved';
+    status.style.color = '#16a34a';
+    await loadMmaEndpoint();
+    setTimeout(() => { status.textContent = ''; }, 3000);
+  } else {
+    status.textContent = `✗ ${data.error || 'Failed to save'}`;
+    status.style.color = '#ef4444';
+  }
+});
+
 async function loadModel() {
   const { ok, data } = await api('GET', '/model');
   if (!ok) {
@@ -1116,6 +1156,7 @@ async function loadModel() {
   refreshGroupDropdowns(data);
   renderDeviceWorkspace();
   renderMemoryTab(data);
+  await loadMmaEndpoint();
 
   // If the config viewer tab is open, keep it in sync with the latest compiled output.
   await refreshConfigViewerIfActive();
