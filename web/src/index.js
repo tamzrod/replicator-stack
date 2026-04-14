@@ -23,6 +23,16 @@ const STATUS_SLOT_SIZE = 30;
 // Helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Validate that a value is a required positive integer (e.g. for unit IDs).
+ * Returns true if valid, false otherwise.
+ */
+function isRequiredNonNegativeInt(value) {
+    if (value == null || value === '') return false;
+    const n = Number(value);
+    return Number.isFinite(n) && n >= 0;
+}
+
 function initialModel() {
     return { system: DEFAULT_SYSTEM, groups: [], devices: [], memory: { ports: [] } };
 }
@@ -470,8 +480,12 @@ app.post('/device', (req, res) => {
             return res.status(400).json({ error: 'device.target_endpoint must be a valid endpoint (e.g. mma2:501)' });
         }
         const unitId = Number(device.unitId);
-        if (!Number.isFinite(unitId) || unitId < 1) {
-            return res.status(400).json({ error: 'device.unitId must be a positive integer (MMA unit ID)' });
+        if (!Number.isFinite(unitId) || unitId < 0) {
+            return res.status(400).json({ error: 'device.unitId must be a non-negative integer (MMA unit ID)' });
+        }
+        const sourceUnitId = Number(device.source_unit_id);
+        if (!isRequiredNonNegativeInt(device.source_unit_id)) {
+            return res.status(400).json({ error: 'device.source_unit_id is required and must be a non-negative integer' });
         }
         const model = readModel();
 
@@ -491,7 +505,7 @@ app.post('/device', (req, res) => {
             name: device.name || '',
             groupId: device.groupId || null,
             source_endpoint: device.source_endpoint.trim(),
-            source_unit_id: device.source_unit_id,
+            source_unit_id: sourceUnitId,
             target_endpoint: device.target_endpoint.trim(),
             unitId,
             status_slot: device.status_slot != null ? Number(device.status_slot) : 0,
@@ -534,8 +548,8 @@ app.put('/device/:id', (req, res) => {
         }
         if (device.unitId !== undefined) {
             const unitId = Number(device.unitId);
-            if (!Number.isFinite(unitId) || unitId < 1) {
-                return res.status(400).json({ error: 'device.unitId must be a positive integer (MMA unit ID)' });
+            if (!Number.isFinite(unitId) || unitId < 0) {
+                return res.status(400).json({ error: 'device.unitId must be a non-negative integer (MMA unit ID)' });
             }
             existing.unitId = unitId;
         }
@@ -598,6 +612,74 @@ app.put('/system', (req, res) => {
         }
         const model = readModel();
         model.system = { ...model.system, ...system };
+        writeModel(model);
+        autoCompile(model);
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /config/save — unified save: device source+target config and system MMA endpoint in one atomic call
+app.post('/config/save', (req, res) => {
+    try {
+        const { deviceId, sourceConfig, targetConfig, mmaEndpointConfig } = req.body;
+
+        // Validate Source Unit ID — required
+        const rawSourceUnitId = sourceConfig && sourceConfig.source_unit_id;
+        if (!isRequiredNonNegativeInt(rawSourceUnitId)) {
+            return res.status(400).json({ error: 'sourceConfig.source_unit_id is required and must be a non-negative integer' });
+        }
+        const sourceUnitIdNum = Number(rawSourceUnitId);
+
+        // Validate source endpoint
+        if (!sourceConfig || !isValidEndpoint(sourceConfig.source_endpoint)) {
+            return res.status(400).json({ error: 'sourceConfig.source_endpoint must be a valid endpoint (e.g. 10.0.0.1:502)' });
+        }
+
+        // Validate target endpoint
+        if (!targetConfig || !isValidEndpoint(targetConfig.target_endpoint)) {
+            return res.status(400).json({ error: 'targetConfig.target_endpoint must be a valid endpoint (e.g. mma2:501)' });
+        }
+
+        // Validate target unit ID
+        const targetUnitId = Number(targetConfig.unitId);
+        if (!Number.isFinite(targetUnitId) || targetUnitId < 0) {
+            return res.status(400).json({ error: 'targetConfig.unitId must be a non-negative integer' });
+        }
+
+        const model = readModel();
+
+        // Update device source + target
+        if (deviceId) {
+            const existing = findDevice(model, deviceId);
+            if (!existing) {
+                return res.status(404).json({ error: `Device ${deviceId} not found` });
+            }
+
+            existing.source_endpoint = sourceConfig.source_endpoint.trim();
+            existing.source_unit_id = sourceUnitIdNum;
+            if (sourceConfig.name !== undefined) existing.name = sourceConfig.name;
+            if (sourceConfig.groupId !== undefined) {
+                if (sourceConfig.groupId && !findGroup(model, sourceConfig.groupId)) {
+                    return res.status(400).json({ error: `Group "${sourceConfig.groupId}" not found` });
+                }
+                existing.groupId = sourceConfig.groupId || null;
+            }
+            if (sourceConfig.status_slot !== undefined) existing.status_slot = Number(sourceConfig.status_slot);
+
+            existing.target_endpoint = targetConfig.target_endpoint.trim();
+            existing.unitId = targetUnitId;
+            if (targetConfig.status_unit_id !== undefined) {
+                existing.status_unit_id = targetConfig.status_unit_id != null ? Number(targetConfig.status_unit_id) : null;
+            }
+        }
+
+        // Update system MMA endpoint
+        if (mmaEndpointConfig !== undefined) {
+            model.system = { ...model.system, mma_endpoint: mmaEndpointConfig || null };
+        }
+
         writeModel(model);
         autoCompile(model);
         res.json({ ok: true });
@@ -726,8 +808,8 @@ app.post('/memory/port/:portId/block', (req, res) => {
             return res.status(400).json({ error: 'block is required' });
         }
         const unitId = Number(block.unit_id);
-        if (!Number.isFinite(unitId) || unitId < 1) {
-            return res.status(400).json({ error: 'block.unit_id must be a positive integer' });
+        if (!Number.isFinite(unitId) || unitId < 0) {
+            return res.status(400).json({ error: 'block.unit_id must be a non-negative integer' });
         }
         const address = Number(block.address);
         const count = Number(block.count);
@@ -777,8 +859,8 @@ app.put('/memory/port/:portId/block/:blockId', (req, res) => {
         }
         if (block.unit_id !== undefined) {
             const unitId = Number(block.unit_id);
-            if (!Number.isFinite(unitId) || unitId < 1) {
-                return res.status(400).json({ error: 'block.unit_id must be a positive integer' });
+            if (!Number.isFinite(unitId) || unitId < 0) {
+                return res.status(400).json({ error: 'block.unit_id must be a non-negative integer' });
             }
             existing.unit_id = unitId;
         }
@@ -1099,7 +1181,7 @@ function ensureMemoryCoverage(model) {
 
     for (const device of (model.devices || [])) {
         const unitId = Number(device.unitId);
-        if (!Number.isFinite(unitId) || unitId < 1) continue;
+        if (!Number.isFinite(unitId) || unitId < 0) continue;
 
         // Resolve which port this unit belongs to; skip if port not found (no silent auto-creation)
         let portId = unitToPortId[unitId];
