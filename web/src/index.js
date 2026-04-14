@@ -34,6 +34,7 @@ function readModel() {
     if (!model.system) model.system = {};
     if (!Array.isArray(model.system.targets)) model.system.targets = [];
     // Migrate old free-text device.group → device.groupId using group entities
+    let migrated = false;
     for (const device of model.devices) {
         if (device.group && !device.groupId) {
             let grp = model.groups.find(g => g.name === device.group);
@@ -43,8 +44,10 @@ function readModel() {
             }
             device.groupId = grp.id;
             delete device.group;
+            migrated = true;
         }
     }
+    if (migrated) writeModel(model);
     return model;
 }
 

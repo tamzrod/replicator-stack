@@ -986,15 +986,15 @@ function renderTree(data) {
 document.getElementById('tree-panel').addEventListener('click', async e => {
   // Delete group button
   const delGroup = e.target.closest('[data-del-group]');
-  if (delGroup) { await deleteGroup(delGroup.dataset.delGroup); return; }
+  if (delGroup) { e.stopPropagation(); await deleteGroup(delGroup.dataset.delGroup); return; }
 
   // Edit group button
   const editGroup = e.target.closest('[data-edit-group]');
-  if (editGroup) { openEditGroup(editGroup.dataset.editGroup); return; }
+  if (editGroup) { e.stopPropagation(); openEditGroup(editGroup.dataset.editGroup); return; }
 
   // Toggle group collapse
   const toggleGrp = e.target.closest('[data-toggle-group]');
-  if (toggleGrp && !e.target.closest('[data-del-group]') && !e.target.closest('[data-edit-group]')) {
+  if (toggleGrp) {
     const g = toggleGrp.dataset.toggleGroup;
     if (_collapsedGroups.has(g)) _collapsedGroups.delete(g);
     else _collapsedGroups.add(g);
