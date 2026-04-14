@@ -428,7 +428,7 @@
 
   <!-- ── Targets ──────────────────────────────────────────────────── -->
   <div class="card">
-    <h2>Targets</h2>
+    <h2>Targets <span style="color:#94a3b8;font-size:.8rem;font-weight:400">(MMA 2.0 runtime endpoints)</span></h2>
     <div id="targets-list" style="margin-bottom:16px"></div>
     <form id="target-form">
       <div class="row">
@@ -441,16 +441,6 @@
           <input id="t-port" type="number" placeholder="502" min="1" max="65535" required />
         </div>
       </div>
-      <div class="row">
-        <div class="field">
-          <label>Status Unit ID</label>
-          <input id="t-status-unit" type="number" value="100" required />
-        </div>
-        <div class="field">
-          <label>Status Slot Size</label>
-          <input id="t-slot-size" type="number" value="10" min="1" required />
-        </div>
-      </div>
       <div id="target-banner" class="banner"></div>
       <div><button type="submit" class="btn-primary">Add Target</button></div>
     </form>
@@ -458,7 +448,7 @@
 
   <!-- ── Add Device ─────────────────────────────────────────────────── -->
   <div class="card">
-    <h2>Add Device</h2>
+    <h2>Add Device <span style="color:#94a3b8;font-size:.8rem;font-weight:400">(Replicator configuration unit)</span></h2>
     <form id="device-form">
       <div class="row">
         <div class="field">
@@ -486,6 +476,10 @@
       </div>
       <div class="row">
         <div class="field">
+          <label>MMA Unit ID <span style="color:#64748b;font-size:.75rem;font-weight:400">(target memory unit)</span></label>
+          <input id="d-mma-unit" type="number" value="1" min="1" required />
+        </div>
+        <div class="field">
           <label>Target</label>
           <select id="d-target" required>
             <option value="">— select target —</option>
@@ -503,9 +497,9 @@
     </form>
   </div>
 
-  <!-- ── Add Read ───────────────────────────────────────────────────── -->
+  <!-- ── Memory Mapping (Reads) ────────────────────────────────────── -->
   <div class="card">
-    <h2>Add Read</h2>
+    <h2>Memory Mapping <span style="color:#94a3b8;font-size:.8rem;font-weight:400">(register reads per device)</span></h2>
     <form id="read-form">
       <div class="row">
         <div class="field">
@@ -650,6 +644,10 @@
       </div>
       <div class="row">
         <div class="field">
+          <label>MMA Unit ID <span style="color:#64748b;font-size:.75rem;font-weight:400">(target memory unit)</span></label>
+          <input id="ed-mma-unit" type="number" min="1" required />
+        </div>
+        <div class="field">
           <label>Target</label>
           <select id="ed-target" required></select>
         </div>
@@ -778,15 +776,6 @@ function targetPort(t) {
   return (t.endpoint || '').split(':')[1] || '';
 }
 
-function statusRange(device, model) {
-  const target = findTarget(model, device.target_name);
-  if (!target || device.status_slot == null) return '';
-  const slotSize = target.status_slot_size || 10;
-  const start = device.status_slot * slotSize;
-  const end = start + slotSize - 1;
-  return `unit ${target.status_unit_id} @ HR[${start}..${end}]`;
-}
-
 function renderTargetsList(data) {
   const el = document.getElementById('targets-list');
   const targets = (data.system && data.system.targets) || [];
@@ -797,13 +786,11 @@ function renderTargetsList(data) {
   const rows = targets.map(t => `<tr>
     <td>${escapeHtml(t.name)}</td>
     <td>${escapeHtml(targetPort(t))}</td>
-    <td>${escapeHtml(t.status_unit_id)}</td>
-    <td>${escapeHtml(t.status_slot_size)}</td>
     <td><button class="btn-danger btn-delete-target" data-name="${escapeHtml(t.name)}">✕ Remove</button></td>
   </tr>`).join('');
   el.innerHTML = `<table>
     <thead><tr>
-      <th>Name</th><th>Port</th><th>Status Unit ID</th><th>Slot Size</th><th></th>
+      <th>Name</th><th>Port</th><th></th>
     </tr></thead>
     <tbody>${rows}</tbody>
   </table>`;
@@ -819,7 +806,6 @@ function renderModel(data) {
   }
 
   const rows = data.devices.map(d => {
-    const sr = statusRange(d, data);
     const readsCount = (d.reads || []).length;
     const grpName = groupName(data, d.groupId);
     return `<tr data-device-id="${escapeHtml(d.id)}">
@@ -827,9 +813,8 @@ function renderModel(data) {
       <td>${grpName ? escapeHtml(grpName) : '<span style="color:#cbd5e1">—</span>'}</td>
       <td>${d.ipAddress ? escapeHtml(d.ipAddress) : '<span style="color:#cbd5e1">—</span>'}</td>
       <td>Port&nbsp;${escapeHtml(d.port)} (unit&nbsp;${escapeHtml(d.source_unit_id)})</td>
-      <td>unit&nbsp;${escapeHtml(d.assigned_unit_id ?? '?')}</td>
+      <td>unit&nbsp;${escapeHtml(d.unitId ?? '?')}</td>
       <td>${d.target_name ? escapeHtml(d.target_name) : '—'}</td>
-      <td>${sr ? escapeHtml(sr) : '—'}</td>
       <td>${readsCount}</td>
       <td style="white-space:nowrap">
         <button class="btn-edit btn-edit-device" data-edit-device="${escapeHtml(d.id)}">✎ Edit</button>
@@ -845,10 +830,9 @@ function renderModel(data) {
         <th>Group</th>
         <th>IP Address</th>
         <th>Source</th>
-        <th>Assigned Unit</th>
+        <th>MMA Unit</th>
         <th>Target</th>
-        <th>Status Location</th>
-        <th>Reads</th>
+        <th>Mappings</th>
         <th>Actions</th>
       </tr>
     </thead>
@@ -919,7 +903,7 @@ async function loadModel() {
     for (const d of data.devices) {
       const opt = document.createElement('option');
       opt.value = d.id;
-      opt.textContent = `${d.id}${d.name ? ' — ' + d.name : ''} (unit ${d.assigned_unit_id != null ? d.assigned_unit_id : '?'})`;
+      opt.textContent = `${d.id}${d.name ? ' — ' + d.name : ''} (unit ${d.unitId != null ? d.unitId : '?'})`;
       sel.appendChild(opt);
     }
   }
@@ -942,10 +926,8 @@ document.getElementById('target-form').addEventListener('submit', async e => {
 
   const payload = {
     target: {
-      name:             document.getElementById('t-name').value.trim(),
-      port:             Number(document.getElementById('t-port').value),
-      status_unit_id:   Number(document.getElementById('t-status-unit').value),
-      status_slot_size: Number(document.getElementById('t-slot-size').value),
+      name: document.getElementById('t-name').value.trim(),
+      port: Number(document.getElementById('t-port').value),
     }
   };
 
@@ -954,8 +936,6 @@ document.getElementById('target-form').addEventListener('submit', async e => {
     banner.textContent = `✓ Target "${payload.target.name}" added.`;
     banner.className = 'banner show ok';
     document.getElementById('target-form').reset();
-    document.getElementById('t-status-unit').value = '100';
-    document.getElementById('t-slot-size').value = '10';
     await loadModel();
   } else {
     banner.textContent = `✗ ${data.error || 'Unknown error'}`;
@@ -991,6 +971,7 @@ document.getElementById('device-form').addEventListener('submit', async e => {
       ipAddress:      document.getElementById('d-ip').value.trim(),
       port:           Number(document.getElementById('d-port').value),
       source_unit_id: Number(document.getElementById('d-unit').value),
+      unitId:         Number(document.getElementById('d-mma-unit').value),
       target_name:    document.getElementById('d-target').value,
     }
   };
@@ -998,18 +979,12 @@ document.getElementById('device-form').addEventListener('submit', async e => {
   const { ok, data } = await api('POST', '/device', payload);
   if (ok) {
     await loadModel();
-    const model = _currentModel || {};
-    const target = findTarget(model, payload.device.target_name);
-    const slotSize = target ? target.status_slot_size : '?';
-    const statusEnd = (target && data.status_start != null)
-      ? data.status_start + target.status_slot_size - 1
-      : '?';
-    const statusUnitId = target ? target.status_unit_id : '?';
-    banner.textContent = `✓ Device "${payload.device.id}" added — unit ${data.assigned_unit_id}, status: unit ${statusUnitId} @ HR[${data.status_start}..${statusEnd}]`;
+    banner.textContent = `✓ Device "${payload.device.id}" added — MMA unit ${payload.device.unitId}`;
     banner.className = 'banner show ok';
     document.getElementById('device-form').reset();
     document.getElementById('d-port').value = '502';
     document.getElementById('d-unit').value = '1';
+    document.getElementById('d-mma-unit').value = '1';
   } else {
     banner.textContent = `✗ ${data.error || 'Unknown error'}`;
     banner.className = 'banner show err';
@@ -1418,6 +1393,8 @@ function openEditDevice(deviceId) {
   document.getElementById('ed-ip').value = device.ipAddress || '';
   document.getElementById('ed-port').value = device.port || '';
   document.getElementById('ed-unit').value = device.source_unit_id || '';
+  document.getElementById('ed-mma-unit').value = device.unitId || '';
+  document.getElementById('ed-unit').value = device.source_unit_id || '';
 
   // Populate group dropdown and select current
   refreshGroupDropdowns(model);
@@ -1451,6 +1428,7 @@ document.getElementById('edit-device-form').addEventListener('submit', async e =
       ipAddress:      document.getElementById('ed-ip').value.trim(),
       port:           Number(document.getElementById('ed-port').value),
       source_unit_id: Number(document.getElementById('ed-unit').value),
+      unitId:         Number(document.getElementById('ed-mma-unit').value),
       target_name:    document.getElementById('ed-target').value,
     }
   };
