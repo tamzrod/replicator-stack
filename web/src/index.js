@@ -223,7 +223,56 @@ function findDevice(model, deviceId) {
     return (model.devices || []).find(d => d.id === deviceId) || null;
 }
 
+// ---------------------------------------------------------------------------
+// CSV helpers
+// ---------------------------------------------------------------------------
 
+/**
+ * Escape a value for a CSV cell (RFC 4180).
+ */
+function csvCell(val) {
+    const s = String(val ?? '');
+    if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
+        return '"' + s.replace(/"/g, '""') + '"';
+    }
+    return s;
+}
+
+/**
+ * Parse a single CSV row, handling quoted fields per RFC 4180.
+ */
+function parseCSVRow(line) {
+    const cells = [];
+    let cur = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (inQuotes) {
+            if (ch === '"') {
+                if (line[i + 1] === '"') { cur += '"'; i++; }
+                else { inQuotes = false; }
+            } else {
+                cur += ch;
+            }
+        } else {
+            if (ch === '"') { inQuotes = true; }
+            else if (ch === ',') { cells.push(cur); cur = ''; }
+            else { cur += ch; }
+        }
+    }
+    cells.push(cur);
+    return cells;
+}
+
+/**
+ * Generate a unique read ID that does not clash with any existing read on the device.
+ */
+function generateUniqueReadId(reads) {
+    const existingIds = new Set((reads || []).map(r => r.id));
+    let n = 1;
+    while (existingIds.has(`read_${n}`)) n++;
+    return `read_${n}`;
+}
 
 /**
  * Recompile status slot assignments for all devices.
@@ -941,6 +990,132 @@ app.delete('/read/:deviceId/:readId', (req, res) => {
     }
 });
 
+
+// GET /read/:deviceId/export-csv — download reads as CSV (read_id excluded)
+app.get('/read/:deviceId/export-csv', (req, res) => {
+    try {
+        const { deviceId } = req.params;
+        const model = readModel();
+        const device = findDevice(model, deviceId);
+        if (!device) {
+            return res.status(404).json({ error: `Device ${deviceId} not found` });
+        }
+        const reads = device.reads || [];
+        const header = 'name,source_area,source_address,count,poll_interval_ms';
+        const rows = reads.map(r => [
+            csvCell(r.name || ''),
+            csvCell(r.source_area || ''),
+            r.source_address ?? 0,
+            r.source_count ?? 1,
+            r.poll_interval ?? 1000,
+        ].join(','));
+        const csv = [header, ...rows].join('\r\n');
+        const filename = `reads_${deviceId}.csv`;
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.send(csv);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /read/:deviceId/import-csv — import reads from CSV; read IDs are auto-generated
+app.post('/read/:deviceId/import-csv', express.text({ type: 'text/plain' }), (req, res) => {
+    try {
+        const { deviceId } = req.params;
+        const csv = req.body;
+        if (!csv || typeof csv !== 'string' || !csv.trim()) {
+            return res.status(400).json({ error: 'CSV body is required' });
+        }
+
+        const model = readModel();
+        const device = findDevice(model, deviceId);
+        if (!device) {
+            return res.status(404).json({ error: `Device ${deviceId} not found` });
+        }
+
+        const lines = csv.split(/\r?\n/).filter(l => l.trim());
+        if (lines.length < 2) {
+            return res.status(400).json({ error: 'CSV must have a header row and at least one data row' });
+        }
+
+        const header = parseCSVRow(lines[0]).map(h => h.trim());
+        const REQUIRED_COLS = ['name', 'source_area', 'source_address', 'count', 'poll_interval_ms'];
+        for (const col of REQUIRED_COLS) {
+            if (!header.includes(col)) {
+                return res.status(400).json({ error: `CSV missing required column: ${col}` });
+            }
+        }
+
+        const colIdx = {
+            name:            header.indexOf('name'),
+            source_area:     header.indexOf('source_area'),
+            source_address:  header.indexOf('source_address'),
+            count:           header.indexOf('count'),
+            poll_interval_ms: header.indexOf('poll_interval_ms'),
+        };
+
+        const VALID_AREAS = new Set(['holding_registers', 'coils', 'input_registers', 'discrete_inputs']);
+        const imported = [];
+        const errors = [];
+
+        for (let i = 1; i < lines.length; i++) {
+            const cols = parseCSVRow(lines[i]);
+            const name          = (cols[colIdx.name] || '').trim();
+            const source_area   = (cols[colIdx.source_area] || '').trim();
+            const source_address = Number(cols[colIdx.source_address]);
+            const source_count  = Number(cols[colIdx.count]);
+            const poll_interval = Number(cols[colIdx.poll_interval_ms]);
+
+            if (!VALID_AREAS.has(source_area)) {
+                errors.push(`Row ${i + 1}: invalid source_area "${source_area}"`);
+                continue;
+            }
+            if (!Number.isFinite(source_address) || source_address < 0) {
+                errors.push(`Row ${i + 1}: invalid source_address "${cols[colIdx.source_address]}"`);
+                continue;
+            }
+            if (!Number.isFinite(source_count) || source_count < 1) {
+                errors.push(`Row ${i + 1}: invalid count "${cols[colIdx.count]}"`);
+                continue;
+            }
+            if (!Number.isFinite(poll_interval) || poll_interval < 100) {
+                errors.push(`Row ${i + 1}: invalid poll_interval_ms "${cols[colIdx.poll_interval_ms]}"`);
+                continue;
+            }
+
+            const id = generateUniqueReadId(device.reads);
+            const newRead = {
+                id,
+                name,
+                source_area,
+                source_address,
+                source_count,
+                poll_interval,
+                target_area:    'holding_registers',
+                target_address: 0,
+            };
+
+            const overlap = device.reads.find(r => readsOverlap(r, newRead));
+            if (overlap) {
+                errors.push(`Row ${i + 1}: overlaps with existing read "${overlap.id}" in area ${source_area}`);
+                continue;
+            }
+
+            device.reads.push(newRead);
+            imported.push(id);
+        }
+
+        if (imported.length > 0) {
+            writeModel(model);
+            autoCompile(model);
+        }
+
+        res.json({ ok: true, imported: imported.length, errors });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 
 // GET /config — return raw YAML snapshots for Config Viewer (read-only)
 app.get('/config', (req, res) => {
