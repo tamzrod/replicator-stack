@@ -696,35 +696,6 @@ function findMemoryPort(model, portId) {
     return ((model.memory && model.memory.ports) || []).find(p => p.id === portId) || null;
 }
 
-/**
- * Derive an initial memory block for a newly-created MMA port.
- *
- * If any device targets portNum and has at least one read configured, the
- * block is derived from the first such read (using the device's unitId and
- * the read's area/address/count).  Otherwise a safe default block is returned:
- *   unit_id: 1, area: holding_registers, address: 0, count: 1
- *
- * @param {object} model
- * @param {number} portNum
- * @returns {{ unit_id: number, area: string, address: number, count: number }}
- */
-function deriveInitialBlock(model, portNum) {
-    for (const device of (model.devices || [])) {
-        if (endpointPort(device.target_endpoint) !== portNum) continue;
-        const reads = device.reads || [];
-        if (reads.length === 0) continue;
-        const read = reads[0];
-        return {
-            unit_id: Number(device.unitId) || 1,
-            area: read.source_area || 'holding_registers',
-            address: Number(read.source_address) >= 0 ? Number(read.source_address) : 0,
-            count: Number(read.source_count) >= 1 ? Number(read.source_count) : 1,
-        };
-    }
-    // No device reads found — use safe defaults
-    return { unit_id: 1, area: 'holding_registers', address: 0, count: 1 };
-}
-
 // POST /memory/port — add a memory port (MMA listener)
 app.post('/memory/port', (req, res) => {
     try {
@@ -738,12 +709,12 @@ app.post('/memory/port', (req, res) => {
         if (exists) {
             return res.status(409).json({ error: `Memory port ${portNum} already exists` });
         }
-        // Seed an initial memory block so the port is immediately usable.
-        const initialBlock = deriveInitialBlock(model, portNum);
+        // Blocks are always derived from device reads via rehydrateFromYaml —
+        // the port starts empty and autoCompile will populate blocks from reads.
         const newPort = {
             id: randomUUID(),
             port: portNum,
-            blocks: [{ id: randomUUID(), ...initialBlock }],
+            blocks: [],
         };
         model.memory.ports.push(newPort);
         writeModel(model);
@@ -791,116 +762,6 @@ app.delete('/memory/port/:id', (req, res) => {
             return res.status(404).json({ error: `Memory port ${id} not found` });
         }
         model.memory.ports.splice(idx, 1);
-        writeModel(model);
-        autoCompile(model);
-        res.json({ ok: true });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// POST /memory/port/:portId/block — add a memory block to a port
-app.post('/memory/port/:portId/block', (req, res) => {
-    try {
-        const { portId } = req.params;
-        const { block } = req.body;
-        if (!block) {
-            return res.status(400).json({ error: 'block is required' });
-        }
-        const unitId = Number(block.unit_id);
-        if (!Number.isFinite(unitId) || unitId < 0) {
-            return res.status(400).json({ error: 'block.unit_id must be a non-negative integer' });
-        }
-        const address = Number(block.address);
-        const count = Number(block.count);
-        if (!Number.isFinite(address) || address < 0) {
-            return res.status(400).json({ error: 'block.address must be a non-negative integer' });
-        }
-        if (!Number.isFinite(count) || count < 1) {
-            return res.status(400).json({ error: 'block.count must be a positive integer' });
-        }
-        const model = readModel();
-        const port = findMemoryPort(model, portId);
-        if (!port) {
-            return res.status(404).json({ error: `Memory port ${portId} not found` });
-        }
-        const newBlock = {
-            id: randomUUID(),
-            unit_id: unitId,
-            area: block.area || 'holding_registers',
-            address,
-            count,
-        };
-        port.blocks.push(newBlock);
-        writeModel(model);
-        autoCompile(model);
-        res.status(201).json({ ok: true, id: newBlock.id });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// PUT /memory/port/:portId/block/:blockId — update a memory block
-app.put('/memory/port/:portId/block/:blockId', (req, res) => {
-    try {
-        const { portId, blockId } = req.params;
-        const { block } = req.body;
-        if (!block) {
-            return res.status(400).json({ error: 'block is required' });
-        }
-        const model = readModel();
-        const port = findMemoryPort(model, portId);
-        if (!port) {
-            return res.status(404).json({ error: `Memory port ${portId} not found` });
-        }
-        const existing = (port.blocks || []).find(b => b.id === blockId);
-        if (!existing) {
-            return res.status(404).json({ error: `Memory block ${blockId} not found` });
-        }
-        if (block.unit_id !== undefined) {
-            const unitId = Number(block.unit_id);
-            if (!Number.isFinite(unitId) || unitId < 0) {
-                return res.status(400).json({ error: 'block.unit_id must be a non-negative integer' });
-            }
-            existing.unit_id = unitId;
-        }
-        if (block.address !== undefined) {
-            const address = Number(block.address);
-            if (!Number.isFinite(address) || address < 0) {
-                return res.status(400).json({ error: 'block.address must be a non-negative integer' });
-            }
-            existing.address = address;
-        }
-        if (block.count !== undefined) {
-            const count = Number(block.count);
-            if (!Number.isFinite(count) || count < 1) {
-                return res.status(400).json({ error: 'block.count must be a positive integer' });
-            }
-            existing.count = count;
-        }
-        if (block.area !== undefined) existing.area = block.area;
-        writeModel(model);
-        autoCompile(model);
-        res.json({ ok: true });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// DELETE /memory/port/:portId/block/:blockId — remove a memory block
-app.delete('/memory/port/:portId/block/:blockId', (req, res) => {
-    try {
-        const { portId, blockId } = req.params;
-        const model = readModel();
-        const port = findMemoryPort(model, portId);
-        if (!port) {
-            return res.status(404).json({ error: `Memory port ${portId} not found` });
-        }
-        const idx = (port.blocks || []).findIndex(b => b.id === blockId);
-        if (idx === -1) {
-            return res.status(404).json({ error: `Memory block ${blockId} not found` });
-        }
-        port.blocks.splice(idx, 1);
         writeModel(model);
         autoCompile(model);
         res.json({ ok: true });
@@ -1127,116 +988,69 @@ function mergeRanges(ranges) {
 }
 
 /**
- * Check whether every range in `required` is fully covered by some range in `existing`.
- * Both arrays should be pre-merged (sorted, non-overlapping).
+ * Full rehydration: rebuild all memory allocation state from scratch.
  *
- * @param {Array<{start: number, end: number}>} existing - merged existing ranges
- * @param {Array<{start: number, end: number}>} required - merged required ranges
- * @returns {boolean} true if all required ranges are fully covered
+ * Derives memory blocks entirely from device reads — no merging with existing
+ * blocks, no diff-based updates. Status slot assignments are also recomputed.
+ * Every call produces a deterministic, complete snapshot of memory state
+ * derived solely from the model.
+ *
+ * Called on every model mutation and compile to ensure memory always matches
+ * the model exactly.
+ *
+ * @param {object} model
+ * @returns {{ modified: boolean, blocksCreated: number }}
  */
-function rangesAreCovered(existing, required) {
-    for (const req of required) {
-        const covered = existing.some(ex => ex.start <= req.start && ex.end >= req.end);
-        if (!covered) return false;
-    }
-    return true;
-}
+function rehydrateFromYaml(model) {
+    // Step 1: recompile status slot assignments (deterministic sequential allocation)
+    const statusSlots = recompileStatusSlots(model);
 
-/**
- * Memory validation + auto-creation step.
- *
- * For every Device.read, ensures a corresponding Memory block exists in
- * model.memory.ports that covers the full address range of the read.
- *
- * Matching: port (from device unitId → memory port lookup), unit_id, area,
- *           address range [read.source_address, read.source_address + read.source_count - 1].
- *
- * If blocks overlap or are adjacent after merging with required ranges they are
- * merged into a single expanded block.
- *
- * Returns { modified: boolean, blocksCreated: number }.
- * Mutates model.memory.ports in place.
- */
-function ensureMemoryCoverage(model) {
-    const memoryPorts = model.memory.ports;
-    let modified = false;
-    let blocksCreated = 0;
+    const memoryPorts = model.memory.ports || [];
 
-    // Build lookup: unit_id (number) → port id.
-    // Consistent with toReplicatorYaml: first port that contains a block for a given
-    // unit_id wins; unit_ids are expected to be unique across ports.
-    const unitToPortId = {};
-    for (const port of memoryPorts) {
-        for (const block of (port.blocks || [])) {
-            const uid = Number(block.unit_id);
-            if (Number.isFinite(uid) && !(uid in unitToPortId)) {
-                unitToPortId[uid] = port.id;
-            }
-        }
-    }
-
-    // Collect required coverage grouped by portId|unitId|area
-    // Each entry: { portId, unitId, area, ranges: [{start, end}] }
+    // Collect required coverage grouped by portId|unitId|area, derived purely
+    // from device reads. Port is resolved from device.target_endpoint.
     const required = {};
 
     for (const device of (model.devices || [])) {
         const unitId = Number(device.unitId);
         if (!Number.isFinite(unitId) || unitId < 0) continue;
 
-        // Resolve which port this unit belongs to; skip if port not found (no silent auto-creation)
-        let portId = unitToPortId[unitId];
-        if (!portId) {
-            // Prefer the port from the device's target_endpoint, fall back to 502
-            const targetPort = endpointPort(device.target_endpoint) || 502;
-            const matchingPort = memoryPorts.find(p => Number(p.port) === targetPort);
-            if (!matchingPort) continue; // port does not exist — skip this device
-            portId = matchingPort.id;
-            unitToPortId[unitId] = portId;
-        }
+        const targetPort = endpointPort(device.target_endpoint) || 502;
+        const matchingPort = memoryPorts.find(p => Number(p.port) === targetPort);
+        if (!matchingPort) continue; // port does not exist — skip device
 
         for (const read of (device.reads || [])) {
             const area = read.source_area || 'holding_registers';
             const start = Number(read.source_address);
             const count = Number(read.source_count);
             if (!Number.isFinite(start) || !Number.isFinite(count) || count < 1) continue;
-            const end = start + count - 1;
 
-            const key = `${portId}|${unitId}|${area}`;
+            const key = `${matchingPort.id}|${unitId}|${area}`;
             if (!required[key]) {
-                required[key] = { portId, unitId, area, ranges: [] };
+                required[key] = { portId: matchingPort.id, unitId, area, ranges: [] };
             }
-            required[key].ranges.push({ start, end });
+            required[key].ranges.push({ start, end: start + count - 1 });
         }
     }
 
-    // For each required (portId, unitId, area) group, ensure coverage exists
+    // Track prior block counts to detect changes
+    const oldBlockCounts = {};
+    for (const port of memoryPorts) {
+        oldBlockCounts[port.id] = (port.blocks || []).length;
+    }
+
+    // Step 2: clear all existing blocks — full replace, never merge
+    for (const port of memoryPorts) {
+        port.blocks = [];
+    }
+
+    // Step 3: assign freshly-computed blocks derived from reads
+    let blocksCreated = 0;
     for (const req of Object.values(required)) {
         const port = memoryPorts.find(p => p.id === req.portId);
         if (!port) continue;
 
-        const existingBlocks = (port.blocks || []).filter(
-            b => Number(b.unit_id) === req.unitId &&
-                 (b.area || 'holding_registers') === req.area
-        );
-
-        const existingRanges = existingBlocks
-            .map(b => ({ start: Number(b.address), end: Number(b.address) + Number(b.count) - 1 }))
-            .filter(r => Number.isFinite(r.start) && Number.isFinite(r.end));
-
-        const mergedExisting = mergeRanges(existingRanges);
-        const mergedRequired = mergeRanges(req.ranges);
-
-        // If existing blocks already cover all required ranges, nothing to do
-        if (rangesAreCovered(mergedExisting, mergedRequired)) continue;
-
-        // Merge required + existing into full coverage set
-        const merged = mergeRanges([...existingRanges, ...req.ranges]);
-
-        // Replace existing blocks for this (unitId, area) with merged result
-        port.blocks = port.blocks.filter(
-            b => !(Number(b.unit_id) === req.unitId &&
-                   (b.area || 'holding_registers') === req.area)
-        );
+        const merged = mergeRanges(req.ranges);
         for (const m of merged) {
             port.blocks.push({
                 id: randomUUID(),
@@ -1245,12 +1059,26 @@ function ensureMemoryCoverage(model) {
                 address: m.start,
                 count: m.end - m.start + 1,
             });
+            blocksCreated++;
         }
-        // Count only net-new blocks (existing blocks that are replaced/merged are not counted).
-        blocksCreated += Math.max(0, merged.length - existingBlocks.length);
-        modified = true;
     }
 
+    // Detect whether any blocks changed
+    let blocksChanged = false;
+    for (const port of memoryPorts) {
+        if ((port.blocks || []).length !== oldBlockCounts[port.id]) {
+            blocksChanged = true;
+            break;
+        }
+    }
+    // Also mark modified when old non-empty blocks were present (they got new IDs)
+    if (!blocksChanged) {
+        for (const port of memoryPorts) {
+            if (oldBlockCounts[port.id] > 0) { blocksChanged = true; break; }
+        }
+    }
+
+    const modified = blocksChanged || statusSlots.modified;
     return { modified, blocksCreated };
 }
 
@@ -1263,15 +1091,10 @@ function ensureMemoryCoverage(model) {
  * @param {Set<number>} [excludedPortNums] - port numbers whose devices should be omitted from replicator YAML
  */
 function compileAndWrite(model, excludedPortNums = new Set()) {
-    // Step 0: recompile status slot assignments — deterministic sequential allocation per status_unit_id
-    const statusSlots = recompileStatusSlots(model);
-    if (statusSlots.modified) {
-        writeModel(model);
-    }
-
-    // Step 1: ensure every read has a backing memory block (auto-create blocks if missing, but never auto-create ports)
-    const coverage = ensureMemoryCoverage(model);
-    if (coverage.modified) {
+    // Full rehydration: rebuild all memory state (blocks + status slots) from scratch.
+    // This is the single deterministic step that replaces any prior incremental logic.
+    const rehydrated = rehydrateFromYaml(model);
+    if (rehydrated.modified) {
         writeModel(model);
     }
 
@@ -1295,7 +1118,7 @@ function compileAndWrite(model, excludedPortNums = new Set()) {
     if (emptyPorts.length > 0) {
         return {
             ok: false,
-            mmaErrors: [`MMA port(s) ${emptyPorts.join(', ')} have no memory blocks — add at least one block before compiling`],
+            mmaErrors: [`MMA port(s) ${emptyPorts.join(', ')} have no memory blocks — add a read on a device targeting this port before compiling`],
             replicatorErrors: [],
         };
     }
@@ -1309,7 +1132,7 @@ function compileAndWrite(model, excludedPortNums = new Set()) {
     }
     atomicWrite(REPLICATOR_CONFIG_PATH, replicatorYaml);
     atomicWrite(MMA_CONFIG_PATH, mmaYaml);
-    return { ok: true, blocksCreated: coverage.blocksCreated };
+    return { ok: true, blocksCreated: rehydrated.blocksCreated };
 }
 
 /**

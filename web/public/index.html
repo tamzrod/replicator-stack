@@ -563,17 +563,8 @@
       border-radius: 4px;
       padding: 1px 5px;
     }
-    .mem-add-block-form {
-      margin-top: 12px;
-      padding-top: 12px;
-      border-top: 1px dashed #d1fae5;
-      display: none;
-    }
-    .mem-add-block-form.show { display: block; }
     .btn-mem { background: #d1fae5; color: #065f46; font-size: .75rem; padding: 4px 10px; font-weight: 600; border-radius: 5px; border: none; cursor: pointer; }
     .btn-mem:hover { background: #a7f3d0; }
-    .btn-mem-edit { background: #e0f2fe; color: #0369a1; font-size: .75rem; padding: 4px 10px; }
-    .btn-mem-edit:hover { background: #bae6fd; }
 
     /* ── Runtime Tab ──────────────────────────────────────────────────── */
     #runtime-tab-container {
@@ -781,8 +772,8 @@
   <div class="card" style="margin-bottom:20px">
     <h2>Memory <span style="color:#94a3b8;font-size:.8rem;font-weight:400">(MMA runtime memory layout)</span></h2>
     <p style="color:#64748b;font-size:.85rem;margin-bottom:16px">
-      Define MMA listener ports and their memory blocks. Each memory port runs a Modbus listener.
-      Each block allocates a register range for a specific unit ID.
+      Define MMA listener ports. Memory blocks are automatically computed from device reads on every compile —
+      they always reflect the current YAML model exactly and cannot be edited manually.
     </p>
     <div id="memory-ports-list" style="margin-bottom:16px"></div>
     <form id="memory-port-form">
@@ -1635,7 +1626,7 @@ async function deleteRead(deviceId, readId) {
 
 // ── Memory Tab ───────────────────────────────────────────────────────────────
 
-let _editingBlockId = null; // { portId, blockId }
+let _editingBlockId = null; // kept for legacy compat but no longer used
 
 function renderMemoryTab(data) {
   const container = document.getElementById('memory-ports-list');
@@ -1649,44 +1640,13 @@ function renderMemoryTab(data) {
   container.innerHTML = ports.map(port => {
     const blocks = port.blocks || [];
     const blocksHtml = blocks.length === 0
-      ? `<div class="empty-state" style="padding:10px 0;font-size:.8rem">No memory blocks. Add one below.</div>`
+      ? `<div class="empty-state" style="padding:10px 0;font-size:.8rem">No memory blocks — add a read to a device targeting this port and compile to generate blocks.</div>`
       : blocks.map(b => {
-          const isEditing = _editingBlockId && _editingBlockId.portId === port.id && _editingBlockId.blockId === b.id;
-          if (isEditing) {
-            const areaOpts = ['holding_registers','coils','input_registers','discrete_inputs']
-              .map(a => `<option value="${a}"${b.area === a ? ' selected' : ''}>${a}</option>`).join('');
-            return `<div class="mem-block-row" style="background:#fffbeb;border-radius:6px;padding:8px;flex-wrap:wrap;gap:8px">
-              <div class="mem-block-field">
-                <label>Unit ID</label>
-                <input class="inline-input" type="number" id="mbe-uid-${escapeHtml(b.id)}" value="${escapeHtml(String(b.unit_id))}" min="0" style="width:70px" />
-              </div>
-              <div class="mem-block-field">
-                <label>Area</label>
-                <select class="inline-input" id="mbe-area-${escapeHtml(b.id)}">${areaOpts}</select>
-              </div>
-              <div class="mem-block-field">
-                <label>Address</label>
-                <input class="inline-input" type="number" id="mbe-addr-${escapeHtml(b.id)}" value="${escapeHtml(String(b.address))}" min="0" style="width:70px" />
-              </div>
-              <div class="mem-block-field">
-                <label>Count</label>
-                <input class="inline-input" type="number" id="mbe-count-${escapeHtml(b.id)}" value="${escapeHtml(String(b.count))}" min="1" style="width:70px" />
-              </div>
-              <div style="display:flex;gap:6px;align-self:flex-end">
-                <button class="btn-save-inline mem-save-block" data-port-id="${escapeHtml(port.id)}" data-block-id="${escapeHtml(b.id)}">Save</button>
-                <button class="btn-cancel-inline mem-cancel-block">Cancel</button>
-              </div>
-            </div>`;
-          }
           return `<div class="mem-block-row">
             <div class="mem-block-field"><label>Unit ID</label><div class="mem-val">${escapeHtml(String(b.unit_id))}</div></div>
             <div class="mem-block-field"><label>Area</label><div class="mem-val"><code>${escapeHtml(b.area || 'holding_registers')}</code></div></div>
             <div class="mem-block-field"><label>Address</label><div class="mem-val">${escapeHtml(String(b.address))}</div></div>
             <div class="mem-block-field"><label>Count</label><div class="mem-val">${escapeHtml(String(b.count))}</div></div>
-            <div style="display:flex;gap:6px">
-              <button class="btn-mem btn-mem-edit mem-edit-block" data-port-id="${escapeHtml(port.id)}" data-block-id="${escapeHtml(b.id)}">✎ Edit</button>
-              <button class="btn-danger mem-del-block" data-port-id="${escapeHtml(port.id)}" data-block-id="${escapeHtml(b.id)}" style="font-size:.75rem;padding:4px 10px">✕</button>
-            </div>
           </div>`;
         }).join('');
 
@@ -1699,145 +1659,15 @@ function renderMemoryTab(data) {
         </div>
       </div>
       <div class="mem-port-body">
+        <p style="font-size:.78rem;color:#64748b;margin-bottom:8px">
+          Memory blocks are auto-computed from device reads on compile. They cannot be edited manually.
+        </p>
         <div class="mem-blocks-list">${blocksHtml}</div>
-        <div class="mem-block-banner banner" id="mem-block-banner-${escapeHtml(port.id)}"></div>
-        <button class="btn-mem mem-show-add-block" data-port-id="${escapeHtml(port.id)}" style="margin-top:10px">+ Add Memory Block</button>
-        <form class="mem-add-block-form" id="mem-add-block-form-${escapeHtml(port.id)}">
-          <div class="row" style="flex-wrap:wrap">
-            <div class="field" style="min-width:100px;max-width:120px">
-              <label>Unit ID</label>
-              <input class="mem-ab-uid" type="number" value="0" min="0" required />
-            </div>
-            <div class="field" style="min-width:160px">
-              <label>Area</label>
-              <select class="mem-ab-area">
-                <option value="holding_registers">holding_registers</option>
-                <option value="coils">coils</option>
-                <option value="input_registers">input_registers</option>
-                <option value="discrete_inputs">discrete_inputs</option>
-              </select>
-            </div>
-            <div class="field" style="min-width:100px;max-width:120px">
-              <label>Address</label>
-              <input class="mem-ab-addr" type="number" value="0" min="0" required />
-            </div>
-            <div class="field" style="min-width:100px;max-width:120px">
-              <label>Count</label>
-              <input class="mem-ab-count" type="number" value="1" min="1" required />
-            </div>
-          </div>
-          <div style="display:flex;gap:8px;margin-top:8px">
-            <button type="submit" class="btn-primary" style="font-size:.8rem;padding:6px 14px">Add Block</button>
-            <button type="button" class="btn-refresh mem-cancel-add-block" style="font-size:.8rem;padding:6px 12px">Cancel</button>
-          </div>
-        </form>
       </div>
     </div>`;
   }).join('');
 
   // ── Memory port event handlers ─────────────────────────────────────
-
-  // Show add-block form
-  container.querySelectorAll('.mem-show-add-block').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const portId = btn.dataset.portId;
-      const form = document.getElementById(`mem-add-block-form-${portId}`);
-      form.classList.toggle('show');
-      btn.style.display = form.classList.contains('show') ? 'none' : '';
-    });
-  });
-
-  // Cancel add-block form
-  container.querySelectorAll('.mem-cancel-add-block').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const form = btn.closest('.mem-add-block-form');
-      const portId = form.id.replace('mem-add-block-form-', '');
-      form.classList.remove('show');
-      const showBtn = container.querySelector(`.mem-show-add-block[data-port-id="${portId}"]`);
-      if (showBtn) showBtn.style.display = '';
-    });
-  });
-
-  // Submit add-block form
-  container.querySelectorAll('.mem-add-block-form').forEach(form => {
-    form.addEventListener('submit', async e => {
-      e.preventDefault();
-      const portId = form.id.replace('mem-add-block-form-', '');
-      const banner = document.getElementById(`mem-block-banner-${portId}`);
-      banner.className = 'mem-block-banner banner';
-      const payload = {
-        block: {
-          unit_id: Number(form.querySelector('.mem-ab-uid').value),
-          area:    form.querySelector('.mem-ab-area').value,
-          address: Number(form.querySelector('.mem-ab-addr').value),
-          count:   Number(form.querySelector('.mem-ab-count').value),
-        }
-      };
-      const { ok, data } = await api('POST', `/memory/port/${encodeURIComponent(portId)}/block`, payload);
-      if (ok) {
-        _editingBlockId = null;
-        await loadModel();
-      } else {
-        banner.textContent = `✗ ${data.error || 'Unknown error'}`;
-        banner.className = 'mem-block-banner banner show err';
-      }
-    });
-  });
-
-  // Edit block: enter edit mode
-  container.querySelectorAll('.mem-edit-block').forEach(btn => {
-    btn.addEventListener('click', () => {
-      _editingBlockId = { portId: btn.dataset.portId, blockId: btn.dataset.blockId };
-      renderMemoryTab(_currentModel);
-    });
-  });
-
-  // Cancel block edit
-  container.querySelectorAll('.mem-cancel-block').forEach(btn => {
-    btn.addEventListener('click', () => {
-      _editingBlockId = null;
-      renderMemoryTab(_currentModel);
-    });
-  });
-
-  // Save block edit
-  container.querySelectorAll('.mem-save-block').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const { portId, blockId } = btn.dataset;
-      const banner = document.getElementById(`mem-block-banner-${portId}`);
-      banner.className = 'mem-block-banner banner';
-      const payload = {
-        block: {
-          unit_id: Number(document.getElementById(`mbe-uid-${blockId}`).value),
-          area:    document.getElementById(`mbe-area-${blockId}`).value,
-          address: Number(document.getElementById(`mbe-addr-${blockId}`).value),
-          count:   Number(document.getElementById(`mbe-count-${blockId}`).value),
-        }
-      };
-      const { ok, data } = await api('PUT',
-        `/memory/port/${encodeURIComponent(portId)}/block/${encodeURIComponent(blockId)}`, payload);
-      if (ok) {
-        _editingBlockId = null;
-        await loadModel();
-      } else {
-        banner.textContent = `✗ ${data.error || 'Unknown error'}`;
-        banner.className = 'mem-block-banner banner show err';
-      }
-    });
-  });
-
-  // Delete block
-  container.querySelectorAll('.mem-del-block').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const { portId, blockId } = btn.dataset;
-      if (!confirm('Delete this memory block?')) return;
-      const { ok, data } = await api('DELETE',
-        `/memory/port/${encodeURIComponent(portId)}/block/${encodeURIComponent(blockId)}`);
-      if (!ok) { alert(`Error: ${data.error || 'Unknown error'}`); return; }
-      _editingBlockId = null;
-      await loadModel();
-    });
-  });
 
   // Edit port (change port number)
   container.querySelectorAll('.mem-edit-port').forEach(btn => {
