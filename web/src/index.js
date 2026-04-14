@@ -121,25 +121,50 @@ function findDevice(model, deviceId) {
 
 
 
-function toReplicatorYaml(system, devices) {
-    // Uses the first target's endpoint for the global MMA connection.
-    // Multi-target routing requires replicator service support and will be addressed separately.
+function toReplicatorYaml(system, devices, groups) {
+    // Replicator orchestration config.
+    // Format per docs/COMPILATION.md:
+    //   - top-level mma: { host, port } connection section (Replicator needs this to reach MMA)
+    //   - routes: list, each with source, target (unit/area/address), poll_interval, ref
+    //   - ref contains group_id, device_id, block_id for traceability back to model
     const targets = (system && system.targets) || [];
+
+    // Build a lookup map from target name → target object.
+    const targetByName = {};
+    for (const t of targets) {
+        targetByName[t.name] = t;
+    }
+
+    // Build a lookup map from group id → group object.
+    const groupById = {};
+    for (const g of (groups || [])) {
+        groupById[g.id] = g;
+    }
+
+    // Derive the global MMA connection from the first defined target.
     const firstTarget = targets[0] || {};
-    const endpointParts = (firstTarget.endpoint || 'mma:502').split(':');
-    const host = endpointParts[0] || 'mma';
-    const port = Number(endpointParts[1]) || 502;
+    const endpointParts = (firstTarget.endpoint || '').split(':');
+    const mmaHost = endpointParts[0] || TARGET_HOST;
+    const rawPort = firstTarget.port != null ? Number(firstTarget.port)
+        : Number(endpointParts[1] || '');
+    const mmaPort = Number.isFinite(rawPort) && rawPort > 0 ? rawPort : 502;
+
     const indent = '  ';
     const lines = [
         'mma:',
-        `${indent}host: ${host}`,
-        `${indent}port: ${port}`,
+        `${indent}host: ${mmaHost}`,
+        `${indent}port: ${mmaPort}`,
         '',
         'routes:'
     ];
+
     for (const device of devices) {
+        const group = groupById[device.groupId] || null;
         for (const read of (device.reads || [])) {
-            const routeId = `${device.id}__${read.id}`;
+            // Route ID: {group_id}__{device_id}__{block_id}  (docs/COMPILATION.md naming)
+            const routeId = group
+                ? `${group.id}__${device.id}__${read.id}`
+                : `${device.id}__${read.id}`;
             lines.push(`${indent}- id: ${routeId}`);
             lines.push(`${indent}  source:`);
             lines.push(`${indent}    host: ${device.ipAddress}`);
@@ -149,13 +174,16 @@ function toReplicatorYaml(system, devices) {
             lines.push(`${indent}    address: ${read.source_address}`);
             lines.push(`${indent}    count: ${read.source_count}`);
             lines.push(`${indent}  target:`);
+            // target: unit, area, address — per docs/COMPILATION.md (no mma_port)
             lines.push(`${indent}    unit: ${device.unitId}`);
             lines.push(`${indent}    area: ${read.target_area}`);
             lines.push(`${indent}    address: ${read.target_address}`);
             lines.push(`${indent}  poll_interval: ${read.poll_interval}`);
             lines.push(`${indent}  ref:`);
+            // ref: group_id + device_id + block_id — per docs/COMPILATION.md
+            if (group) lines.push(`${indent}    group_id: ${group.id}`);
             lines.push(`${indent}    device_id: ${device.id}`);
-            lines.push(`${indent}    read_id: ${read.id}`);
+            lines.push(`${indent}    block_id: ${read.id}`);
         }
     }
     return lines.join('\n') + '\n';
@@ -184,6 +212,59 @@ function toMmaYaml(system, devices) {
         }
     }
     return lines.join('\n') + '\n';
+}
+
+// ---------------------------------------------------------------------------
+// Config validation
+// ---------------------------------------------------------------------------
+
+// MMA config must contain ONLY runtime listener definitions — no orchestration data.
+function validateMmaConfig(yaml) {
+    const errors = [];
+    if (/^routes\s*:/m.test(yaml)) {
+        errors.push('MMA config must not contain routes — routes belong in Replicator config');
+    }
+    if (/\bdevice_id\s*:/m.test(yaml)) {
+        errors.push('MMA config must not contain device_id — device references belong in Replicator config');
+    }
+    if (/\bread_id\s*:/m.test(yaml)) {
+        errors.push('MMA config must not contain read_id — read references belong in Replicator config');
+    }
+    if (/\bblock_id\s*:/m.test(yaml)) {
+        errors.push('MMA config must not contain block_id — block references belong in Replicator config');
+    }
+    return errors;
+}
+
+// Replicator config must contain orchestration data only — no MMA listener/memory definitions.
+// An mma: { host, port } connection section is permitted and expected (Replicator needs it to
+// reach MMA), but must not contain routes, device references, or memory block definitions.
+function validateReplicatorConfig(yaml) {
+    const errors = [];
+    if (/^listeners\s*:/m.test(yaml)) {
+        errors.push('Replicator config must not contain a top-level listeners block — listeners belong in MMA config');
+    }
+    if (/^memory\s*:/m.test(yaml)) {
+        errors.push('Replicator config must not contain a top-level memory block — memory definitions belong in MMA config');
+    }
+    // The mma: block is permitted only for connection settings (host, port).
+    // Contamination would be routes or memory definitions inside the mma: block.
+    const lines = yaml.split('\n');
+    let inMmaBlock = false;
+    for (const line of lines) {
+        if (/^mma\s*:/.test(line)) { inMmaBlock = true; continue; }
+        if (inMmaBlock) {
+            if (/^\S/.test(line)) { inMmaBlock = false; continue; }
+            if (/^\s+routes\s*:/.test(line)) {
+                errors.push('Replicator mma: block must not contain routes — routes must be at the top level');
+                inMmaBlock = false;
+            } else if (/^\s+memory\s*:/.test(line)) {
+                errors.push('Replicator mma: block must not contain memory definitions — those belong in MMA config');
+                inMmaBlock = false;
+            }
+        }
+    }
+    return errors;
 }
 
 // ---------------------------------------------------------------------------
@@ -592,16 +673,85 @@ app.post('/compile', (req, res) => {
         const model = readModel();
         const system = model.system || DEFAULT_SYSTEM;
         const devices = model.devices || [];
+        const groups = model.groups || [];
 
         let routeCount = 0;
         for (const device of devices) {
             routeCount += (device.reads || []).length;
         }
 
-        atomicWrite(REPLICATOR_CONFIG_PATH, toReplicatorYaml(system, devices));
-        atomicWrite(MMA_CONFIG_PATH, toMmaYaml(system, devices));
+        const replicatorYaml = toReplicatorYaml(system, devices, groups);
+        const mmaYaml = toMmaYaml(system, devices);
+
+        // Validate generated configs before writing to disk.
+        const mmaErrors = validateMmaConfig(mmaYaml);
+        const replicatorErrors = validateReplicatorConfig(replicatorYaml);
+        if (mmaErrors.length > 0 || replicatorErrors.length > 0) {
+            return res.status(400).json({
+                error: 'Config validation failed — generated configs violate separation rules',
+                mma_errors: mmaErrors,
+                replicator_errors: replicatorErrors,
+            });
+        }
+
+        atomicWrite(REPLICATOR_CONFIG_PATH, replicatorYaml);
+        atomicWrite(MMA_CONFIG_PATH, mmaYaml);
 
         res.json({ ok: true, routes: routeCount });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Simple in-memory rate limiter for read-heavy endpoints (max 30 req/min per IP).
+const _rateLimitStore = new Map();
+function rateLimit(req, res, next) {
+    const key = req.ip || 'unknown';
+    const now = Date.now();
+    const window = 60_000;
+    const maxReqs = 30;
+    const entry = _rateLimitStore.get(key) || { count: 0, start: now };
+    if (now - entry.start > window) {
+        entry.count = 0;
+        entry.start = now;
+    }
+    entry.count += 1;
+    _rateLimitStore.set(key, entry);
+    if (entry.count > maxReqs) {
+        return res.status(429).json({ error: 'Too many requests — please wait before retrying' });
+    }
+    next();
+}
+
+// GET /validate — validate the current on-disk config files against separation rules
+app.get('/validate', rateLimit, (req, res) => {
+    try {
+        const result = {
+            mma: { valid: true, errors: [] },
+            replicator: { valid: true, errors: [] },
+        };
+
+        if (fs.existsSync(MMA_CONFIG_PATH)) {
+            const yaml = fs.readFileSync(MMA_CONFIG_PATH, 'utf-8');
+            const errors = validateMmaConfig(yaml);
+            result.mma.valid = errors.length === 0;
+            result.mma.errors = errors;
+        } else {
+            result.mma.valid = false;
+            result.mma.errors = ['Config file not found — run Compile to generate it'];
+        }
+
+        if (fs.existsSync(REPLICATOR_CONFIG_PATH)) {
+            const yaml = fs.readFileSync(REPLICATOR_CONFIG_PATH, 'utf-8');
+            const errors = validateReplicatorConfig(yaml);
+            result.replicator.valid = errors.length === 0;
+            result.replicator.errors = errors;
+        } else {
+            result.replicator.valid = false;
+            result.replicator.errors = ['Config file not found — run Compile to generate it'];
+        }
+
+        res.json(result);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
