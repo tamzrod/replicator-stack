@@ -9,7 +9,6 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 
 const DATA_DIR = process.env.DATA_DIR || '/app/data';
 const TARGET_HOST = process.env.TARGET_HOST || 'mma';
-const DEVICE_HOST = process.env.DEVICE_HOST || 'localhost';
 const MODEL_PATH = path.join(DATA_DIR, 'model.json');
 const REPLICATOR_CONFIG_PATH = path.join(DATA_DIR, 'replicator/config.yaml');
 const MMA_CONFIG_PATH = path.join(DATA_DIR, 'mma/config.yaml');
@@ -46,9 +45,22 @@ function readModel() {
             delete device.group;
             migrated = true;
         }
+        // Migrate old device.host → device.ipAddress
+        if (device.host && !device.ipAddress) {
+            device.ipAddress = device.host;
+            delete device.host;
+            migrated = true;
+        }
     }
     if (migrated) writeModel(model);
     return model;
+}
+
+function isValidIp(ip) {
+    if (typeof ip !== 'string' || !ip.trim()) return false;
+    const parts = ip.trim().split('.');
+    if (parts.length !== 4) return false;
+    return parts.every(p => /^\d+$/.test(p) && Number(p) >= 0 && Number(p) <= 255);
 }
 
 function findGroup(model, groupId) {
@@ -129,7 +141,7 @@ function toReplicatorYaml(system, devices) {
             const routeId = `${device.id}__${read.id}`;
             lines.push(`${indent}- id: ${routeId}`);
             lines.push(`${indent}  source:`);
-            lines.push(`${indent}    host: ${device.host}`);
+            lines.push(`${indent}    host: ${device.ipAddress}`);
             lines.push(`${indent}    port: ${device.port}`);
             lines.push(`${indent}    unit_id: ${device.source_unit_id}`);
             lines.push(`${indent}    area: ${read.source_area}`);
@@ -202,6 +214,9 @@ app.post('/device', (req, res) => {
         if (!device.target_name) {
             return res.status(400).json({ error: 'device.target_name is required' });
         }
+        if (!isValidIp(device.ipAddress)) {
+            return res.status(400).json({ error: 'device.ipAddress must be a valid IPv4 address' });
+        }
         const port = Number(device.port);
         if (!Number.isFinite(port) || port < 1 || port > 65535) {
             return res.status(400).json({ error: 'device.port must be a valid port number (1–65535)' });
@@ -232,7 +247,7 @@ app.post('/device', (req, res) => {
             id: device.id,
             name: device.name || '',
             groupId: device.groupId || null,
-            host: DEVICE_HOST,
+            ipAddress: device.ipAddress.trim(),
             port,
             source_unit_id: device.source_unit_id,
             target_name: device.target_name,
@@ -268,6 +283,12 @@ app.put('/device/:id', (req, res) => {
                 return res.status(400).json({ error: 'device.port must be a valid port number (1–65535)' });
             }
             existing.port = port;
+        }
+        if (device.ipAddress !== undefined) {
+            if (!isValidIp(device.ipAddress)) {
+                return res.status(400).json({ error: 'device.ipAddress must be a valid IPv4 address' });
+            }
+            existing.ipAddress = device.ipAddress.trim();
         }
         if (device.name !== undefined) existing.name = device.name;
         if (device.groupId !== undefined) {
