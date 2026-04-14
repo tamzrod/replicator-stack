@@ -17,7 +17,7 @@ const MMA_CONFIG_PATH = path.join(DATA_DIR, 'mma/config.yaml');
 const DEFAULT_SYSTEM = {};
 
 // Number of holding registers consumed by each device's status slot.
-const STATUS_SLOT_SIZE = 1;
+const STATUS_SLOT_SIZE = 30;
 
 // ---------------------------------------------------------------------------
 // Helpers
