@@ -804,6 +804,14 @@ function escapeHtml(str) {
     .replace(/'/g, '&#39;');
 }
 
+// Refresh config viewer only when its tab is currently visible.
+async function refreshConfigViewerIfActive() {
+  const cvContainer = document.getElementById('config-viewer-container');
+  if (cvContainer.classList.contains('active')) {
+    await loadConfigs();
+  }
+}
+
 // ── Model ────────────────────────────────────────────────────────────────────
 
 let _currentModel = null;
@@ -963,10 +971,7 @@ async function loadModel() {
   if (prev) sel.value = prev;
 
   // If the config viewer tab is open, keep it in sync with the latest compiled output.
-  const cvContainer = document.getElementById('config-viewer-container');
-  if (cvContainer.classList.contains('active')) {
-    await loadConfigs();
-  }
+  await refreshConfigViewerIfActive();
 }
 
 // ── Targets ──────────────────────────────────────────────────────────────────
@@ -1102,10 +1107,7 @@ async function compile() {
   if (ok) {
     el.innerHTML = `<div class="banner show ok">✓ Compiled successfully — ${escapeHtml(String(data.routes))} route(s) written to Replicator and MMA configs.</div>`;
     // Refresh config viewer immediately so it reflects the latest compiled output.
-    const cvContainer = document.getElementById('config-viewer-container');
-    if (cvContainer.classList.contains('active')) {
-      await loadConfigs();
-    }
+    await refreshConfigViewerIfActive();
   } else if (data.mma_errors || data.replicator_errors) {
     const mmaItems = (data.mma_errors || []).map(e => `<li>${escapeHtml(e)}</li>`).join('');
     const repItems = (data.replicator_errors || []).map(e => `<li>${escapeHtml(e)}</li>`).join('');
