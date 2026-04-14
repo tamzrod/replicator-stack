@@ -223,7 +223,6 @@
     .pipeline-section:last-child  { border-radius: 0 0 8px 8px; }
     .pipeline-section-source { border-left: 4px solid #3b82f6; }
     .pipeline-section-read   { border-left: 4px solid #f59e0b; }
-    .pipeline-section-target { border-left: 4px solid #10b981; }
     .pipeline-arrow {
       text-align: center;
       padding: 6px 0;
@@ -246,7 +245,6 @@
     }
     .pipeline-label-source { background: #dbeafe; color: #1d4ed8; }
     .pipeline-label-read   { background: #fef3c7; color: #b45309; }
-    .pipeline-label-target { background: #d1fae5; color: #065f46; }
     .info-field label {
       display: block; font-size: .75rem; font-weight: 600; color: #64748b;
       margin-bottom: 4px; text-transform: uppercase; letter-spacing: .04em;
@@ -497,6 +495,83 @@
     }
     .cv-valid-badge.valid { background: #d1fae5; color: #065f46; }
     .cv-valid-badge.invalid { background: #fee2e2; color: #991b1b; }
+
+    /* ── Memory Tab ──────────────────────────────────────────────────── */
+    #memory-tab-container {
+      display: none;
+      max-width: 960px;
+      margin: 32px auto;
+      padding: 0 16px;
+    }
+    #memory-tab-container.active { display: block; }
+
+    .mem-port-card {
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+      margin-bottom: 20px;
+      border-left: 4px solid #10b981;
+      overflow: hidden;
+    }
+    .mem-port-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 20px;
+      border-bottom: 1px solid #e2e8f0;
+      background: #f0fdf4;
+    }
+    .mem-port-title {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #065f46;
+    }
+    .mem-port-body { padding: 16px 20px; }
+    .mem-block-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 0;
+      border-bottom: 1px solid #f1f5f9;
+      font-size: .85rem;
+    }
+    .mem-block-row:last-child { border-bottom: none; }
+    .mem-block-field {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      flex: 1;
+      min-width: 80px;
+    }
+    .mem-block-field label {
+      font-size: .65rem;
+      font-weight: 700;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .mem-block-field .mem-val {
+      font-size: .82rem;
+      color: #1a1a2e;
+    }
+    .mem-block-field code {
+      font-size: .78rem;
+      color: #0369a1;
+      background: #e0f2fe;
+      border-radius: 4px;
+      padding: 1px 5px;
+    }
+    .mem-add-block-form {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px dashed #d1fae5;
+      display: none;
+    }
+    .mem-add-block-form.show { display: block; }
+    .btn-mem { background: #d1fae5; color: #065f46; font-size: .75rem; padding: 4px 10px; font-weight: 600; border-radius: 5px; border: none; cursor: pointer; }
+    .btn-mem:hover { background: #a7f3d0; }
+    .btn-mem-edit { background: #e0f2fe; color: #0369a1; font-size: .75rem; padding: 4px 10px; }
+    .btn-mem-edit:hover { background: #bae6fd; }
   </style>
 </head>
 <body>
@@ -508,6 +583,7 @@
 
 <div id="tab-bar">
   <button class="tab-btn active" data-tab="model">Model</button>
+  <button class="tab-btn" data-tab="memory">🧠 Memory</button>
   <button class="tab-btn" data-tab="config-viewer">🔍 Config Viewer</button>
   <button class="btn-refresh btn-tab-bar-refresh" id="btn-refresh">↻ Refresh</button>
 </div>
@@ -517,30 +593,6 @@
 <div id="main-wrapper">
 
 <main>
-
-  <!-- ── Targets (global) ───────────────────────────────────────────── -->
-  <div class="card">
-    <h2>Targets <span style="color:#94a3b8;font-size:.8rem;font-weight:400">(MMA 2.0 runtime endpoints)</span></h2>
-    <div id="targets-list" style="margin-bottom:16px"></div>
-    <form id="target-form">
-      <div class="row">
-        <div class="field">
-          <label>Name</label>
-          <input id="t-name" type="text" placeholder="Main MMA" required />
-        </div>
-        <div class="field">
-          <label>Port</label>
-          <input id="t-port" type="number" placeholder="502" min="1" max="65535" required />
-        </div>
-        <div class="field">
-          <label>Status Unit ID <span style="color:#94a3b8;font-weight:400">(optional)</span></label>
-          <input id="t-status-unit" type="number" placeholder="e.g. 100" min="0" />
-        </div>
-      </div>
-      <div id="target-banner" class="banner"></div>
-      <div><button type="submit" class="btn-primary">Add Target</button></div>
-    </form>
-  </div>
 
   <!-- ── Device Workspace (driven by tree selection) ─────────────────── -->
   <div id="device-workspace"></div>
@@ -612,6 +664,30 @@
 
 </div><!-- #config-viewer-container -->
 
+<!-- ── Memory Tab ─────────────────────────────────────────────────── -->
+<div id="memory-tab-container">
+
+  <div class="card" style="margin-bottom:20px">
+    <h2>Memory <span style="color:#94a3b8;font-size:.8rem;font-weight:400">(MMA runtime memory layout)</span></h2>
+    <p style="color:#64748b;font-size:.85rem;margin-bottom:16px">
+      Define MMA listener ports and their memory blocks. Each memory port runs a Modbus listener.
+      Each block allocates a register range for a specific unit ID.
+    </p>
+    <div id="memory-ports-list" style="margin-bottom:16px"></div>
+    <form id="memory-port-form">
+      <div class="row">
+        <div class="field" style="max-width:200px">
+          <label>Port</label>
+          <input id="mp-port" type="number" placeholder="502" min="1" max="65535" required />
+        </div>
+      </div>
+      <div id="memory-port-banner" class="banner" style="margin-top:8px"></div>
+      <div style="margin-top:10px"><button type="submit" class="btn-primary">+ Add Memory Port</button></div>
+    </form>
+  </div>
+
+</div><!-- #memory-tab-container -->
+
 <!-- ── Add / Edit Group Dialog ───────────────────────────────────── -->
 <dialog id="group-dialog">
   <div class="card" style="margin:0;min-width:300px;max-width:400px">
@@ -662,20 +738,8 @@
       </div>
       <div class="row">
         <div class="field">
-          <label>MMA Unit ID <span style="color:#64748b;font-size:.75rem;font-weight:400">(target memory unit)</span></label>
+          <label>MMA Unit ID <span style="color:#64748b;font-size:.75rem;font-weight:400">(memory unit)</span></label>
           <input id="ad-mma-unit" type="number" value="1" min="1" required />
-        </div>
-        <div class="field">
-          <label>Status Slot <span style="color:#94a3b8;font-weight:400">(optional)</span></label>
-          <input id="ad-status-slot" type="number" value="0" min="0" />
-        </div>
-      </div>
-      <div class="row">
-        <div class="field">
-          <label>Target</label>
-          <select id="ad-target" required>
-            <option value="">— select target —</option>
-          </select>
         </div>
         <div class="field">
           <label>Group <span style="color:#94a3b8;font-weight:400">(optional)</span></label>
@@ -725,11 +789,6 @@ async function refreshConfigViewerIfActive() {
 
 let _currentModel = null;
 
-function findTarget(model, targetName) {
-  const targets = (model.system && model.system.targets) || [];
-  return targets.find(t => t.name === targetName) || null;
-}
-
 function findGroupById(model, groupId) {
   const groups = (model && model.groups) || [];
   return groups.find(g => g.id === groupId) || null;
@@ -739,31 +798,6 @@ function groupName(model, groupId) {
   if (!groupId) return null;
   const g = findGroupById(model, groupId);
   return g ? g.name : null;
-}
-
-function targetPort(t) {
-  if (t.port != null) return t.port;
-  return (t.endpoint || '').split(':')[1] || '';
-}
-
-function renderTargetsList(data) {
-  const el = document.getElementById('targets-list');
-  const targets = (data.system && data.system.targets) || [];
-  if (targets.length === 0) {
-    el.innerHTML = '<div class="empty-state" style="padding:12px 0">No targets defined yet.</div>';
-    return;
-  }
-  const rows = targets.map(t => `<tr>
-    <td>${escapeHtml(t.name)}</td>
-    <td>${escapeHtml(targetPort(t))}</td>
-    <td><button class="btn-danger btn-delete-target" data-name="${escapeHtml(t.name)}">✕ Remove</button></td>
-  </tr>`).join('');
-  el.innerHTML = `<table>
-    <thead><tr>
-      <th>Name</th><th>Port</th><th></th>
-    </tr></thead>
-    <tbody>${rows}</tbody>
-  </table>`;
 }
 
 // ── Device Workspace ─────────────────────────────────────────────────────────
@@ -792,8 +826,6 @@ function renderDeviceWorkspace() {
   }
 
   const grpName = groupName(model, device.groupId) || '— Ungrouped —';
-  const target = findTarget(model, device.target_name);
-  const tPortRaw = target ? targetPort(target) : null;
   const reads = device.reads || [];
 
   // ── A. SOURCE Section ──────────────────────────────────────────────
@@ -825,6 +857,7 @@ function renderDeviceWorkspace() {
           <label>Source Unit ID <span style="color:#94a3b8;font-weight:400">(optional)</span></label>
           <input class="info-edit-input" type="number" id="ws-ed-src-unit" value="${escapeHtml(String(device.source_unit_id ?? ''))}" placeholder="e.g. 1" />
         </div>
+        <div class="info-field"><label>MMA Unit ID</label><div class="info-val">${escapeHtml(String(device.unitId ?? '—'))}</div></div>
         <div class="info-field"><label>Group</label><div class="info-val">${escapeHtml(grpName)}</div></div>
       </div>
       <div id="ws-device-banner" class="banner" style="margin-top:10px"></div>
@@ -917,27 +950,6 @@ function renderDeviceWorkspace() {
     </div>
   </div>`;
 
-  // ── Pipeline Arrow ─────────────────────────────────────────────────
-  html += `<div class="pipeline-arrow">↓</div>`;
-
-  // ── C. TARGET Section ─────────────────────────────────────────────
-  html += `<div class="card pipeline-section pipeline-section-target">
-    <div class="ws-card-header"><h2><span class="pipeline-label pipeline-label-target">TARGET</span>🎯 ${escapeHtml(device.target_name || '— No Target —')}</h2></div>
-    <form id="ws-target-form">
-      <div class="info-grid" style="margin-bottom:12px">
-        <div class="info-field"><label>Target Name</label><div class="info-val">${escapeHtml(device.target_name || '—')}</div></div>
-        <div class="info-field">
-          <label>MMA Port</label>
-          <input class="info-edit-input" type="number" id="ws-t-port" value="${tPortRaw != null ? escapeHtml(String(tPortRaw)) : ''}" min="1" max="65535" ${!device.target_name ? 'disabled' : ''} />
-        </div>
-        <div class="info-field"><label>MMA Unit ID <span style="color:#94a3b8;font-weight:400">(unit mapping)</span></label><div class="info-val">${escapeHtml(String(device.unitId ?? '—'))}</div></div>
-        <div class="info-field"><label>Status Slot <span style="color:#94a3b8;font-weight:400">(address mapping)</span></label><div class="info-val">${escapeHtml(String(device.status_slot ?? 0))}</div></div>
-      </div>
-      <div id="ws-target-banner" class="banner"></div>
-      <div><button type="submit" class="btn-primary" style="font-size:.8rem;padding:7px 14px" ${!device.target_name ? 'disabled' : ''}>Save Target</button></div>
-    </form>
-  </div>`;
-
   el.innerHTML = html;
 
   // ── Event Listeners ────────────────────────────────────────────────
@@ -957,8 +969,6 @@ function renderDeviceWorkspace() {
                           : device.source_unit_id,
         groupId:        device.groupId || null,
         unitId:         device.unitId,
-        status_slot:    device.status_slot ?? 0,
-        target_name:    device.target_name,
       }
     };
     const { ok, data } = await api('PUT', `/device/${encodeURIComponent(device.id)}`, payload);
@@ -971,24 +981,6 @@ function renderDeviceWorkspace() {
   });
 
   document.getElementById('ws-btn-del-device').addEventListener('click', () => deleteDevice(device.id));
-
-  // Save target port (inline)
-  document.getElementById('ws-target-form').addEventListener('submit', async e => {
-    e.preventDefault();
-    const banner = document.getElementById('ws-target-banner');
-    banner.className = 'banner';
-    const newPort = Number(document.getElementById('ws-t-port').value);
-    if (!device.target_name) return;
-    const { ok, data } = await api('PUT', `/target/${encodeURIComponent(device.target_name)}`, { target: { port: newPort } });
-    if (ok) {
-      banner.textContent = `✓ Target "${device.target_name}" port updated to ${newPort}.`;
-      banner.className = 'banner show ok';
-      await loadModel();
-    } else {
-      banner.textContent = `✗ ${data.error || 'Unknown error'}`;
-      banner.className = 'banner show err';
-    }
-  });
 
   // Show/hide add-read panel
   document.getElementById('ws-btn-show-add-read').addEventListener('click', () => {
@@ -1098,99 +1090,23 @@ async function loadModel() {
   }
 
   _currentModel = data;
-  renderTargetsList(data);
   renderTree(data);
   refreshGroupDropdowns(data);
-
-  // Refresh target dropdown in Add Device dialog
-  const targets = (data.system && data.system.targets) || [];
-  const tsel = document.getElementById('ad-target');
-  const tprev = tsel.value;
-  tsel.innerHTML = '<option value="">— select target —</option>';
-  for (const t of targets) {
-    const opt = document.createElement('option');
-    opt.value = t.name;
-    opt.textContent = `${t.name} (port ${targetPort(t)})`;
-    tsel.appendChild(opt);
-  }
-  if (tprev) tsel.value = tprev;
-
   renderDeviceWorkspace();
+  renderMemoryTab(data);
 
   // If the config viewer tab is open, keep it in sync with the latest compiled output.
   await refreshConfigViewerIfActive();
 }
 
-// ── Targets ──────────────────────────────────────────────────────────────────
-
-document.getElementById('targets-list').addEventListener('click', async e => {
-  const btn = e.target.closest('.btn-delete-target');
-  if (!btn) return;
-  const name = btn.dataset.name;
-  await deleteTarget(name);
-});
-
-document.getElementById('target-form').addEventListener('submit', async e => {
-  e.preventDefault();
-  const banner = document.getElementById('target-banner');
-  banner.className = 'banner';
-
-  const payload = {
-    target: {
-      name: document.getElementById('t-name').value.trim(),
-      port: Number(document.getElementById('t-port').value),
-      status_unit_id: document.getElementById('t-status-unit').value !== ''
-        ? Number(document.getElementById('t-status-unit').value)
-        : null,
-    }
-  };
-
-  const { ok, data } = await api('POST', '/target', payload);
-  if (ok) {
-    banner.textContent = `✓ Target "${payload.target.name}" added.`;
-    banner.className = 'banner show ok';
-    document.getElementById('target-form').reset();
-    await loadModel();
-  } else {
-    banner.textContent = `✗ ${data.error || 'Unknown error'}`;
-    banner.className = 'banner show err';
-  }
-});
-
-async function deleteTarget(name) {
-  const { ok, data } = await api('DELETE', `/target/${encodeURIComponent(name)}`);
-  const banner = document.getElementById('target-banner');
-  if (ok) {
-    banner.textContent = `✓ Target "${name}" removed.`;
-    banner.className = 'banner show ok';
-    await loadModel();
-  } else {
-    banner.textContent = `✗ ${data.error || 'Unknown error'}`;
-    banner.className = 'banner show err';
-  }
-}
-
 // ── Add Device (dialog) ──────────────────────────────────────────────────────
 
 function openAddDevice() {
-  const model = _currentModel || {};
   document.getElementById('add-device-form').reset();
   document.getElementById('ad-port').value = '502';
   document.getElementById('ad-unit').value = '1';
   document.getElementById('ad-mma-unit').value = '1';
-  document.getElementById('ad-status-slot').value = '0';
   document.getElementById('add-device-banner').className = 'banner';
-
-  // Populate target dropdown
-  const targets = (model.system && model.system.targets) || [];
-  const tsel = document.getElementById('ad-target');
-  tsel.innerHTML = '<option value="">— select target —</option>';
-  for (const t of targets) {
-    const opt = document.createElement('option');
-    opt.value = t.name;
-    opt.textContent = `${t.name} (port ${targetPort(t)})`;
-    tsel.appendChild(opt);
-  }
 
   document.getElementById('add-device-dialog').showModal();
 }
@@ -1209,8 +1125,6 @@ document.getElementById('add-device-form').addEventListener('submit', async e =>
       port:           Number(document.getElementById('ad-port').value),
       source_unit_id: Number(document.getElementById('ad-unit').value),
       unitId:         Number(document.getElementById('ad-mma-unit').value),
-      status_slot:    Number(document.getElementById('ad-status-slot').value) || 0,
-      target_name:    document.getElementById('ad-target').value,
     }
   };
 
@@ -1447,7 +1361,262 @@ async function deleteRead(deviceId, readId) {
   }
 }
 
-// ── Config Viewer ────────────────────────────────────────────────────────────
+// ── Memory Tab ───────────────────────────────────────────────────────────────
+
+let _editingBlockId = null; // { portId, blockId }
+
+function renderMemoryTab(data) {
+  const container = document.getElementById('memory-ports-list');
+  const ports = (data && data.memory && data.memory.ports) || [];
+
+  if (ports.length === 0) {
+    container.innerHTML = '<div class="empty-state" style="padding:12px 0">No memory ports defined yet.</div>';
+    return;
+  }
+
+  container.innerHTML = ports.map(port => {
+    const blocks = port.blocks || [];
+    const blocksHtml = blocks.length === 0
+      ? `<div class="empty-state" style="padding:10px 0;font-size:.8rem">No memory blocks. Add one below.</div>`
+      : blocks.map(b => {
+          const isEditing = _editingBlockId && _editingBlockId.portId === port.id && _editingBlockId.blockId === b.id;
+          if (isEditing) {
+            const areaOpts = ['holding_registers','coils','input_registers','discrete_inputs']
+              .map(a => `<option value="${a}"${b.area === a ? ' selected' : ''}>${a}</option>`).join('');
+            return `<div class="mem-block-row" style="background:#fffbeb;border-radius:6px;padding:8px;flex-wrap:wrap;gap:8px">
+              <div class="mem-block-field">
+                <label>Unit ID</label>
+                <input class="inline-input" type="number" id="mbe-uid-${escapeHtml(b.id)}" value="${escapeHtml(String(b.unit_id))}" min="1" style="width:70px" />
+              </div>
+              <div class="mem-block-field">
+                <label>Area</label>
+                <select class="inline-input" id="mbe-area-${escapeHtml(b.id)}">${areaOpts}</select>
+              </div>
+              <div class="mem-block-field">
+                <label>Address</label>
+                <input class="inline-input" type="number" id="mbe-addr-${escapeHtml(b.id)}" value="${escapeHtml(String(b.address))}" min="0" style="width:70px" />
+              </div>
+              <div class="mem-block-field">
+                <label>Count</label>
+                <input class="inline-input" type="number" id="mbe-count-${escapeHtml(b.id)}" value="${escapeHtml(String(b.count))}" min="1" style="width:70px" />
+              </div>
+              <div style="display:flex;gap:6px;align-self:flex-end">
+                <button class="btn-save-inline mem-save-block" data-port-id="${escapeHtml(port.id)}" data-block-id="${escapeHtml(b.id)}">Save</button>
+                <button class="btn-cancel-inline mem-cancel-block">Cancel</button>
+              </div>
+            </div>`;
+          }
+          return `<div class="mem-block-row">
+            <div class="mem-block-field"><label>Unit ID</label><div class="mem-val">${escapeHtml(String(b.unit_id))}</div></div>
+            <div class="mem-block-field"><label>Area</label><div class="mem-val"><code>${escapeHtml(b.area || 'holding_registers')}</code></div></div>
+            <div class="mem-block-field"><label>Address</label><div class="mem-val">${escapeHtml(String(b.address))}</div></div>
+            <div class="mem-block-field"><label>Count</label><div class="mem-val">${escapeHtml(String(b.count))}</div></div>
+            <div style="display:flex;gap:6px">
+              <button class="btn-mem btn-mem-edit mem-edit-block" data-port-id="${escapeHtml(port.id)}" data-block-id="${escapeHtml(b.id)}">✎ Edit</button>
+              <button class="btn-danger mem-del-block" data-port-id="${escapeHtml(port.id)}" data-block-id="${escapeHtml(b.id)}" style="font-size:.75rem;padding:4px 10px">✕</button>
+            </div>
+          </div>`;
+        }).join('');
+
+    return `<div class="mem-port-card" data-port-id="${escapeHtml(port.id)}">
+      <div class="mem-port-header">
+        <span class="mem-port-title">🔌 Port ${escapeHtml(String(port.port))}</span>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn-mem mem-edit-port" data-port-id="${escapeHtml(port.id)}" data-port-num="${escapeHtml(String(port.port))}">✎ Edit Port</button>
+          <button class="btn-danger mem-del-port" data-port-id="${escapeHtml(port.id)}" style="font-size:.75rem;padding:4px 10px">✕ Remove</button>
+        </div>
+      </div>
+      <div class="mem-port-body">
+        <div class="mem-blocks-list">${blocksHtml}</div>
+        <div class="mem-block-banner banner" id="mem-block-banner-${escapeHtml(port.id)}"></div>
+        <button class="btn-mem mem-show-add-block" data-port-id="${escapeHtml(port.id)}" style="margin-top:10px">+ Add Memory Block</button>
+        <form class="mem-add-block-form" id="mem-add-block-form-${escapeHtml(port.id)}">
+          <div class="row" style="flex-wrap:wrap">
+            <div class="field" style="min-width:100px;max-width:120px">
+              <label>Unit ID</label>
+              <input class="mem-ab-uid" type="number" value="1" min="1" required />
+            </div>
+            <div class="field" style="min-width:160px">
+              <label>Area</label>
+              <select class="mem-ab-area">
+                <option value="holding_registers">holding_registers</option>
+                <option value="coils">coils</option>
+                <option value="input_registers">input_registers</option>
+                <option value="discrete_inputs">discrete_inputs</option>
+              </select>
+            </div>
+            <div class="field" style="min-width:100px;max-width:120px">
+              <label>Address</label>
+              <input class="mem-ab-addr" type="number" value="0" min="0" required />
+            </div>
+            <div class="field" style="min-width:100px;max-width:120px">
+              <label>Count</label>
+              <input class="mem-ab-count" type="number" value="1" min="1" required />
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <button type="submit" class="btn-primary" style="font-size:.8rem;padding:6px 14px">Add Block</button>
+            <button type="button" class="btn-refresh mem-cancel-add-block" style="font-size:.8rem;padding:6px 12px">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>`;
+  }).join('');
+
+  // ── Memory port event handlers ─────────────────────────────────────
+
+  // Show add-block form
+  container.querySelectorAll('.mem-show-add-block').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const portId = btn.dataset.portId;
+      const form = document.getElementById(`mem-add-block-form-${portId}`);
+      form.classList.toggle('show');
+      btn.style.display = form.classList.contains('show') ? 'none' : '';
+    });
+  });
+
+  // Cancel add-block form
+  container.querySelectorAll('.mem-cancel-add-block').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const form = btn.closest('.mem-add-block-form');
+      const portId = form.id.replace('mem-add-block-form-', '');
+      form.classList.remove('show');
+      const showBtn = container.querySelector(`.mem-show-add-block[data-port-id="${portId}"]`);
+      if (showBtn) showBtn.style.display = '';
+    });
+  });
+
+  // Submit add-block form
+  container.querySelectorAll('.mem-add-block-form').forEach(form => {
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      const portId = form.id.replace('mem-add-block-form-', '');
+      const banner = document.getElementById(`mem-block-banner-${portId}`);
+      banner.className = 'mem-block-banner banner';
+      const payload = {
+        block: {
+          unit_id: Number(form.querySelector('.mem-ab-uid').value),
+          area:    form.querySelector('.mem-ab-area').value,
+          address: Number(form.querySelector('.mem-ab-addr').value),
+          count:   Number(form.querySelector('.mem-ab-count').value),
+        }
+      };
+      const { ok, data } = await api('POST', `/memory/port/${encodeURIComponent(portId)}/block`, payload);
+      if (ok) {
+        _editingBlockId = null;
+        await loadModel();
+      } else {
+        banner.textContent = `✗ ${data.error || 'Unknown error'}`;
+        banner.className = 'mem-block-banner banner show err';
+      }
+    });
+  });
+
+  // Edit block: enter edit mode
+  container.querySelectorAll('.mem-edit-block').forEach(btn => {
+    btn.addEventListener('click', () => {
+      _editingBlockId = { portId: btn.dataset.portId, blockId: btn.dataset.blockId };
+      renderMemoryTab(_currentModel);
+    });
+  });
+
+  // Cancel block edit
+  container.querySelectorAll('.mem-cancel-block').forEach(btn => {
+    btn.addEventListener('click', () => {
+      _editingBlockId = null;
+      renderMemoryTab(_currentModel);
+    });
+  });
+
+  // Save block edit
+  container.querySelectorAll('.mem-save-block').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const { portId, blockId } = btn.dataset;
+      const banner = document.getElementById(`mem-block-banner-${portId}`);
+      banner.className = 'mem-block-banner banner';
+      const payload = {
+        block: {
+          unit_id: Number(document.getElementById(`mbe-uid-${blockId}`).value),
+          area:    document.getElementById(`mbe-area-${blockId}`).value,
+          address: Number(document.getElementById(`mbe-addr-${blockId}`).value),
+          count:   Number(document.getElementById(`mbe-count-${blockId}`).value),
+        }
+      };
+      const { ok, data } = await api('PUT',
+        `/memory/port/${encodeURIComponent(portId)}/block/${encodeURIComponent(blockId)}`, payload);
+      if (ok) {
+        _editingBlockId = null;
+        await loadModel();
+      } else {
+        banner.textContent = `✗ ${data.error || 'Unknown error'}`;
+        banner.className = 'mem-block-banner banner show err';
+      }
+    });
+  });
+
+  // Delete block
+  container.querySelectorAll('.mem-del-block').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const { portId, blockId } = btn.dataset;
+      if (!confirm('Delete this memory block?')) return;
+      const { ok, data } = await api('DELETE',
+        `/memory/port/${encodeURIComponent(portId)}/block/${encodeURIComponent(blockId)}`);
+      if (!ok) { alert(`Error: ${data.error || 'Unknown error'}`); return; }
+      _editingBlockId = null;
+      await loadModel();
+    });
+  });
+
+  // Edit port (change port number)
+  container.querySelectorAll('.mem-edit-port').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const portId = btn.dataset.portId;
+      const current = btn.dataset.portNum;
+      const newPort = prompt(`Edit port number for this memory port:`, current);
+      if (newPort === null) return;
+      const portNum = Number(newPort);
+      if (!Number.isFinite(portNum) || portNum < 1 || portNum > 65535) {
+        alert('Invalid port number. Must be 1–65535.');
+        return;
+      }
+      const { ok, data } = await api('PUT', `/memory/port/${encodeURIComponent(portId)}`, { port: { port: portNum } });
+      if (!ok) { alert(`Error: ${data.error || 'Unknown error'}`); return; }
+      await loadModel();
+    });
+  });
+
+  // Delete port
+  container.querySelectorAll('.mem-del-port').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const portId = btn.dataset.portId;
+      const card = btn.closest('.mem-port-card');
+      const portNum = card.querySelector('.mem-port-title').textContent.replace('🔌 Port ', '').trim();
+      if (!confirm(`Remove memory port ${portNum} and all its blocks?`)) return;
+      const { ok, data } = await api('DELETE', `/memory/port/${encodeURIComponent(portId)}`);
+      if (!ok) { alert(`Error: ${data.error || 'Unknown error'}`); return; }
+      _editingBlockId = null;
+      await loadModel();
+    });
+  });
+}
+
+// Add memory port form
+document.getElementById('memory-port-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const banner = document.getElementById('memory-port-banner');
+  banner.className = 'banner';
+  const portNum = Number(document.getElementById('mp-port').value);
+  const { ok, data } = await api('POST', '/memory/port', { port: { port: portNum } });
+  if (ok) {
+    banner.textContent = `✓ Memory port ${portNum} added.`;
+    banner.className = 'banner show ok';
+    document.getElementById('memory-port-form').reset();
+    await loadModel();
+  } else {
+    banner.textContent = `✗ ${data.error || 'Unknown error'}`;
+    banner.className = 'banner show err';
+  }
+});
 
 // Raw config snapshots (strings)
 const _cvRaw = { replicator: null, mma: null };
@@ -1689,12 +1858,17 @@ document.getElementById('tab-bar').addEventListener('click', e => {
 
   const appContainer = document.getElementById('app-container');
   const cvContainer = document.getElementById('config-viewer-container');
+  const memContainer = document.getElementById('memory-tab-container');
+
+  appContainer.style.display = 'none';
+  cvContainer.classList.remove('active');
+  memContainer.classList.remove('active');
 
   if (tab === 'model') {
     appContainer.style.display = '';
-    cvContainer.classList.remove('active');
+  } else if (tab === 'memory') {
+    memContainer.classList.add('active');
   } else if (tab === 'config-viewer') {
-    appContainer.style.display = 'none';
     cvContainer.classList.add('active');
     loadConfigs();
   }

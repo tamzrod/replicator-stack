@@ -13,9 +13,7 @@ const MODEL_PATH = path.join(DATA_DIR, 'model.json');
 const REPLICATOR_CONFIG_PATH = path.join(DATA_DIR, 'replicator/config.yaml');
 const MMA_CONFIG_PATH = path.join(DATA_DIR, 'mma/config.yaml');
 
-const DEFAULT_SYSTEM = {
-    targets: []
-};
+const DEFAULT_SYSTEM = {};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -23,7 +21,7 @@ const DEFAULT_SYSTEM = {
 
 function readModel() {
     if (!fs.existsSync(MODEL_PATH)) {
-        const initial = { system: DEFAULT_SYSTEM, groups: [], devices: [] };
+        const initial = { system: DEFAULT_SYSTEM, groups: [], devices: [], memory: { ports: [] } };
         writeModel(initial);
         return initial;
     }
@@ -31,7 +29,8 @@ function readModel() {
     if (!Array.isArray(model.devices)) model.devices = [];
     if (!Array.isArray(model.groups)) model.groups = [];
     if (!model.system) model.system = {};
-    if (!Array.isArray(model.system.targets)) model.system.targets = [];
+    if (!model.memory) model.memory = { ports: [] };
+    if (!Array.isArray(model.memory.ports)) model.memory.ports = [];
     let migrated = false;
     for (const device of model.devices) {
         // Migrate old free-text device.group → device.groupId using group entities
@@ -60,17 +59,26 @@ function readModel() {
             delete device.assigned_unit_id;
             migrated = true;
         }
-        // Ensure status_slot defaults to 0
-        if (!('status_slot' in device)) {
-            device.status_slot = 0;
+        // Remove legacy target_name reference (target concept removed)
+        if ('target_name' in device) {
+            delete device.target_name;
             migrated = true;
         }
     }
-    // Remove memory-config fields that no longer belong on targets (keep status_unit_id)
-    for (const target of model.system.targets) {
-        for (const field of ['status_slot_size']) {
-            if (field in target) { delete target[field]; migrated = true; }
+    // Migrate old system.targets → model.memory.ports (preserve port numbers, drop empty)
+    if (Array.isArray(model.system.targets) && model.system.targets.length > 0
+            && model.memory.ports.length === 0) {
+        for (const t of model.system.targets) {
+            const port = t.port || Number((t.endpoint || '').split(':')[1]) || 502;
+            if (Number.isFinite(port) && port > 0) {
+                model.memory.ports.push({ id: randomUUID(), port, blocks: [] });
+            }
         }
+        migrated = true;
+    }
+    if (Array.isArray(model.system.targets)) {
+        delete model.system.targets;
+        migrated = true;
     }
     if (migrated) writeModel(model);
     return model;
@@ -135,22 +143,29 @@ const AREA_TO_FC = {
     input_status: 2,
 };
 
-function toReplicatorYaml(system, devices) {
+function toReplicatorYaml(model) {
     // Replicator orchestration config.
     // Format per docs/sample yaml/replicator.yaml:
     //   - top-level replicator: block
     //   - replicator.units: list, one per device
     //   - each unit: source (endpoint, unit_id, device_name, status_slot),
     //                reads (fc, address, quantity),
-    //                targets (id, endpoint, unit_id, status_unit_id, memories),
+    //                targets (id, endpoint, unit_id, memories),
     //                poll (interval_ms)
-    const targets = (system && system.targets) || [];
+    const memoryPorts = (model.memory && model.memory.ports) || [];
+    const devices = model.devices || [];
 
-    // Build a lookup map from target name → target object.
-    const targetByName = {};
-    for (const t of targets) {
-        targetByName[t.name] = t;
+    // Build lookup: unit_id (number) → memory port number
+    const unitToPort = {};
+    for (const port of memoryPorts) {
+        for (const block of (port.blocks || [])) {
+            const uid = Number(block.unit_id);
+            if (Number.isFinite(uid) && !(uid in unitToPort)) {
+                unitToPort[uid] = Number(port.port) || 502;
+            }
+        }
     }
+    const defaultPort = (memoryPorts[0] && Number(memoryPorts[0].port)) || 502;
 
     const lines = ['replicator:', '  units:'];
 
@@ -164,12 +179,11 @@ function toReplicatorYaml(system, devices) {
         // Poll interval: use minimum across all reads for this device.
         const pollMs = Math.min(...deviceReads.map(r => Number(r.poll_interval) || 1000));
 
-        const target = targetByName[device.target_name] || {};
-        const targetEndpointParts = (target.endpoint || `${TARGET_HOST}:502`).split(':');
-        const targetHost = targetEndpointParts[0] || TARGET_HOST;
-        const targetPort = Number(targetEndpointParts[1]) || 502;
-        const targetEndpoint = `${targetHost}:${targetPort}`;
-        const statusUnitId = target.status_unit_id != null ? Number(target.status_unit_id) : null;
+        // Determine target endpoint from memory port lookup (by device unitId).
+        const targetPortNum = (device.unitId != null && unitToPort[Number(device.unitId)] != null)
+            ? unitToPort[Number(device.unitId)]
+            : defaultPort;
+        const targetEndpoint = `${TARGET_HOST}:${targetPortNum}`;
 
         lines.push(`    - id: "${device.id}"`);
         lines.push(`      source:`);
@@ -188,9 +202,6 @@ function toReplicatorYaml(system, devices) {
         lines.push(`        - id: ${device.unitId}`);
         lines.push(`          endpoint: "${targetEndpoint}"`);
         lines.push(`          unit_id: ${device.unitId}`);
-        if (statusUnitId != null) {
-            lines.push(`          status_unit_id: ${statusUnitId}`);
-        }
         lines.push(`          memories:`);
         lines.push(`            - memory_id: ${device.unitId}`);
         lines.push(`              offsets: {}`);
@@ -200,60 +211,45 @@ function toReplicatorYaml(system, devices) {
     return lines.join('\n') + '\n';
 }
 
-function toMmaYaml(system, devices) {
-    // MMA runtime config.
+function toMmaYaml(model) {
+    // MMA runtime config generated from Memory tab ports and blocks.
     // Format per docs/sample yaml/mma.yaml:
     //   - top-level listeners: array
     //   - each listener has id, listen (":PORT"), and memory
     //   - memory is a list of unit entries with unit_id, holding_registers (start/count), and policy
-    const targets = (system && system.targets) || [];
-    const firstTarget = targets[0] || {};
-    const endpointParts = (firstTarget.endpoint || 'mma:502').split(':');
-    const port = Number(endpointParts[1]) || 502;
+    const memoryPorts = (model.memory && model.memory.ports) || [];
 
-    const lines = [
-        'listeners:',
-        '  - id: main',
-        `    listen: ":${port}"`,
-        '    memory:'
-    ];
-
-    // Group reads by MMA unit_id to compute register ranges.
-    const unitReads = {}; // unitId → [{source_address, source_count, source_area}]
-    for (const device of devices) {
-        const uid = Number(device.unitId);
-        if (!Number.isFinite(uid)) continue;
-        if (!unitReads[uid]) unitReads[uid] = [];
-        for (const read of (device.reads || [])) {
-            unitReads[uid].push({
-                source_address: Number(read.source_address),
-                source_count: Number(read.source_count),
-                source_area: read.source_area,
-            });
-        }
+    if (memoryPorts.length === 0) {
+        return 'listeners: []\n';
     }
 
-    const sortedUids = Object.keys(unitReads).map(Number).sort((a, b) => a - b);
+    const lines = ['listeners:'];
 
-    for (const uid of sortedUids) {
-        const reads = unitReads[uid];
-        // Only allocate for holding registers (FC3); coils/inputs are separate areas.
-        const holdingReads = reads.filter(r => r.source_area === 'holding_registers');
-        if (holdingReads.length > 0) {
-            const start = Math.min(...holdingReads.map(r => r.source_address));
-            const end = Math.max(...holdingReads.map(r => r.source_address + r.source_count));
-            const count = end - start;
-            lines.push(`      - unit_id: ${uid}`);
-            lines.push(`        holding_registers:`);
-            lines.push(`          start: ${start}`);
-            lines.push(`          count: ${count}`);
-            lines.push(`        policy:`);
-            lines.push(`          rules:`);
-            lines.push(`            - id: read-only`);
-            lines.push(`              source_ip:`);
-            lines.push(`                - 0.0.0.0/0`);
-            lines.push(`                - ::/0`);
-            lines.push(`              allow_fc: [3]`);
+    for (const port of memoryPorts) {
+        const portNum = Number(port.port) || 502;
+        lines.push(`  - id: port-${portNum}`);
+        lines.push(`    listen: ":${portNum}"`);
+        lines.push(`    memory:`);
+        const blocks = port.blocks || [];
+        if (blocks.length === 0) {
+            lines.push(`      []`);
+        } else {
+            for (const block of blocks) {
+                lines.push(`      - unit_id: ${block.unit_id}`);
+                // Emit register range based on area type
+                if (!block.area || block.area === 'holding_registers') {
+                    lines.push(`        holding_registers:`);
+                    lines.push(`          start: ${block.address}`);
+                    lines.push(`          count: ${block.count}`);
+                    lines.push(`        policy:`);
+                    lines.push(`          rules:`);
+                    lines.push(`            - id: read-only`);
+                    lines.push(`              source_ip:`);
+                    lines.push(`                - 0.0.0.0/0`);
+                    lines.push(`                - ::/0`);
+                    lines.push(`              allow_fc: [3]`);
+                }
+            }
         }
     }
     return lines.join('\n') + '\n';
@@ -324,9 +320,6 @@ app.post('/device', (req, res) => {
         if (!device || !device.id) {
             return res.status(400).json({ error: 'device.id is required' });
         }
-        if (!device.target_name) {
-            return res.status(400).json({ error: 'device.target_name is required' });
-        }
         if (!isValidIp(device.ipAddress)) {
             return res.status(400).json({ error: 'device.ipAddress must be a valid IPv4 address' });
         }
@@ -336,14 +329,9 @@ app.post('/device', (req, res) => {
         }
         const unitId = Number(device.unitId);
         if (!Number.isFinite(unitId) || unitId < 1) {
-            return res.status(400).json({ error: 'device.unitId must be a positive integer (MMA target unit)' });
+            return res.status(400).json({ error: 'device.unitId must be a positive integer (MMA unit ID)' });
         }
         const model = readModel();
-
-        const target = model.system.targets.find(t => t.name === device.target_name);
-        if (!target) {
-            return res.status(400).json({ error: `Target "${device.target_name}" not found` });
-        }
 
         if (device.groupId) {
             if (!findGroup(model, device.groupId)) {
@@ -364,8 +352,6 @@ app.post('/device', (req, res) => {
             port,
             source_unit_id: device.source_unit_id,
             unitId,
-            target_name: device.target_name,
-            status_slot: Number.isFinite(Number(device.status_slot)) ? Number(device.status_slot) : 0,
             reads: []
         });
         writeModel(model);
@@ -377,7 +363,7 @@ app.post('/device', (req, res) => {
     }
 });
 
-// PUT /device/:id — update editable device fields (name, group, ipAddress, port, source_unit_id, unitId, target_name)
+// PUT /device/:id — update editable device fields (name, group, ipAddress, port, source_unit_id, unitId)
 app.put('/device/:id', (req, res) => {
     try {
         const { id } = req.params;
@@ -406,7 +392,7 @@ app.put('/device/:id', (req, res) => {
         if (device.unitId !== undefined) {
             const unitId = Number(device.unitId);
             if (!Number.isFinite(unitId) || unitId < 1) {
-                return res.status(400).json({ error: 'device.unitId must be a positive integer (MMA target unit)' });
+                return res.status(400).json({ error: 'device.unitId must be a positive integer (MMA unit ID)' });
             }
             existing.unitId = unitId;
         }
@@ -418,14 +404,6 @@ app.put('/device/:id', (req, res) => {
             existing.groupId = device.groupId || null;
         }
         if (device.source_unit_id !== undefined) existing.source_unit_id = Number(device.source_unit_id);
-        if (device.status_slot !== undefined) existing.status_slot = Number(device.status_slot);
-        if (device.target_name !== undefined) {
-            const target = model.system.targets.find(t => t.name === device.target_name);
-            if (!target) {
-                return res.status(400).json({ error: `Target "${device.target_name}" not found` });
-            }
-            existing.target_name = device.target_name;
-        }
         writeModel(model);
         autoCompile(model);
         res.json({ ok: true });
@@ -454,7 +432,7 @@ app.delete('/device/:id', (req, res) => {
     }
 });
 
-// PUT /system — update system settings (generic merge, targets preserved)
+// PUT /system — update system settings (generic merge)
 app.put('/system', (req, res) => {
     try {
         const { system } = req.body;
@@ -463,7 +441,6 @@ app.put('/system', (req, res) => {
         }
         const model = readModel();
         model.system = { ...model.system, ...system };
-        if (!Array.isArray(model.system.targets)) model.system.targets = [];
         writeModel(model);
         autoCompile(model);
         res.json({ ok: true });
@@ -472,57 +449,56 @@ app.put('/system', (req, res) => {
     }
 });
 
-// POST /target — add a target destination (MMA 2.0 runtime endpoint)
-app.post('/target', (req, res) => {
-    try {
-        const { target } = req.body;
-        if (!target || !target.name) {
-            return res.status(400).json({ error: 'target.name is required' });
-        }
-        const port = Number(target.port);
-        if (!Number.isFinite(port) || port < 1 || port > 65535) {
-            return res.status(400).json({ error: 'target.port must be a valid port number (1–65535)' });
-        }
+// ---------------------------------------------------------------------------
+// Memory port + block CRUD
+// ---------------------------------------------------------------------------
 
+function findMemoryPort(model, portId) {
+    return ((model.memory && model.memory.ports) || []).find(p => p.id === portId) || null;
+}
+
+// POST /memory/port — add a memory port (MMA listener)
+app.post('/memory/port', (req, res) => {
+    try {
+        const { port } = req.body;
+        const portNum = Number(port && port.port);
+        if (!Number.isFinite(portNum) || portNum < 1 || portNum > 65535) {
+            return res.status(400).json({ error: 'port.port must be a valid port number (1–65535)' });
+        }
         const model = readModel();
-        const exists = model.system.targets.some(t => t.name === target.name);
+        const exists = model.memory.ports.some(p => Number(p.port) === portNum);
         if (exists) {
-            return res.status(409).json({ error: `Target "${target.name}" already exists` });
+            return res.status(409).json({ error: `Memory port ${portNum} already exists` });
         }
-
-        model.system.targets.push({
-            name: target.name,
-            // `endpoint` is kept for internal use by the YAML compiler (toReplicatorYaml / toMmaYaml).
-            // `port` is the canonical user-facing value.
-            endpoint: `${TARGET_HOST}:${port}`,
-            port,
-            status_unit_id: target.status_unit_id != null ? Number(target.status_unit_id) : null,
-        });
+        const newPort = { id: randomUUID(), port: portNum, blocks: [] };
+        model.memory.ports.push(newPort);
         writeModel(model);
         autoCompile(model);
-        res.status(201).json({ ok: true });
+        res.status(201).json({ ok: true, id: newPort.id });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-// DELETE /target/:name — remove a target (only if no devices reference it)
-app.delete('/target/:name', (req, res) => {
+// PUT /memory/port/:id — update a memory port's port number
+app.put('/memory/port/:id', (req, res) => {
     try {
-        const name = decodeURIComponent(req.params.name);
+        const { id } = req.params;
+        const { port } = req.body;
+        const portNum = Number(port && port.port);
+        if (!Number.isFinite(portNum) || portNum < 1 || portNum > 65535) {
+            return res.status(400).json({ error: 'port.port must be a valid port number (1–65535)' });
+        }
         const model = readModel();
-
-        const idx = model.system.targets.findIndex(t => t.name === name);
-        if (idx === -1) {
-            return res.status(404).json({ error: `Target "${name}" not found` });
+        const existing = findMemoryPort(model, id);
+        if (!existing) {
+            return res.status(404).json({ error: `Memory port ${id} not found` });
         }
-
-        const inUse = (model.devices || []).some(d => d.target_name === name);
-        if (inUse) {
-            return res.status(409).json({ error: `Target "${name}" is in use by one or more devices` });
+        const conflict = model.memory.ports.some(p => Number(p.port) === portNum && p.id !== id);
+        if (conflict) {
+            return res.status(409).json({ error: `Memory port ${portNum} already exists` });
         }
-
-        model.system.targets.splice(idx, 1);
+        existing.port = portNum;
         writeModel(model);
         autoCompile(model);
         res.json({ ok: true });
@@ -531,30 +507,126 @@ app.delete('/target/:name', (req, res) => {
     }
 });
 
-// PUT /target/:name — update an existing target's port (and optional status_unit_id)
-app.put('/target/:name', (req, res) => {
+// DELETE /memory/port/:id — remove a memory port
+app.delete('/memory/port/:id', (req, res) => {
     try {
-        const name = decodeURIComponent(req.params.name);
-        const { target } = req.body;
-        if (!target) {
-            return res.status(400).json({ error: 'target is required' });
+        const { id } = req.params;
+        const model = readModel();
+        const idx = model.memory.ports.findIndex(p => p.id === id);
+        if (idx === -1) {
+            return res.status(404).json({ error: `Memory port ${id} not found` });
+        }
+        model.memory.ports.splice(idx, 1);
+        writeModel(model);
+        autoCompile(model);
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /memory/port/:portId/block — add a memory block to a port
+app.post('/memory/port/:portId/block', (req, res) => {
+    try {
+        const { portId } = req.params;
+        const { block } = req.body;
+        if (!block) {
+            return res.status(400).json({ error: 'block is required' });
+        }
+        const unitId = Number(block.unit_id);
+        if (!Number.isFinite(unitId) || unitId < 1) {
+            return res.status(400).json({ error: 'block.unit_id must be a positive integer' });
+        }
+        const address = Number(block.address);
+        const count = Number(block.count);
+        if (!Number.isFinite(address) || address < 0) {
+            return res.status(400).json({ error: 'block.address must be a non-negative integer' });
+        }
+        if (!Number.isFinite(count) || count < 1) {
+            return res.status(400).json({ error: 'block.count must be a positive integer' });
         }
         const model = readModel();
-        const existing = model.system.targets.find(t => t.name === name);
+        const port = findMemoryPort(model, portId);
+        if (!port) {
+            return res.status(404).json({ error: `Memory port ${portId} not found` });
+        }
+        const newBlock = {
+            id: randomUUID(),
+            unit_id: unitId,
+            area: block.area || 'holding_registers',
+            address,
+            count,
+        };
+        port.blocks.push(newBlock);
+        writeModel(model);
+        autoCompile(model);
+        res.status(201).json({ ok: true, id: newBlock.id });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// PUT /memory/port/:portId/block/:blockId — update a memory block
+app.put('/memory/port/:portId/block/:blockId', (req, res) => {
+    try {
+        const { portId, blockId } = req.params;
+        const { block } = req.body;
+        if (!block) {
+            return res.status(400).json({ error: 'block is required' });
+        }
+        const model = readModel();
+        const port = findMemoryPort(model, portId);
+        if (!port) {
+            return res.status(404).json({ error: `Memory port ${portId} not found` });
+        }
+        const existing = (port.blocks || []).find(b => b.id === blockId);
         if (!existing) {
-            return res.status(404).json({ error: `Target "${name}" not found` });
+            return res.status(404).json({ error: `Memory block ${blockId} not found` });
         }
-        if (target.port !== undefined) {
-            const port = Number(target.port);
-            if (!Number.isFinite(port) || port < 1 || port > 65535) {
-                return res.status(400).json({ error: 'target.port must be a valid port number (1–65535)' });
+        if (block.unit_id !== undefined) {
+            const unitId = Number(block.unit_id);
+            if (!Number.isFinite(unitId) || unitId < 1) {
+                return res.status(400).json({ error: 'block.unit_id must be a positive integer' });
             }
-            existing.port = port;
-            existing.endpoint = `${TARGET_HOST}:${port}`;
+            existing.unit_id = unitId;
         }
-        if (target.status_unit_id !== undefined) {
-            existing.status_unit_id = target.status_unit_id != null ? Number(target.status_unit_id) : null;
+        if (block.address !== undefined) {
+            const address = Number(block.address);
+            if (!Number.isFinite(address) || address < 0) {
+                return res.status(400).json({ error: 'block.address must be a non-negative integer' });
+            }
+            existing.address = address;
         }
+        if (block.count !== undefined) {
+            const count = Number(block.count);
+            if (!Number.isFinite(count) || count < 1) {
+                return res.status(400).json({ error: 'block.count must be a positive integer' });
+            }
+            existing.count = count;
+        }
+        if (block.area !== undefined) existing.area = block.area;
+        writeModel(model);
+        autoCompile(model);
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// DELETE /memory/port/:portId/block/:blockId — remove a memory block
+app.delete('/memory/port/:portId/block/:blockId', (req, res) => {
+    try {
+        const { portId, blockId } = req.params;
+        const model = readModel();
+        const port = findMemoryPort(model, portId);
+        if (!port) {
+            return res.status(404).json({ error: `Memory port ${portId} not found` });
+        }
+        const idx = (port.blocks || []).findIndex(b => b.id === blockId);
+        if (idx === -1) {
+            return res.status(404).json({ error: `Memory block ${blockId} not found` });
+        }
+        port.blocks.splice(idx, 1);
         writeModel(model);
         autoCompile(model);
         res.json({ ok: true });
@@ -762,10 +834,8 @@ app.get('/config', (req, res) => {
  * Does NOT throw — callers that want to surface errors should check the return value.
  */
 function compileAndWrite(model) {
-    const system = model.system || DEFAULT_SYSTEM;
-    const devices = model.devices || [];
-    const replicatorYaml = toReplicatorYaml(system, devices);
-    const mmaYaml = toMmaYaml(system, devices);
+    const replicatorYaml = toReplicatorYaml(model);
+    const mmaYaml = toMmaYaml(model);
     const mmaErrors = validateMmaConfig(mmaYaml);
     const replicatorErrors = validateReplicatorConfig(replicatorYaml);
     if (mmaErrors.length > 0 || replicatorErrors.length > 0) {
