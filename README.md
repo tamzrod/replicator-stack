@@ -1,4 +1,4 @@
-# Replicator Stack
+# MCS — Modbus Consolidator System
 
 Web-based control plane for MMA2 and Replicator.
 
@@ -6,7 +6,7 @@ Web-based control plane for MMA2 and Replicator.
 
 ## Test Setup (MMA + Replicator only)
 
-Minimal Docker environment for testing MMA2 and Replicator without the web app.
+Minimal Docker environment for testing MMA2 and Replicator without MCS Web.
 
 ### Requirements
 
@@ -81,7 +81,7 @@ docker compose -f docker-compose.test.yaml down
 
 ## Full Stack
 
-See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the full stack (MMA + Replicator + Web App).
+See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the full stack (MMA + Replicator + MCS Web).
 
 ```bash
 docker compose up -d --build

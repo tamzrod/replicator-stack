@@ -4,7 +4,7 @@
 
 `/data/model.json` is the human model. It is the only place where grouping and hierarchy exist.
 
-The Web App compiles this file into the flat replicator config on every deployment.
+MCS Web compiles this file into the flat replicator config on every deployment.
 
 ---
 

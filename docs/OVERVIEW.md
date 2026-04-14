@@ -1,4 +1,4 @@
-# REPLICATOR STACK — OVERVIEW
+# MCS — OVERVIEW
 
 ## Purpose
 
@@ -6,13 +6,13 @@ This project is a:
 
 > Web-based Control Plane for MMA2 and Replicator
 
-The web app is the primary product.
+MCS Web is the primary product.
 
 ---
 
 ## System Components
 
-### Web App (Primary)
+### MCS Web (Primary)
 
 - User Interface
 - Config Editor
@@ -38,7 +38,7 @@ The web app is the primary product.
 
 ## Core Principle
 
-> Web App owns control. Everything else is headless.
+> MCS Web owns control. Everything else is headless.
 
 ---
 
@@ -71,7 +71,7 @@ Configuration is loaded **only at startup**. There is no hot reload.
 - Config is read once when a service starts — never re-read while running
 - Any change to configuration requires a **full restart** of the affected services
 - The system rebuilds its entire runtime state on every deployment
-- The Web App is responsible for orchestrating the correct restart sequence
+- The MCS Web is responsible for orchestrating the correct restart sequence
 
 ### Restart Sequence
 
@@ -88,7 +88,7 @@ This sequence ensures MMA memory is always consistent with the current configura
 
 ## Human Model vs Runtime Model
 
-The Web App operates with two distinct configuration representations:
+MCS Web operates with two distinct configuration representations:
 
 ### Human Model (grouped, hierarchical)
 
@@ -117,4 +117,4 @@ Each route contains:
 
 ### Compilation
 
-The Web App compiles `model.json` → `config.yaml` on every deployment. Runtime services only ever see the flat output.
+MCS Web compiles `model.json` → `config.yaml` on every deployment. Runtime services only ever see the flat output.

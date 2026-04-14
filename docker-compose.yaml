@@ -28,7 +28,8 @@ services:
 
   web:
     build: ./web
-    container_name: replicator-web
+    image: rodtamin/mcs-web
+    container_name: mcs-web
     restart: unless-stopped
     ports:
       - "8081:8080"

@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Web App compiles `/data/model.json` into `/data/replicator/config.yaml`.
+The MCS Web compiles `/data/model.json` into `/data/replicator/config.yaml`.
 
 Replicator receives only the flat output. It has no knowledge of groups, devices, or blocks beyond what is encoded in unit IDs.
 
@@ -202,7 +202,7 @@ listeners:
 
 ## Validation
 
-Before compiling, the Web App must validate:
+Before compiling, the MCS Web must validate:
 
 - All IDs are non-empty and unique within their scope
 - `source_count` is greater than zero
