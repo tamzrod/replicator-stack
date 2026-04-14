@@ -254,7 +254,7 @@ function validateReplicatorConfig(yaml) {
     for (const line of lines) {
         if (/^mma\s*:/.test(line)) { inMmaBlock = true; continue; }
         if (inMmaBlock) {
-            if (/^\S/.test(line) && line.trim() !== '') { inMmaBlock = false; continue; }
+            if (/^\S/.test(line)) { inMmaBlock = false; continue; }
             if (/^\s+routes\s*:/.test(line)) {
                 errors.push('Replicator mma: block must not contain routes — routes must be at the top level');
                 inMmaBlock = false;
