@@ -1,15 +1,4 @@
 listeners:
   - id: main
     listen: ":502"
-    memory:
-      - unit_id: 1
-        holding_registers:
-          start: 0
-          count: 10
-        policy:
-          rules:
-            - id: read-only
-              source_ip:
-                - 0.0.0.0/0
-                - ::/0
-              allow_fc: [3]
+    memory: []

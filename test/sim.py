@@ -17,7 +17,7 @@ from pymodbus.datastore import (
 
 REGISTER_VALUES = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
 
-hr = ModbusSequentialDataBlock(0, REGISTER_VALUES)
+hr = ModbusSequentialDataBlock(1, REGISTER_VALUES)
 store = ModbusSlaveContext(hr=hr)
 context = ModbusServerContext(slaves=store, single=True)
 

@@ -21,7 +21,7 @@ services:
     volumes:
       - ./test:/test
     command: >
-      sh -c "pip install pymodbus --quiet && python /test/sim.py"
+      sh -c "pip install 'pymodbus==3.6.9' --quiet && python /test/sim.py"
     networks:
       - replicator-net
 
@@ -49,7 +49,7 @@ services:
     volumes:
       - ./test:/test
     command: >
-      sh -c "pip install pymodbus --quiet && python /test/verify.py"
+      sh -c "pip install 'pymodbus==3.6.9' --quiet && python /test/verify.py"
     networks:
       - replicator-net
 
