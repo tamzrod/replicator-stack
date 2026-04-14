@@ -574,6 +574,102 @@
     .btn-mem:hover { background: #a7f3d0; }
     .btn-mem-edit { background: #e0f2fe; color: #0369a1; font-size: .75rem; padding: 4px 10px; }
     .btn-mem-edit:hover { background: #bae6fd; }
+
+    /* ── Runtime Tab ──────────────────────────────────────────────────── */
+    #runtime-tab-container {
+      display: none;
+      max-width: 760px;
+      margin: 32px auto;
+      padding: 0 16px;
+      gap: 20px;
+      flex-direction: column;
+    }
+    #runtime-tab-container.active { display: flex; }
+
+    .rt-card {
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+      overflow: hidden;
+    }
+    .rt-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 20px;
+      border-bottom: 1px solid #e2e8f0;
+      background: #f8fafc;
+    }
+    .rt-card-header h2 {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: #16213e;
+      margin: 0;
+    }
+    .rt-card-body {
+      padding: 18px 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .rt-status-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 1;
+      min-width: 140px;
+    }
+    .rt-status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      background: #94a3b8;
+    }
+    .rt-status-dot.running  { background: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,.2); }
+    .rt-status-dot.stopped  { background: #ef4444; }
+    .rt-status-dot.exited   { background: #ef4444; }
+    .rt-status-dot.unknown  { background: #94a3b8; }
+    .rt-status-dot.not_found { background: #f59e0b; }
+    .rt-status-label {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: #334155;
+    }
+    .rt-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .btn-rt-start { background: #22c55e; color: #fff; font-size: .8rem; padding: 7px 14px; }
+    .btn-rt-start:not(:disabled):hover { background: #16a34a; }
+    .btn-rt-stop  { background: #ef4444; color: #fff; font-size: .8rem; padding: 7px 14px; }
+    .btn-rt-stop:not(:disabled):hover { background: #dc2626; }
+    .btn-rt-restart { background: #f59e0b; color: #fff; font-size: .8rem; padding: 7px 14px; }
+    .btn-rt-restart:not(:disabled):hover { background: #d97706; }
+
+    .rt-global-card {
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+      padding: 20px 24px;
+    }
+    .rt-global-card h2 {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: #16213e;
+      margin-bottom: 8px;
+      border-bottom: 2px solid #e2e8f0;
+      padding-bottom: 8px;
+    }
+    .rt-global-card p {
+      font-size: .85rem;
+      color: #64748b;
+      margin-bottom: 16px;
+    }
+    .rt-global-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+    .btn-apply { background: #3b82f6; color: #fff; font-size: .9rem; padding: 10px 22px; }
+    .btn-apply:not(:disabled):hover { background: #2563eb; }
+    .btn-apply-restart { background: #7c3aed; color: #fff; font-size: .9rem; padding: 10px 22px; }
+    .btn-apply-restart:not(:disabled):hover { background: #6d28d9; }
+    .rt-result { margin-top: 14px; font-size: .875rem; }
   </style>
 </head>
 <body>
@@ -586,6 +682,7 @@
 <div id="tab-bar">
   <button class="tab-btn active" data-tab="model">Model</button>
   <button class="tab-btn" data-tab="memory">🧠 Memory</button>
+  <button class="tab-btn" data-tab="runtime">⚙ Runtime</button>
   <button class="tab-btn" data-tab="config-viewer">🔍 Config Viewer</button>
   <button class="btn-refresh btn-tab-bar-refresh" id="btn-refresh">↻ Refresh</button>
 </div>
@@ -702,6 +799,62 @@
   </div>
 
 </div><!-- #memory-tab-container -->
+
+<!-- ── Runtime Tab ────────────────────────────────────────────────── -->
+<div id="runtime-tab-container">
+
+  <!-- MMA Service -->
+  <div class="rt-card" id="rt-mma-card">
+    <div class="rt-card-header">
+      <h2>🔌 MMA <span style="color:#94a3b8;font-size:.8rem;font-weight:400">(Modbus Memory Appliance)</span></h2>
+      <button class="btn-refresh" id="btn-rt-refresh" style="font-size:.75rem;padding:5px 12px">↻ Refresh Status</button>
+    </div>
+    <div class="rt-card-body">
+      <div class="rt-status-wrap">
+        <div class="rt-status-dot" id="rt-mma-dot"></div>
+        <span class="rt-status-label" id="rt-mma-label">Loading…</span>
+      </div>
+      <div class="rt-actions">
+        <button class="btn-rt-start" data-rt-service="mma" data-rt-action="start">▶ Start</button>
+        <button class="btn-rt-stop"  data-rt-service="mma" data-rt-action="stop">■ Stop</button>
+        <button class="btn-rt-restart" data-rt-service="mma" data-rt-action="restart">↺ Restart</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Replicator Service -->
+  <div class="rt-card" id="rt-replicator-card">
+    <div class="rt-card-header">
+      <h2>🔄 Replicator</h2>
+    </div>
+    <div class="rt-card-body">
+      <div class="rt-status-wrap">
+        <div class="rt-status-dot" id="rt-replicator-dot"></div>
+        <span class="rt-status-label" id="rt-replicator-label">Loading…</span>
+      </div>
+      <div class="rt-actions">
+        <button class="btn-rt-start"   data-rt-service="replicator" data-rt-action="start">▶ Start</button>
+        <button class="btn-rt-stop"    data-rt-service="replicator" data-rt-action="stop">■ Stop</button>
+        <button class="btn-rt-restart" data-rt-service="replicator" data-rt-action="restart">↺ Restart</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Global Actions -->
+  <div class="rt-global-card">
+    <h2>Global Actions</h2>
+    <p>
+      <strong>Apply Config</strong> writes the current model to MMA and Replicator config files on disk.
+      <strong>Apply + Restart All</strong> writes configs and immediately restarts both services to load the new config.
+    </p>
+    <div class="rt-global-actions">
+      <button class="btn-apply" id="btn-rt-apply">⚙ Apply Config</button>
+      <button class="btn-apply-restart" id="btn-rt-apply-restart">⚙ Apply + Restart All</button>
+    </div>
+    <div class="rt-result" id="rt-result"></div>
+  </div>
+
+</div><!-- #runtime-tab-container -->
 
 <!-- ── Add / Edit Group Dialog ───────────────────────────────────── -->
 <dialog id="group-dialog">
@@ -2005,20 +2158,153 @@ document.getElementById('tab-bar').addEventListener('click', e => {
   const appContainer = document.getElementById('app-container');
   const cvContainer = document.getElementById('config-viewer-container');
   const memContainer = document.getElementById('memory-tab-container');
+  const rtContainer = document.getElementById('runtime-tab-container');
 
   appContainer.style.display = 'none';
   cvContainer.classList.remove('active');
   memContainer.classList.remove('active');
+  rtContainer.classList.remove('active');
 
   if (tab === 'model') {
     appContainer.style.display = '';
   } else if (tab === 'memory') {
     memContainer.classList.add('active');
+  } else if (tab === 'runtime') {
+    rtContainer.classList.add('active');
+    loadRuntimeStatus();
   } else if (tab === 'config-viewer') {
     cvContainer.classList.add('active');
     loadConfigs();
   }
 });
+
+// ── Runtime Tab ──────────────────────────────────────────────────────────────
+
+async function loadRuntimeStatus() {
+  const { ok, data } = await api('GET', '/runtime/status');
+  if (!ok) {
+    renderServiceStatus('mma', 'unknown');
+    renderServiceStatus('replicator', 'unknown');
+    return;
+  }
+  renderServiceStatus('mma', (data.mma && data.mma.status) || 'unknown');
+  renderServiceStatus('replicator', (data.replicator && data.replicator.status) || 'unknown');
+}
+
+function renderServiceStatus(service, status) {
+  const dot = document.getElementById(`rt-${service}-dot`);
+  const label = document.getElementById(`rt-${service}-label`);
+  if (!dot || !label) return;
+
+  dot.className = 'rt-status-dot';
+  let displayText = status;
+  if (status === 'running') {
+    dot.classList.add('running');
+    displayText = 'Running';
+  } else if (status === 'exited' || status === 'stopped') {
+    dot.classList.add(status);
+    displayText = 'Stopped';
+  } else if (status === 'not_found') {
+    dot.classList.add('not_found');
+    displayText = 'Not Found';
+  } else {
+    dot.classList.add('unknown');
+    displayText = status.charAt(0).toUpperCase() + status.slice(1);
+  }
+  label.textContent = displayText;
+}
+
+// Service control buttons (start / stop / restart)
+document.getElementById('runtime-tab-container').addEventListener('click', async e => {
+  const btn = e.target.closest('[data-rt-service][data-rt-action]');
+  if (!btn) return;
+
+  const service = btn.dataset.rtService;
+  const action = btn.dataset.rtAction;
+
+  // Disable all rt action buttons while the request is in flight
+  const allBtns = document.querySelectorAll('[data-rt-service][data-rt-action]');
+  allBtns.forEach(b => { b.disabled = true; });
+
+  const { ok, status, data } = await api('POST', `/runtime/${encodeURIComponent(service)}/${encodeURIComponent(action)}`);
+
+  allBtns.forEach(b => { b.disabled = false; });
+
+  if (!ok) {
+    alert(`Failed to ${action} ${service}: ${data.error || `HTTP ${status}`}`);
+  }
+
+  // Refresh status after a short delay to give Docker time to update
+  setTimeout(loadRuntimeStatus, 800);
+});
+
+document.getElementById('btn-rt-refresh').addEventListener('click', loadRuntimeStatus);
+
+// Shared compile-with-precheck logic reused by both Apply and Apply+Restart
+async function runtimeApplyFlow(endpoint) {
+  const resultEl = document.getElementById('rt-result');
+  resultEl.innerHTML = '';
+
+  // Step 1: Pre-check missing ports
+  const { ok: precheckOk, data: precheckData } = await api('GET', '/compile/precheck');
+  if (!precheckOk) {
+    resultEl.innerHTML = `<div class="banner show err">✗ Pre-check failed: ${escapeHtml(precheckData.error || 'Unknown error')}</div>`;
+    return;
+  }
+
+  const missingPorts = precheckData.missingPorts || [];
+  const excludedPorts = [];
+
+  // Step 2: Confirm creation of any missing MMA ports
+  for (const port of missingPorts) {
+    const confirmed = confirm(`MMA port ${port} does not exist. Do you want to create it?`);
+    if (confirmed) {
+      const { ok, data } = await api('POST', '/memory/port', { port: { port } });
+      if (!ok) {
+        resultEl.innerHTML = `<div class="banner show err">✗ Failed to create MMA port ${port}: ${escapeHtml(data.error || 'Unknown error')}</div>`;
+        return;
+      }
+    } else {
+      excludedPorts.push(port);
+    }
+  }
+
+  // Step 3: Call the requested endpoint (apply or apply-restart)
+  const body = excludedPorts.length > 0 ? { excluded_ports: excludedPorts } : undefined;
+  const { ok, data } = await api('POST', endpoint, body);
+
+  if (ok) {
+    const blocksMsg = data.blocksCreated > 0 ? ` (${data.blocksCreated} memory block(s) auto-created)` : '';
+    const excludedMsg = excludedPorts.length > 0
+      ? ` — ${excludedPorts.length} port(s) skipped (${excludedPorts.join(', ')})`
+      : '';
+    const actionMsg = endpoint === '/runtime/apply-restart'
+      ? '✓ Configs applied and services restarted'
+      : '✓ Configs applied';
+    resultEl.innerHTML = `<div class="banner show ok">${actionMsg} — ${escapeHtml(String(data.routes))} route(s)${blocksMsg}${excludedMsg}.</div>`;
+    if (endpoint === '/runtime/apply-restart') {
+      setTimeout(loadRuntimeStatus, 1500);
+    }
+  } else if (data.mma_errors || data.replicator_errors) {
+    const mmaItems = (data.mma_errors || []).map(e => `<li>${escapeHtml(e)}</li>`).join('');
+    const repItems = (data.replicator_errors || []).map(e => `<li>${escapeHtml(e)}</li>`).join('');
+    let detail = '';
+    if (mmaItems) detail += `<strong>MMA:</strong><ul style="margin:4px 0 0 16px">${mmaItems}</ul>`;
+    if (repItems) detail += `<strong>Replicator:</strong><ul style="margin:4px 0 0 16px">${repItems}</ul>`;
+    resultEl.innerHTML = `<div class="banner show err">✗ Blocked — config separation violation:<br/>${detail}</div>`;
+  } else if (data.restart_errors) {
+    const errItems = data.restart_errors.map(e => `<li>${escapeHtml(e)}</li>`).join('');
+    resultEl.innerHTML = `<div class="banner show err">⚠ Configs applied but restarts failed:<ul style="margin:4px 0 0 16px">${errItems}</ul></div>`;
+    setTimeout(loadRuntimeStatus, 1000);
+  } else {
+    resultEl.innerHTML = `<div class="banner show err">✗ ${escapeHtml(data.error || 'Operation failed')}</div>`;
+  }
+
+  await loadModel();
+}
+
+document.getElementById('btn-rt-apply').addEventListener('click', () => runtimeApplyFlow('/runtime/apply'));
+document.getElementById('btn-rt-apply-restart').addEventListener('click', () => runtimeApplyFlow('/runtime/apply-restart'));
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 document.getElementById('btn-refresh').addEventListener('click', loadModel);
