@@ -50,6 +50,15 @@ function readModel() {
             delete device.host;
             migrated = true;
         }
+        // Migrate old device.ipAddress + device.port → device.source_endpoint
+        if ((device.ipAddress || device.port) && !device.source_endpoint) {
+            const ip = (device.ipAddress || 'localhost').trim();
+            const p = Number(device.port) || 502;
+            device.source_endpoint = `${ip}:${p}`;
+            delete device.ipAddress;
+            delete device.port;
+            migrated = true;
+        }
         // Migrate old auto-assigned assigned_unit_id → explicit unitId
         if ('assigned_unit_id' in device && !('unitId' in device)) {
             device.unitId = device.assigned_unit_id;
@@ -80,6 +89,29 @@ function readModel() {
         delete model.system.targets;
         migrated = true;
     }
+    // Migrate missing target_endpoint: derive from mma_endpoint system setting + memory port lookup
+    {
+        const unitToPortNum = {};
+        for (const port of model.memory.ports) {
+            for (const block of (port.blocks || [])) {
+                const uid = Number(block.unit_id);
+                if (Number.isFinite(uid) && !(uid in unitToPortNum)) {
+                    unitToPortNum[uid] = Number(port.port) || 502;
+                }
+            }
+        }
+        const defaultMmaHost = (model.system && model.system.mma_endpoint) || TARGET_HOST;
+        const defaultPortNum = (model.memory.ports[0] && Number(model.memory.ports[0].port)) || 502;
+        for (const device of model.devices) {
+            if (!device.target_endpoint) {
+                const targetPort = (device.unitId != null && unitToPortNum[Number(device.unitId)] != null)
+                    ? unitToPortNum[Number(device.unitId)]
+                    : defaultPortNum;
+                device.target_endpoint = `${defaultMmaHost}:${targetPort}`;
+                migrated = true;
+            }
+        }
+    }
     if (migrated) writeModel(model);
     return model;
 }
@@ -89,6 +121,25 @@ function isValidIp(ip) {
     const parts = ip.trim().split('.');
     if (parts.length !== 4) return false;
     return parts.every(p => /^\d+$/.test(p) && Number(p) >= 0 && Number(p) <= 255);
+}
+
+// Validate a free-form endpoint string: "<host>:<port>" where host may be an
+// IP address, docker service name, or "localhost".
+function isValidEndpoint(endpoint) {
+    if (typeof endpoint !== 'string' || !endpoint.trim()) return false;
+    const lastColon = endpoint.lastIndexOf(':');
+    if (lastColon < 1) return false; // no host before colon
+    const port = Number(endpoint.slice(lastColon + 1));
+    return Number.isFinite(port) && port >= 1 && port <= 65535;
+}
+
+// Extract the port number from an endpoint string. Returns null on failure.
+function endpointPort(endpoint) {
+    if (typeof endpoint !== 'string') return null;
+    const lastColon = endpoint.lastIndexOf(':');
+    if (lastColon < 0) return null;
+    const port = Number(endpoint.slice(lastColon + 1));
+    return Number.isFinite(port) && port >= 1 && port <= 65535 ? port : null;
 }
 
 function findGroup(model, groupId) {
@@ -152,20 +203,7 @@ function toReplicatorYaml(model) {
     //                reads (fc, address, quantity),
     //                targets (id, endpoint, unit_id, memories),
     //                poll (interval_ms)
-    const memoryPorts = (model.memory && model.memory.ports) || [];
     const devices = model.devices || [];
-
-    // Build lookup: unit_id (number) → memory port number
-    const unitToPort = {};
-    for (const port of memoryPorts) {
-        for (const block of (port.blocks || [])) {
-            const uid = Number(block.unit_id);
-            if (Number.isFinite(uid) && !(uid in unitToPort)) {
-                unitToPort[uid] = Number(port.port) || 502;
-            }
-        }
-    }
-    const defaultPort = (memoryPorts[0] && Number(memoryPorts[0].port)) || 502;
 
     const lines = ['replicator:', '  units:'];
 
@@ -173,18 +211,12 @@ function toReplicatorYaml(model) {
         const deviceReads = device.reads || [];
         if (deviceReads.length === 0) continue;
 
-        const sourceEndpoint = `${device.ipAddress}:${device.port}`;
+        const sourceEndpoint = device.source_endpoint || '';
+        const targetEndpoint = device.target_endpoint || '';
         const statusSlot = device.status_slot != null ? Number(device.status_slot) : 0;
 
         // Poll interval: use minimum across all reads for this device.
         const pollMs = Math.min(...deviceReads.map(r => Number(r.poll_interval) || 1000));
-
-        // Determine target endpoint from memory port lookup (by device unitId).
-        const targetPortNum = (device.unitId != null && unitToPort[Number(device.unitId)] != null)
-            ? unitToPort[Number(device.unitId)]
-            : defaultPort;
-        const mmaHost = (model.system && model.system.mma_endpoint) || TARGET_HOST;
-        const targetEndpoint = `${mmaHost}:${targetPortNum}`;
 
         lines.push(`    - id: "${device.id}"`);
         lines.push(`      source:`);
@@ -328,12 +360,11 @@ app.post('/device', (req, res) => {
         if (!device || !device.id) {
             return res.status(400).json({ error: 'device.id is required' });
         }
-        if (!isValidIp(device.ipAddress)) {
-            return res.status(400).json({ error: 'device.ipAddress must be a valid IPv4 address' });
+        if (!isValidEndpoint(device.source_endpoint)) {
+            return res.status(400).json({ error: 'device.source_endpoint must be a valid endpoint (e.g. 10.0.0.1:502 or mydevice:502)' });
         }
-        const port = Number(device.port);
-        if (!Number.isFinite(port) || port < 1 || port > 65535) {
-            return res.status(400).json({ error: 'device.port must be a valid port number (1–65535)' });
+        if (!isValidEndpoint(device.target_endpoint)) {
+            return res.status(400).json({ error: 'device.target_endpoint must be a valid endpoint (e.g. mma2:501)' });
         }
         const unitId = Number(device.unitId);
         if (!Number.isFinite(unitId) || unitId < 1) {
@@ -356,9 +387,9 @@ app.post('/device', (req, res) => {
             id: device.id,
             name: device.name || '',
             groupId: device.groupId || null,
-            ipAddress: device.ipAddress.trim(),
-            port,
+            source_endpoint: device.source_endpoint.trim(),
             source_unit_id: device.source_unit_id,
+            target_endpoint: device.target_endpoint.trim(),
             unitId,
             status_slot: device.status_slot != null ? Number(device.status_slot) : 0,
             status_unit_id: device.status_unit_id != null ? Number(device.status_unit_id) : null,
@@ -373,7 +404,7 @@ app.post('/device', (req, res) => {
     }
 });
 
-// PUT /device/:id — update editable device fields (name, group, ipAddress, port, source_unit_id, unitId)
+// PUT /device/:id — update editable device fields (name, group, source_endpoint, target_endpoint, source_unit_id, unitId)
 app.put('/device/:id', (req, res) => {
     try {
         const { id } = req.params;
@@ -386,18 +417,17 @@ app.put('/device/:id', (req, res) => {
         if (!existing) {
             return res.status(404).json({ error: `Device ${id} not found` });
         }
-        if (device.port !== undefined) {
-            const port = Number(device.port);
-            if (!Number.isFinite(port) || port < 1 || port > 65535) {
-                return res.status(400).json({ error: 'device.port must be a valid port number (1–65535)' });
+        if (device.source_endpoint !== undefined) {
+            if (!isValidEndpoint(device.source_endpoint)) {
+                return res.status(400).json({ error: 'device.source_endpoint must be a valid endpoint (e.g. 10.0.0.1:502 or mydevice:502)' });
             }
-            existing.port = port;
+            existing.source_endpoint = device.source_endpoint.trim();
         }
-        if (device.ipAddress !== undefined) {
-            if (!isValidIp(device.ipAddress)) {
-                return res.status(400).json({ error: 'device.ipAddress must be a valid IPv4 address' });
+        if (device.target_endpoint !== undefined) {
+            if (!isValidEndpoint(device.target_endpoint)) {
+                return res.status(400).json({ error: 'device.target_endpoint must be a valid endpoint (e.g. mma2:501)' });
             }
-            existing.ipAddress = device.ipAddress.trim();
+            existing.target_endpoint = device.target_endpoint.trim();
         }
         if (device.unitId !== undefined) {
             const unitId = Number(device.unitId);
@@ -933,15 +963,18 @@ function ensureMemoryCoverage(model) {
         const unitId = Number(device.unitId);
         if (!Number.isFinite(unitId) || unitId < 1) continue;
 
-        // Resolve which port this unit belongs to; auto-create port 502 if none exists
+        // Resolve which port this unit belongs to; auto-create from target_endpoint port if none exists
         let portId = unitToPortId[unitId];
         if (!portId) {
-            if (memoryPorts.length === 0) {
-                const newPort = { id: randomUUID(), port: 502, blocks: [] };
-                memoryPorts.push(newPort);
+            // Prefer the port from the device's target_endpoint, fall back to 502
+            const targetPort = endpointPort(device.target_endpoint) || 502;
+            let matchingPort = memoryPorts.find(p => Number(p.port) === targetPort);
+            if (!matchingPort) {
+                matchingPort = { id: randomUUID(), port: targetPort, blocks: [] };
+                memoryPorts.push(matchingPort);
                 modified = true;
             }
-            portId = memoryPorts[0].id;
+            portId = matchingPort.id;
             unitToPortId[unitId] = portId;
         }
 
