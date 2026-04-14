@@ -31,7 +31,7 @@ replicator:
         endpoint: "<device.ipAddress>:<device.port>"
         unit_id: <device.source_unit_id>
         device_name: "<device.id>"
-        status_slot: <device.status_slot>
+        status_slot: <device.status_slot>   # only if status_unit_id is configured
       reads:
         - fc: <function_code>         # derived from block.source_area
           address: <block.source_address>
@@ -84,7 +84,7 @@ listeners:
 | `source.endpoint` | `"{device.ipAddress}:{device.port}"` |
 | `source.unit_id` | `device.source_unit_id` |
 | `source.device_name` | `device.id` |
-| `source.status_slot` | `device.status_slot` (default 0) |
+| `source.status_slot` | `device.status_slot` (default 0, only emitted when `status_unit_id` is set) |
 | `reads[].fc` | Modbus FC from `block.source_area` (see table below) |
 | `reads[].address` | `block.source_address` |
 | `reads[].quantity` | `block.source_count` |
