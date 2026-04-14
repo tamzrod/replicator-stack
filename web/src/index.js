@@ -19,13 +19,25 @@ const DEFAULT_SYSTEM = {};
 // Helpers
 // ---------------------------------------------------------------------------
 
+function initialModel() {
+    return { system: DEFAULT_SYSTEM, groups: [], devices: [], memory: { ports: [] } };
+}
+
 function readModel() {
     if (!fs.existsSync(MODEL_PATH)) {
-        const initial = { system: DEFAULT_SYSTEM, groups: [], devices: [], memory: { ports: [] } };
+        const initial = initialModel();
         writeModel(initial);
         return initial;
     }
-    const model = JSON.parse(fs.readFileSync(MODEL_PATH, 'utf-8'));
+    let model;
+    try {
+        model = JSON.parse(fs.readFileSync(MODEL_PATH, 'utf-8'));
+    } catch (parseErr) {
+        console.error(`[readModel] Failed to parse ${MODEL_PATH}: ${parseErr.message} — resetting to initial model`);
+        const initial = initialModel();
+        writeModel(initial);
+        return initial;
+    }
     if (!Array.isArray(model.devices)) model.devices = [];
     if (!Array.isArray(model.groups)) model.groups = [];
     if (!model.system) model.system = {};
