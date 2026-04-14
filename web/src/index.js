@@ -842,8 +842,10 @@ app.get('/config', (req, res) => {
 // ---------------------------------------------------------------------------
 
 /**
- * Merge an array of {start, end} ranges into a minimal non-overlapping,
- * non-adjacent sorted list of ranges.
+ * Merge an array of {start, end} ranges into a minimal sorted list with no
+ * overlapping or adjacent ranges. Two ranges are considered adjacent when one
+ * ends exactly one before the other begins (e.g. [1,5] and [6,10]), and are
+ * merged into a single range [1,10].
  *
  * @param {Array<{start: number, end: number}>} ranges
  * @returns {Array<{start: number, end: number}>}
@@ -983,8 +985,9 @@ function ensureMemoryCoverage(model) {
                 address: m.start,
                 count: m.end - m.start + 1,
             });
-            blocksCreated++;
         }
+        // Count only net-new blocks (existing blocks that are replaced/merged are not counted).
+        blocksCreated += Math.max(0, merged.length - existingBlocks.length);
         modified = true;
     }
 
