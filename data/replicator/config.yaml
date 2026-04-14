@@ -5,7 +5,6 @@ replicator:
         endpoint: "modbus-sim:502"
         unit_id: 1
         device_name: "device-test"
-        status_slot: 0
       reads:
         - fc: 3
           address: 0

@@ -240,7 +240,9 @@ function toReplicatorYaml(model, excludedPortNums = new Set()) {
         lines.push(`        endpoint: "${sourceEndpoint}"`);
         lines.push(`        unit_id: ${device.source_unit_id}`);
         lines.push(`        device_name: "${device.id}"`);
-        lines.push(`        status_slot: ${statusSlot}`);
+        if (device.status_unit_id != null) {
+            lines.push(`        status_slot: ${statusSlot}`);
+        }
         lines.push(`      reads:`);
         for (const read of deviceReads) {
             const fc = AREA_TO_FC[read.source_area] || 3;
