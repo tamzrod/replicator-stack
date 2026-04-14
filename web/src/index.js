@@ -121,25 +121,50 @@ function findDevice(model, deviceId) {
 
 
 
-function toReplicatorYaml(system, devices) {
-    // Replicator orchestration config: routes only.
-    // MMA is referenced by port only (no hostnames) via target.mma_port per route.
+function toReplicatorYaml(system, devices, groups) {
+    // Replicator orchestration config.
+    // Format per docs/COMPILATION.md:
+    //   - top-level mma: { host, port } connection section (Replicator needs this to reach MMA)
+    //   - routes: list, each with source, target (unit/area/address), poll_interval, ref
+    //   - ref contains group_id, device_id, block_id for traceability back to model
     const targets = (system && system.targets) || [];
+
+    // Build a lookup map from target name → target object.
     const targetByName = {};
     for (const t of targets) {
         targetByName[t.name] = t;
     }
 
+    // Build a lookup map from group id → group object.
+    const groupById = {};
+    for (const g of (groups || [])) {
+        groupById[g.id] = g;
+    }
+
+    // Derive the global MMA connection from the first defined target.
+    const firstTarget = targets[0] || {};
+    const endpointParts = (firstTarget.endpoint || '').split(':');
+    const mmaHost = endpointParts[0] || TARGET_HOST;
+    const rawPort = firstTarget.port != null ? Number(firstTarget.port)
+        : Number(endpointParts[1] || '');
+    const mmaPort = Number.isFinite(rawPort) && rawPort > 0 ? rawPort : 502;
+
     const indent = '  ';
-    const lines = ['routes:'];
+    const lines = [
+        'mma:',
+        `${indent}host: ${mmaHost}`,
+        `${indent}port: ${mmaPort}`,
+        '',
+        'routes:'
+    ];
+
     for (const device of devices) {
-        // Resolve this device's MMA port from its assigned target.
-        const target = targetByName[device.target_name] || {};
-        const rawPort = target.port != null ? Number(target.port)
-            : Number((target.endpoint || '').split(':')[1] || '');
-        const mmaPort = Number.isFinite(rawPort) && rawPort > 0 ? rawPort : 502;
+        const group = groupById[device.groupId] || null;
         for (const read of (device.reads || [])) {
-            const routeId = `${device.id}__${read.id}`;
+            // Route ID: {group_id}__{device_id}__{block_id}  (docs/COMPILATION.md naming)
+            const routeId = group
+                ? `${group.id}__${device.id}__${read.id}`
+                : `${device.id}__${read.id}`;
             lines.push(`${indent}- id: ${routeId}`);
             lines.push(`${indent}  source:`);
             lines.push(`${indent}    host: ${device.ipAddress}`);
@@ -149,14 +174,16 @@ function toReplicatorYaml(system, devices) {
             lines.push(`${indent}    address: ${read.source_address}`);
             lines.push(`${indent}    count: ${read.source_count}`);
             lines.push(`${indent}  target:`);
-            lines.push(`${indent}    mma_port: ${mmaPort}`);
+            // target: unit, area, address — per docs/COMPILATION.md (no mma_port)
             lines.push(`${indent}    unit: ${device.unitId}`);
             lines.push(`${indent}    area: ${read.target_area}`);
             lines.push(`${indent}    address: ${read.target_address}`);
             lines.push(`${indent}  poll_interval: ${read.poll_interval}`);
             lines.push(`${indent}  ref:`);
+            // ref: group_id + device_id + block_id — per docs/COMPILATION.md
+            if (group) lines.push(`${indent}    group_id: ${group.id}`);
             lines.push(`${indent}    device_id: ${device.id}`);
-            lines.push(`${indent}    read_id: ${read.id}`);
+            lines.push(`${indent}    block_id: ${read.id}`);
         }
     }
     return lines.join('\n') + '\n';
@@ -203,11 +230,15 @@ function validateMmaConfig(yaml) {
     if (/\bread_id\s*:/m.test(yaml)) {
         errors.push('MMA config must not contain read_id — read references belong in Replicator config');
     }
+    if (/\bblock_id\s*:/m.test(yaml)) {
+        errors.push('MMA config must not contain block_id — block references belong in Replicator config');
+    }
     return errors;
 }
 
-// Replicator config must contain routes only — no MMA listener/memory definitions,
-// and MMA must be referenced by port only (no hostnames).
+// Replicator config must contain orchestration data only — no MMA listener/memory definitions.
+// An mma: { host, port } connection section is permitted and expected (Replicator needs it to
+// reach MMA), but must not contain routes, device references, or memory block definitions.
 function validateReplicatorConfig(yaml) {
     const errors = [];
     if (/^listeners\s*:/m.test(yaml)) {
@@ -216,16 +247,19 @@ function validateReplicatorConfig(yaml) {
     if (/^memory\s*:/m.test(yaml)) {
         errors.push('Replicator config must not contain a top-level memory block — memory definitions belong in MMA config');
     }
-    // Detect hostname inside a root-level mma: block (reference by port only is required).
+    // The mma: block is permitted only for connection settings (host, port).
+    // Contamination would be routes or memory definitions inside the mma: block.
     const lines = yaml.split('\n');
     let inMmaBlock = false;
     for (const line of lines) {
         if (/^mma\s*:/.test(line)) { inMmaBlock = true; continue; }
         if (inMmaBlock) {
-            // Non-indented non-empty line ends the mma block.
             if (/^\S/.test(line) && line.trim() !== '') { inMmaBlock = false; continue; }
-            if (/^\s+host\s*:/.test(line)) {
-                errors.push('Replicator config must not reference MMA by hostname — use mma_port in route targets instead');
+            if (/^\s+routes\s*:/.test(line)) {
+                errors.push('Replicator mma: block must not contain routes — routes must be at the top level');
+                inMmaBlock = false;
+            } else if (/^\s+memory\s*:/.test(line)) {
+                errors.push('Replicator mma: block must not contain memory definitions — those belong in MMA config');
                 inMmaBlock = false;
             }
         }
@@ -639,13 +673,14 @@ app.post('/compile', (req, res) => {
         const model = readModel();
         const system = model.system || DEFAULT_SYSTEM;
         const devices = model.devices || [];
+        const groups = model.groups || [];
 
         let routeCount = 0;
         for (const device of devices) {
             routeCount += (device.reads || []).length;
         }
 
-        const replicatorYaml = toReplicatorYaml(system, devices);
+        const replicatorYaml = toReplicatorYaml(system, devices, groups);
         const mmaYaml = toMmaYaml(system, devices);
 
         // Validate generated configs before writing to disk.
