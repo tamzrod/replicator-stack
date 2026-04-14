@@ -273,7 +273,6 @@
       max-width: 960px;
       margin: 32px auto;
       padding: 0 16px;
-      display: none;
       gap: 24px;
       flex-direction: column;
     }
@@ -1497,13 +1496,14 @@ function highlightYaml(text) {
 }
 
 function colorValue(val) {
+  // Note: val is already HTML-escaped by highlightYaml before this is called.
   const trimmed = val.trim();
-  if (trimmed === 'true' || trimmed === 'false') return `<span class="yt-bool">${escapeHtml(val)}</span>`;
-  if (trimmed === 'null' || trimmed === '~') return `<span class="yt-null">${escapeHtml(val)}</span>`;
-  if (/^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(trimmed)) return `<span class="yt-num">${escapeHtml(val)}</span>`;
-  if (/^[*&]/.test(trimmed)) return `<span class="yt-anchor">${escapeHtml(val)}</span>`;
-  if (/^['"]/.test(trimmed) || /^[^{[]/.test(trimmed)) return `<span class="yt-str">${escapeHtml(val)}</span>`;
-  return escapeHtml(val);
+  if (trimmed === 'true' || trimmed === 'false') return `<span class="yt-bool">${val}</span>`;
+  if (trimmed === 'null' || trimmed === '~') return `<span class="yt-null">${val}</span>`;
+  if (/^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(trimmed)) return `<span class="yt-num">${val}</span>`;
+  if (/^[*&]/.test(trimmed)) return `<span class="yt-anchor">${val}</span>`;
+  if (/^['"]/.test(trimmed) || /^[^{[]/.test(trimmed)) return `<span class="yt-str">${val}</span>`;
+  return val;
 }
 
 function applySearchHighlight(panelId, query) {
@@ -1655,12 +1655,7 @@ document.addEventListener('keydown', e => {
     const container = document.getElementById('config-viewer-container');
     if (!container.classList.contains('active')) return;
     e.preventDefault();
-    // Focus the search that is nearest to current scroll position
-    const repCard = document.getElementById('cv-replicator-card');
-    const repRect = repCard.getBoundingClientRect();
-    const targetId = repRect.top >= 0 && repRect.bottom <= window.innerHeight
-      ? 'replicator' : 'replicator'; // default to replicator
-    document.getElementById(`cv-search-${targetId}`).focus();
+    document.getElementById('cv-search-replicator').focus();
   }
 });
 
