@@ -27,10 +27,10 @@ const STATUS_SLOT_SIZE = 30;
  * Validate that a value is a required positive integer (e.g. for unit IDs).
  * Returns true if valid, false otherwise.
  */
-function isRequiredPositiveInt(value) {
+function isRequiredNonNegativeInt(value) {
     if (value == null || value === '') return false;
     const n = Number(value);
-    return Number.isFinite(n) && n >= 1;
+    return Number.isFinite(n) && n >= 0;
 }
 
 function initialModel() {
@@ -480,12 +480,12 @@ app.post('/device', (req, res) => {
             return res.status(400).json({ error: 'device.target_endpoint must be a valid endpoint (e.g. mma2:501)' });
         }
         const unitId = Number(device.unitId);
-        if (!Number.isFinite(unitId) || unitId < 1) {
-            return res.status(400).json({ error: 'device.unitId must be a positive integer (MMA unit ID)' });
+        if (!Number.isFinite(unitId) || unitId < 0) {
+            return res.status(400).json({ error: 'device.unitId must be a non-negative integer (MMA unit ID)' });
         }
         const sourceUnitId = Number(device.source_unit_id);
-        if (!isRequiredPositiveInt(device.source_unit_id)) {
-            return res.status(400).json({ error: 'device.source_unit_id is required and must be a positive integer' });
+        if (!isRequiredNonNegativeInt(device.source_unit_id)) {
+            return res.status(400).json({ error: 'device.source_unit_id is required and must be a non-negative integer' });
         }
         const model = readModel();
 
@@ -548,8 +548,8 @@ app.put('/device/:id', (req, res) => {
         }
         if (device.unitId !== undefined) {
             const unitId = Number(device.unitId);
-            if (!Number.isFinite(unitId) || unitId < 1) {
-                return res.status(400).json({ error: 'device.unitId must be a positive integer (MMA unit ID)' });
+            if (!Number.isFinite(unitId) || unitId < 0) {
+                return res.status(400).json({ error: 'device.unitId must be a non-negative integer (MMA unit ID)' });
             }
             existing.unitId = unitId;
         }
@@ -627,8 +627,8 @@ app.post('/config/save', (req, res) => {
 
         // Validate Source Unit ID — required
         const rawSourceUnitId = sourceConfig && sourceConfig.source_unit_id;
-        if (!isRequiredPositiveInt(rawSourceUnitId)) {
-            return res.status(400).json({ error: 'sourceConfig.source_unit_id is required and must be a positive integer' });
+        if (!isRequiredNonNegativeInt(rawSourceUnitId)) {
+            return res.status(400).json({ error: 'sourceConfig.source_unit_id is required and must be a non-negative integer' });
         }
         const sourceUnitIdNum = Number(rawSourceUnitId);
 
@@ -644,8 +644,8 @@ app.post('/config/save', (req, res) => {
 
         // Validate target unit ID
         const targetUnitId = Number(targetConfig.unitId);
-        if (!Number.isFinite(targetUnitId) || targetUnitId < 1) {
-            return res.status(400).json({ error: 'targetConfig.unitId must be a positive integer' });
+        if (!Number.isFinite(targetUnitId) || targetUnitId < 0) {
+            return res.status(400).json({ error: 'targetConfig.unitId must be a non-negative integer' });
         }
 
         const model = readModel();
@@ -808,8 +808,8 @@ app.post('/memory/port/:portId/block', (req, res) => {
             return res.status(400).json({ error: 'block is required' });
         }
         const unitId = Number(block.unit_id);
-        if (!Number.isFinite(unitId) || unitId < 1) {
-            return res.status(400).json({ error: 'block.unit_id must be a positive integer' });
+        if (!Number.isFinite(unitId) || unitId < 0) {
+            return res.status(400).json({ error: 'block.unit_id must be a non-negative integer' });
         }
         const address = Number(block.address);
         const count = Number(block.count);
@@ -859,8 +859,8 @@ app.put('/memory/port/:portId/block/:blockId', (req, res) => {
         }
         if (block.unit_id !== undefined) {
             const unitId = Number(block.unit_id);
-            if (!Number.isFinite(unitId) || unitId < 1) {
-                return res.status(400).json({ error: 'block.unit_id must be a positive integer' });
+            if (!Number.isFinite(unitId) || unitId < 0) {
+                return res.status(400).json({ error: 'block.unit_id must be a non-negative integer' });
             }
             existing.unit_id = unitId;
         }
@@ -1181,7 +1181,7 @@ function ensureMemoryCoverage(model) {
 
     for (const device of (model.devices || [])) {
         const unitId = Number(device.unitId);
-        if (!Number.isFinite(unitId) || unitId < 1) continue;
+        if (!Number.isFinite(unitId) || unitId < 0) continue;
 
         // Resolve which port this unit belongs to; skip if port not found (no silent auto-creation)
         let portId = unitToPortId[unitId];

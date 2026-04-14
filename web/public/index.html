@@ -896,7 +896,7 @@
         </div>
         <div class="field">
           <label>Source Unit ID <span style="color:#ef4444;font-weight:600">*</span></label>
-          <input id="ad-unit" type="number" value="1" min="1" required />
+          <input id="ad-unit" type="number" value="0" min="0" required />
         </div>
       </div>
       <div class="row">
@@ -906,7 +906,7 @@
         </div>
         <div class="field">
           <label>MMA Unit ID <span style="color:#64748b;font-size:.75rem;font-weight:400">(memory unit)</span></label>
-          <input id="ad-mma-unit" type="number" value="1" min="1" required />
+          <input id="ad-mma-unit" type="number" value="0" min="0" required />
         </div>
       </div>
       <div class="row">
@@ -916,7 +916,7 @@
         </div>
         <div class="field">
           <label>Status Unit ID <span style="color:#94a3b8;font-weight:400">(optional, MMA unit for status)</span></label>
-          <input id="ad-status-unit" type="number" placeholder="e.g. 100" min="1" />
+          <input id="ad-status-unit" type="number" placeholder="e.g. 100" min="0" />
         </div>
       </div>
       <div class="row">
@@ -1029,7 +1029,7 @@ function renderDeviceWorkspace() {
         </div>
         <div class="info-field">
           <label>Source Unit ID <span style="color:#ef4444;font-weight:600">*</span></label>
-          <input class="info-edit-input" type="number" id="ws-ed-src-unit" value="${escapeHtml(String(device.source_unit_id ?? ''))}" placeholder="e.g. 1" min="1" required />
+          <input class="info-edit-input" type="number" id="ws-ed-src-unit" value="${escapeHtml(String(device.source_unit_id ?? ''))}" placeholder="e.g. 1" min="0" required />
         </div>
         <div class="info-field">
           <label>Status Slot</label>
@@ -1140,11 +1140,11 @@ function renderDeviceWorkspace() {
       </div>
       <div class="info-field">
         <label>Unit ID <span style="color:#94a3b8;font-weight:400">(MMA unit)</span></label>
-        <input class="info-edit-input" type="number" id="ws-tgt-unit" value="${escapeHtml(String(device.unitId ?? ''))}" form="ws-config-form" min="1" required />
+        <input class="info-edit-input" type="number" id="ws-tgt-unit" value="${escapeHtml(String(device.unitId ?? ''))}" form="ws-config-form" min="0" required />
       </div>
       <div class="info-field">
         <label>Status Unit ID <span style="color:#94a3b8;font-weight:400">(optional, MMA unit for status)</span></label>
-        <input class="info-edit-input" type="number" id="ws-tgt-status-unit" value="${escapeHtml(String(device.status_unit_id ?? ''))}" form="ws-config-form" placeholder="e.g. 100" min="1" />
+        <input class="info-edit-input" type="number" id="ws-tgt-status-unit" value="${escapeHtml(String(device.status_unit_id ?? ''))}" form="ws-config-form" placeholder="e.g. 100" min="0" />
       </div>
     </div>
   </div>`;
@@ -1338,8 +1338,8 @@ function openAddDevice() {
   document.getElementById('add-device-form').reset();
   document.getElementById('ad-src-endpoint').value = '';
   document.getElementById('ad-tgt-endpoint').value = 'mma:502';
-  document.getElementById('ad-unit').value = '1';
-  document.getElementById('ad-mma-unit').value = '1';
+  document.getElementById('ad-unit').value = '0';
+  document.getElementById('ad-mma-unit').value = '0';
   document.getElementById('ad-status-slot').value = '0';
   document.getElementById('ad-status-unit').value = '';
   document.getElementById('add-device-banner').className = 'banner';
@@ -1658,7 +1658,7 @@ function renderMemoryTab(data) {
             return `<div class="mem-block-row" style="background:#fffbeb;border-radius:6px;padding:8px;flex-wrap:wrap;gap:8px">
               <div class="mem-block-field">
                 <label>Unit ID</label>
-                <input class="inline-input" type="number" id="mbe-uid-${escapeHtml(b.id)}" value="${escapeHtml(String(b.unit_id))}" min="1" style="width:70px" />
+                <input class="inline-input" type="number" id="mbe-uid-${escapeHtml(b.id)}" value="${escapeHtml(String(b.unit_id))}" min="0" style="width:70px" />
               </div>
               <div class="mem-block-field">
                 <label>Area</label>
@@ -1706,7 +1706,7 @@ function renderMemoryTab(data) {
           <div class="row" style="flex-wrap:wrap">
             <div class="field" style="min-width:100px;max-width:120px">
               <label>Unit ID</label>
-              <input class="mem-ab-uid" type="number" value="1" min="1" required />
+              <input class="mem-ab-uid" type="number" value="0" min="0" required />
             </div>
             <div class="field" style="min-width:160px">
               <label>Area</label>
