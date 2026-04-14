@@ -531,6 +531,38 @@ app.delete('/target/:name', (req, res) => {
     }
 });
 
+// PUT /target/:name — update an existing target's port (and optional status_unit_id)
+app.put('/target/:name', (req, res) => {
+    try {
+        const name = decodeURIComponent(req.params.name);
+        const { target } = req.body;
+        if (!target) {
+            return res.status(400).json({ error: 'target is required' });
+        }
+        const model = readModel();
+        const existing = model.system.targets.find(t => t.name === name);
+        if (!existing) {
+            return res.status(404).json({ error: `Target "${name}" not found` });
+        }
+        if (target.port !== undefined) {
+            const port = Number(target.port);
+            if (!Number.isFinite(port) || port < 1 || port > 65535) {
+                return res.status(400).json({ error: 'target.port must be a valid port number (1–65535)' });
+            }
+            existing.port = port;
+            existing.endpoint = `${TARGET_HOST}:${port}`;
+        }
+        if (target.status_unit_id !== undefined) {
+            existing.status_unit_id = target.status_unit_id != null ? Number(target.status_unit_id) : null;
+        }
+        writeModel(model);
+        autoCompile(model);
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // POST /read — add read to device, validate no overlap in same area
 app.post('/read', (req, res) => {
     try {

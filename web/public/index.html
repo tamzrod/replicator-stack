@@ -26,9 +26,7 @@
     header span { font-size: 0.8rem; color: #94a3b8; }
 
     main {
-      max-width: 960px;
-      margin: 32px auto;
-      padding: 0 16px;
+      padding: 24px 24px;
       display: grid;
       gap: 24px;
     }
@@ -159,13 +157,10 @@
       flex-shrink: 0;
       background: #fff;
       border-right: 1px solid #e2e8f0;
-      min-height: calc(100vh - 57px);
+      min-height: calc(100vh - 105px);
       overflow-y: auto;
-      display: none;
     }
-    #tree-panel.active { display: block; }
     #main-wrapper { flex: 1; min-width: 0; }
-    body.tree-active main { max-width: none; }
 
     /* ── Tree Panel ─────────────────────────────────────────────────── */
     .tree-panel-header {
@@ -176,12 +171,13 @@
       font-size: .7rem; font-weight: 700; color: #64748b;
       text-transform: uppercase; letter-spacing: .06em;
     }
-    .tree-add-group-btn {
+    .tree-header-actions { display: flex; gap: 4px; }
+    .tree-add-btn {
       background: none; border: 1px dashed #cbd5e1; border-radius: 4px;
       color: #64748b; font-size: .65rem; padding: 2px 7px; cursor: pointer;
       font-weight: 600;
     }
-    .tree-add-group-btn:hover { background: #f1f5f9; border-color: #94a3b8; }
+    .tree-add-btn:hover { background: #f1f5f9; border-color: #94a3b8; }
     .tree-group-header {
       display: flex; align-items: center;
       padding: 6px 10px; cursor: pointer; user-select: none; gap: 4px;
@@ -192,42 +188,47 @@
     .tree-group-actions { display: flex; gap: 2px; opacity: 0; transition: opacity .15s; }
     .tree-group-header:hover .tree-group-actions { opacity: 1; }
     .tree-device {
-      padding: 4px 10px 4px 24px;
-      display: flex; align-items: center; gap: 4px; cursor: pointer;
+      padding: 5px 10px 5px 26px;
+      display: flex; align-items: center; cursor: pointer;
     }
     .tree-device:hover { background: #f8fafc; }
-    .tree-device.selected { background: #eff6ff; border-left: 3px solid #3b82f6; padding-left: 21px; }
+    .tree-device.selected { background: #eff6ff; border-left: 3px solid #3b82f6; padding-left: 23px; }
     .tree-device-name {
-      font-size: .78rem; color: #1e293b; flex: 1;
+      font-size: .78rem; color: #1e293b;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
-    .tree-device-actions { display: flex; gap: 2px; opacity: 0; transition: opacity .15s; }
-    .tree-device:hover .tree-device-actions { opacity: 1; }
-    .tree-device-toggle { font-size: .6rem; width: 10px; color: #cbd5e1; flex-shrink: 0; }
-    .tree-read {
-      padding: 3px 10px 3px 42px;
-      display: flex; align-items: center; gap: 4px; cursor: pointer;
-    }
-    .tree-read:hover { background: #f8fafc; }
-    .tree-read.selected { background: #f0fdf4; border-left: 3px solid #10b981; padding-left: 39px; }
-    .tree-read-name { font-size: .72rem; color: #475569; flex: 1;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .tree-read::before { content: '└ '; color: #cbd5e1; font-size: .7rem; flex-shrink: 0; }
-    .tree-read-actions { display: flex; gap: 2px; opacity: 0; transition: opacity .15s; }
-    .tree-read:hover .tree-read-actions { opacity: 1; }
     .tree-btn {
       background: none; border: none; padding: 2px 5px;
       font-size: .7rem; cursor: pointer; border-radius: 3px;
       line-height: 1; font-weight: 600;
     }
-    .tree-btn-edit { color: #3b82f6; }
-    .tree-btn-edit:hover { background: #dbeafe; }
-    .tree-btn-del { color: #ef4444; }
-    .tree-btn-del:hover { background: #fee2e2; }
     .tree-btn-grp-edit { color: #64748b; font-size: .65rem; }
     .tree-btn-grp-edit:hover { background: #f1f5f9; }
     .tree-btn-grp-del { color: #f59e0b; font-size: .65rem; }
     .tree-btn-grp-del:hover { background: #fef3c7; }
+    .tree-empty { padding: 16px 14px; font-size: .78rem; color: #94a3b8; font-style: italic; }
+
+    /* ── Device Workspace ───────────────────────────────────────────── */
+    #device-workspace { display: grid; gap: 24px; }
+    .ws-placeholder {
+      text-align: center; color: #94a3b8; padding: 64px 0; font-size: .9rem;
+    }
+    .ws-placeholder .ws-icon { font-size: 2.5rem; margin-bottom: 12px; }
+    .info-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; margin-bottom: 0; }
+    .info-field label {
+      display: block; font-size: .75rem; font-weight: 600; color: #64748b;
+      margin-bottom: 4px; text-transform: uppercase; letter-spacing: .04em;
+    }
+    .info-field .info-val {
+      padding: 8px 10px; background: #f8fafc; border: 1px solid #e2e8f0;
+      border-radius: 6px; font-size: .875rem; color: #1a1a2e;
+    }
+    .ws-card-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 16px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px;
+    }
+    .ws-card-header h2 { margin: 0; border: none; padding: 0; font-size: 1rem; font-weight: 600; color: #16213e; }
+    .reads-table-wrap { overflow-x: auto; }
 
     /* ── Dialogs ─────────────────────────────────────────────────────── */
     dialog {
@@ -444,6 +445,7 @@
 <div id="tab-bar">
   <button class="tab-btn active" data-tab="model">Model</button>
   <button class="tab-btn" data-tab="config-viewer">🔍 Config Viewer</button>
+  <button class="btn-refresh" id="btn-refresh" style="margin-left:auto;margin-right:8px;align-self:center">↻ Refresh</button>
 </div>
 
 <div id="app-container">
@@ -452,18 +454,7 @@
 
 <main>
 
-  <!-- ── Current Model ─────────────────────────────────────────────── -->
-  <div class="card">
-    <div class="model-header">
-      <h2>Current Model</h2>
-      <button class="btn-refresh" id="btn-refresh">↻ Refresh</button>
-    </div>
-    <div id="model-display">
-      <div class="empty-state">Loading…</div>
-    </div>
-  </div>
-
-  <!-- ── Targets ──────────────────────────────────────────────────── -->
+  <!-- ── Targets (global) ───────────────────────────────────────────── -->
   <div class="card">
     <h2>Targets <span style="color:#94a3b8;font-size:.8rem;font-weight:400">(MMA 2.0 runtime endpoints)</span></h2>
     <div id="targets-list" style="margin-bottom:16px"></div>
@@ -487,110 +478,8 @@
     </form>
   </div>
 
-  <!-- ── Add Device ─────────────────────────────────────────────────── -->
-  <div class="card">
-    <h2>Add Device <span style="color:#94a3b8;font-size:.8rem;font-weight:400">(Replicator configuration unit)</span></h2>
-    <form id="device-form">
-      <div class="row">
-        <div class="field">
-          <label>Device ID</label>
-          <input id="d-id" type="text" placeholder="device-1" required />
-        </div>
-        <div class="field">
-          <label>Name</label>
-          <input id="d-name" type="text" placeholder="My Device" />
-        </div>
-      </div>
-      <div class="row">
-        <div class="field">
-          <label>IP Address</label>
-          <input id="d-ip" type="text" placeholder="192.168.1.100" pattern="^(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)$" title="Valid IPv4 address required (e.g. 192.168.1.100)" required />
-        </div>
-        <div class="field">
-          <label>Port</label>
-          <input id="d-port" type="number" value="502" min="1" max="65535" required />
-        </div>
-        <div class="field">
-          <label>Source Unit ID</label>
-          <input id="d-unit" type="number" value="1" required />
-        </div>
-      </div>
-      <div class="row">
-        <div class="field">
-          <label>MMA Unit ID <span style="color:#64748b;font-size:.75rem;font-weight:400">(target memory unit)</span></label>
-          <input id="d-mma-unit" type="number" value="1" min="1" required />
-        </div>
-        <div class="field">
-          <label>Status Slot <span style="color:#94a3b8;font-weight:400">(optional)</span></label>
-          <input id="d-status-slot" type="number" value="0" min="0" />
-        </div>
-        <div class="field">
-          <label>Target</label>
-          <select id="d-target" required>
-            <option value="">— select target —</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>Group <span style="color:#94a3b8;font-weight:400">(optional)</span></label>
-          <select id="d-group">
-            <option value="">— Ungrouped —</option>
-          </select>
-        </div>
-      </div>
-      <div id="device-banner" class="banner"></div>
-      <div><button type="submit" class="btn-primary">Add Device</button></div>
-    </form>
-  </div>
-
-  <!-- ── Memory Mapping (Reads) ────────────────────────────────────── -->
-  <div class="card">
-    <h2>Memory Mapping <span style="color:#94a3b8;font-size:.8rem;font-weight:400">(register reads per device)</span></h2>
-    <form id="read-form">
-      <div class="row">
-        <div class="field">
-          <label>Device</label>
-          <select id="r-device" required>
-            <option value="">— select device —</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>Read ID</label>
-          <input id="r-id" type="text" placeholder="read-1" required />
-        </div>
-        <div class="field">
-          <label>Name</label>
-          <input id="r-name" type="text" placeholder="My Read" />
-        </div>
-      </div>
-      <div class="row">
-        <div class="field">
-          <label>Source Area</label>
-          <select id="r-src-area">
-            <option value="holding_registers">holding_registers</option>
-            <option value="coils">coils</option>
-            <option value="input_registers">input_registers</option>
-            <option value="discrete_inputs">discrete_inputs</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>Source Address</label>
-          <input id="r-src-addr" type="number" value="0" required />
-        </div>
-        <div class="field">
-          <label>Count</label>
-          <input id="r-count" type="number" value="1" min="1" required />
-        </div>
-      </div>
-      <div class="row">
-        <div class="field">
-          <label>Poll Interval (ms)</label>
-          <input id="r-poll" type="number" value="2000" min="100" required />
-        </div>
-      </div>
-      <div id="read-banner" class="banner"></div>
-      <div><button type="submit" class="btn-primary">Add Read</button></div>
-    </form>
-  </div>
+  <!-- ── Device Workspace (driven by tree selection) ─────────────────── -->
+  <div id="device-workspace"></div>
 
   <!-- ── Compile ────────────────────────────────────────────────────── -->
   <div class="card compile-area">
@@ -784,6 +673,68 @@
   </div>
 </dialog>
 
+<!-- ── Add Device Dialog ──────────────────────────────────────────── -->
+<dialog id="add-device-dialog">
+  <div class="card" style="margin:0;min-width:380px;max-width:540px">
+    <h2>Add Device</h2>
+    <form id="add-device-form">
+      <div class="row">
+        <div class="field">
+          <label>Device ID</label>
+          <input id="ad-id" type="text" placeholder="device-1" required />
+        </div>
+        <div class="field">
+          <label>Name</label>
+          <input id="ad-name" type="text" placeholder="My Device" />
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>IP Address</label>
+          <input id="ad-ip" type="text" placeholder="192.168.1.100" pattern="^(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)$" title="Valid IPv4 address required (e.g. 192.168.1.100)" required />
+        </div>
+        <div class="field">
+          <label>Port</label>
+          <input id="ad-port" type="number" value="502" min="1" max="65535" required />
+        </div>
+        <div class="field">
+          <label>Source Unit ID</label>
+          <input id="ad-unit" type="number" value="1" required />
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>MMA Unit ID <span style="color:#64748b;font-size:.75rem;font-weight:400">(target memory unit)</span></label>
+          <input id="ad-mma-unit" type="number" value="1" min="1" required />
+        </div>
+        <div class="field">
+          <label>Status Slot <span style="color:#94a3b8;font-weight:400">(optional)</span></label>
+          <input id="ad-status-slot" type="number" value="0" min="0" />
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Target</label>
+          <select id="ad-target" required>
+            <option value="">— select target —</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Group <span style="color:#94a3b8;font-weight:400">(optional)</span></label>
+          <select id="ad-group">
+            <option value="">— Ungrouped —</option>
+          </select>
+        </div>
+      </div>
+      <div id="add-device-banner" class="banner"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+        <button type="button" id="ad-cancel" class="btn-refresh">Cancel</button>
+        <button type="submit" class="btn-primary">Add Device</button>
+      </div>
+    </form>
+  </div>
+</dialog>
+
 <script>
 // ── API helpers ──────────────────────────────────────────────────────────────
 
@@ -857,64 +808,203 @@ function renderTargetsList(data) {
   </table>`;
 }
 
-function renderModel(data) {
-  const el = document.getElementById('model-display');
-  _currentModel = data;
+// ── Device Workspace ─────────────────────────────────────────────────────────
 
-  if (!data.devices || data.devices.length === 0) {
-    el.innerHTML = `<div class="empty-state">No devices configured yet. Add a device below.</div>`;
+function renderDeviceWorkspace() {
+  const el = document.getElementById('device-workspace');
+
+  if (!_selectedDeviceId || !_currentModel) {
+    el.innerHTML = `<div class="card">
+      <div class="ws-placeholder">
+        <div class="ws-icon">📡</div>
+        Select a device from the tree to view and configure it.
+      </div>
+    </div>`;
     return;
   }
 
-  const rows = data.devices.map(d => {
-    const readsCount = (d.reads || []).length;
-    const grpName = groupName(data, d.groupId);
-    return `<tr data-device-id="${escapeHtml(d.id)}">
-      <td>${escapeHtml(d.id)}${d.name ? ` <span style="color:#64748b;font-size:.8rem">— ${escapeHtml(d.name)}</span>` : ''}</td>
-      <td>${grpName ? escapeHtml(grpName) : '<span style="color:#cbd5e1">—</span>'}</td>
-      <td>${d.ipAddress ? escapeHtml(d.ipAddress) : '<span style="color:#cbd5e1">—</span>'}</td>
-      <td>Port&nbsp;${escapeHtml(d.port)} (unit&nbsp;${escapeHtml(d.source_unit_id)})</td>
-      <td>unit&nbsp;${escapeHtml(d.unitId ?? '?')}</td>
-      <td>${d.target_name ? escapeHtml(d.target_name) : '—'}</td>
-      <td>${readsCount}</td>
-      <td style="white-space:nowrap">
-        <button class="btn-edit btn-edit-device" data-edit-device="${escapeHtml(d.id)}">✎ Edit</button>
-        <button class="btn-danger btn-delete-device" data-delete-device="${escapeHtml(d.id)}">✕</button>
-      </td>
-    </tr>`;
-  }).join('');
+  const model = _currentModel;
+  const device = (model.devices || []).find(d => d.id === _selectedDeviceId);
+  if (!device) {
+    _selectedDeviceId = null;
+    el.innerHTML = `<div class="card"><div class="ws-placeholder">Device not found — select another from the tree.</div></div>`;
+    return;
+  }
 
-  el.innerHTML = `<table>
-    <thead>
-      <tr>
-        <th>Device</th>
-        <th>Group</th>
-        <th>IP Address</th>
-        <th>Source</th>
-        <th>MMA Unit</th>
-        <th>Target</th>
-        <th>Mappings</th>
-        <th>Actions</th>
-      </tr>
-    </thead>
-    <tbody>${rows}</tbody>
-  </table>`;
+  const grpName = groupName(model, device.groupId) || '— Ungrouped —';
+  const target = findTarget(model, device.target_name);
+  const tPort = target ? targetPort(target) : '—';
+  const reads = device.reads || [];
+
+  // ── Device Info ────────────────────────────────────────────────────
+  let html = `<div class="card">
+    <div class="ws-card-header">
+      <h2>📟 ${escapeHtml(device.name || device.id)}</h2>
+      <div style="display:flex;gap:8px">
+        <button class="btn-edit" id="ws-btn-edit-device">✎ Edit Device</button>
+        <button class="btn-danger" id="ws-btn-del-device">✕ Delete</button>
+      </div>
+    </div>
+    <div class="info-grid">
+      <div class="info-field"><label>Device ID</label><div class="info-val">${escapeHtml(device.id)}</div></div>
+      <div class="info-field"><label>Name</label><div class="info-val">${escapeHtml(device.name || '—')}</div></div>
+      <div class="info-field"><label>IP Address</label><div class="info-val">${escapeHtml(device.ipAddress || '—')}</div></div>
+      <div class="info-field"><label>Port</label><div class="info-val">${escapeHtml(String(device.port ?? '—'))}</div></div>
+      <div class="info-field"><label>Group</label><div class="info-val">${escapeHtml(grpName)}</div></div>
+      <div class="info-field"><label>Source Unit ID</label><div class="info-val">${escapeHtml(String(device.source_unit_id ?? '—'))}</div></div>
+      <div class="info-field"><label>MMA Unit ID</label><div class="info-val">${escapeHtml(String(device.unitId ?? '—'))}</div></div>
+      <div class="info-field"><label>Status Slot</label><div class="info-val">${escapeHtml(String(device.status_slot ?? 0))}</div></div>
+    </div>
+  </div>`;
+
+  // ── Target Section ─────────────────────────────────────────────────
+  html += `<div class="card">
+    <div class="ws-card-header"><h2>🎯 Target Configuration</h2></div>
+    <div class="info-grid" style="margin-bottom:16px">
+      <div class="info-field"><label>Target Name</label><div class="info-val">${escapeHtml(device.target_name || '—')}</div></div>
+      <div class="info-field"><label>MMA Port</label><div class="info-val">${escapeHtml(String(tPort))}</div></div>
+    </div>
+    <form id="ws-target-form">
+      <div class="row">
+        <div class="field">
+          <label>Update MMA Port</label>
+          <input id="ws-t-port" type="number" value="${escapeHtml(String(tPort === '—' ? '' : tPort))}" min="1" max="65535" ${!device.target_name ? 'disabled' : ''} />
+        </div>
+      </div>
+      <div id="ws-target-banner" class="banner"></div>
+      <div><button type="submit" class="btn-primary" style="font-size:.8rem;padding:7px 14px" ${!device.target_name ? 'disabled' : ''}>Update Port</button></div>
+    </form>
+  </div>`;
+
+  // ── Reads Section ──────────────────────────────────────────────────
+  let readsBody;
+  if (reads.length === 0) {
+    readsBody = `<tr><td colspan="7"><div class="empty-state" style="padding:16px 0">No reads configured yet.</div></td></tr>`;
+  } else {
+    readsBody = reads.map(r => `<tr>
+      <td>${escapeHtml(r.id)}</td>
+      <td>${r.name ? escapeHtml(r.name) : '<span style="color:#cbd5e1">—</span>'}</td>
+      <td><code style="font-size:.78rem">${escapeHtml(r.source_area || '—')}</code></td>
+      <td>${escapeHtml(String(r.source_address ?? '—'))}</td>
+      <td>${escapeHtml(String(r.source_count ?? '—'))}</td>
+      <td>${escapeHtml(String(r.poll_interval ?? '—'))} ms</td>
+      <td style="white-space:nowrap">
+        <button class="btn-edit ws-edit-read" data-read-id="${escapeHtml(r.id)}">✎</button>
+        <button class="btn-danger ws-del-read" data-read-id="${escapeHtml(r.id)}">✕</button>
+      </td>
+    </tr>`).join('');
+  }
+
+  html += `<div class="card">
+    <div class="ws-card-header">
+      <h2>📋 Reads <span style="color:#94a3b8;font-size:.8rem;font-weight:400">(register reads)</span></h2>
+      <button class="btn-primary" id="ws-btn-show-add-read" style="font-size:.8rem;padding:7px 14px">+ Add Read</button>
+    </div>
+    <div class="reads-table-wrap">
+      <table>
+        <thead><tr>
+          <th>ID</th><th>Name</th><th>Area</th><th>Address</th><th>Count</th><th>Poll</th><th></th>
+        </tr></thead>
+        <tbody>${readsBody}</tbody>
+      </table>
+    </div>
+    <div id="ws-add-read-panel" style="display:none;margin-top:16px;border-top:1px solid #e2e8f0;padding-top:16px">
+      <form id="ws-read-form">
+        <div class="row">
+          <div class="field"><label>Read ID</label><input id="wr-id" type="text" placeholder="read-1" required /></div>
+          <div class="field"><label>Name</label><input id="wr-name" type="text" placeholder="My Read" /></div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>Source Area</label>
+            <select id="wr-src-area">
+              <option value="holding_registers">holding_registers</option>
+              <option value="coils">coils</option>
+              <option value="input_registers">input_registers</option>
+              <option value="discrete_inputs">discrete_inputs</option>
+            </select>
+          </div>
+          <div class="field"><label>Source Address</label><input id="wr-src-addr" type="number" value="0" required /></div>
+          <div class="field"><label>Count</label><input id="wr-count" type="number" value="1" min="1" required /></div>
+          <div class="field"><label>Poll Interval (ms)</label><input id="wr-poll" type="number" value="2000" min="100" required /></div>
+        </div>
+        <div id="ws-read-banner" class="banner"></div>
+        <div style="display:flex;gap:8px">
+          <button type="submit" class="btn-primary" style="font-size:.8rem;padding:7px 14px">Add Read</button>
+          <button type="button" id="ws-btn-cancel-read" class="btn-refresh">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>`;
+
+  el.innerHTML = html;
+
+  // ── Event Listeners ────────────────────────────────────────────────
+  document.getElementById('ws-btn-edit-device').addEventListener('click', () => openEditDevice(device.id));
+  document.getElementById('ws-btn-del-device').addEventListener('click', () => deleteDevice(device.id));
+
+  document.getElementById('ws-btn-show-add-read').addEventListener('click', () => {
+    document.getElementById('ws-add-read-panel').style.display = '';
+    document.getElementById('ws-btn-show-add-read').style.display = 'none';
+  });
+  document.getElementById('ws-btn-cancel-read').addEventListener('click', () => {
+    document.getElementById('ws-add-read-panel').style.display = 'none';
+    document.getElementById('ws-btn-show-add-read').style.display = '';
+    document.getElementById('ws-read-form').reset();
+    document.getElementById('wr-poll').value = '2000';
+  });
+
+  document.getElementById('ws-read-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const banner = document.getElementById('ws-read-banner');
+    banner.className = 'banner';
+    const payload = {
+      device_id: device.id,
+      read: {
+        id:             document.getElementById('wr-id').value.trim(),
+        name:           document.getElementById('wr-name').value.trim(),
+        source_area:    document.getElementById('wr-src-area').value,
+        source_address: Number(document.getElementById('wr-src-addr').value),
+        source_count:   Number(document.getElementById('wr-count').value),
+        poll_interval:  Number(document.getElementById('wr-poll').value),
+      }
+    };
+    const { ok, data } = await api('POST', '/read', payload);
+    if (ok) {
+      await loadModel();
+    } else {
+      banner.textContent = `✗ ${data.error || 'Unknown error'}`;
+      banner.className = 'banner show err';
+    }
+  });
+
+  document.getElementById('ws-target-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const banner = document.getElementById('ws-target-banner');
+    banner.className = 'banner';
+    const newPort = Number(document.getElementById('ws-t-port').value);
+    if (!device.target_name) return;
+    const { ok, data } = await api('PUT', `/target/${encodeURIComponent(device.target_name)}`, { target: { port: newPort } });
+    if (ok) {
+      banner.textContent = `✓ Target "${device.target_name}" port updated to ${newPort}.`;
+      banner.className = 'banner show ok';
+      await loadModel();
+    } else {
+      banner.textContent = `✗ ${data.error || 'Unknown error'}`;
+      banner.className = 'banner show err';
+    }
+  });
+
+  el.querySelectorAll('.ws-edit-read').forEach(btn => {
+    btn.addEventListener('click', () => openEditRead(device.id, btn.dataset.readId));
+  });
+  el.querySelectorAll('.ws-del-read').forEach(btn => {
+    btn.addEventListener('click', () => deleteRead(device.id, btn.dataset.readId));
+  });
 }
 
 function refreshGroupDropdowns(data) {
   const groups = (data && data.groups) || [];
-
-  // Add Device form group select
-  const dSel = document.getElementById('d-group');
-  const dPrev = dSel.value;
-  dSel.innerHTML = '<option value="">— Ungrouped —</option>';
-  for (const g of groups) {
-    const opt = document.createElement('option');
-    opt.value = g.id;
-    opt.textContent = g.name;
-    dSel.appendChild(opt);
-  }
-  if (dPrev) dSel.value = dPrev;
 
   // Edit Device dialog group select
   const edSel = document.getElementById('ed-group');
@@ -927,48 +1017,49 @@ function refreshGroupDropdowns(data) {
     edSel.appendChild(opt);
   }
   if (edPrev) edSel.value = edPrev;
+
+  // Add Device dialog group select
+  const adSel = document.getElementById('ad-group');
+  const adPrev = adSel.value;
+  adSel.innerHTML = '<option value="">— Ungrouped —</option>';
+  for (const g of groups) {
+    const opt = document.createElement('option');
+    opt.value = g.id;
+    opt.textContent = g.name;
+    adSel.appendChild(opt);
+  }
+  if (adPrev) adSel.value = adPrev;
 }
 
 async function loadModel() {
   const { ok, data } = await api('GET', '/model');
-  const el = document.getElementById('model-display');
   if (!ok) {
-    el.innerHTML = `<div class="empty-state" style="color:#ef4444">Failed to load model</div>`;
+    document.getElementById('device-workspace').innerHTML =
+      `<div class="card"><div class="empty-state" style="color:#ef4444">Failed to load model</div></div>`;
     return;
   }
 
   _currentModel = data;
-  renderModel(data);
   renderTargetsList(data);
   renderTree(data);
   refreshGroupDropdowns(data);
 
-  // refresh target dropdown in device form
+  // Refresh target dropdowns in Add Device and Edit Device dialogs
   const targets = (data.system && data.system.targets) || [];
-  const tsel = document.getElementById('d-target');
-  const tprev = tsel.value;
-  tsel.innerHTML = '<option value="">— select target —</option>';
-  for (const t of targets) {
-    const opt = document.createElement('option');
-    opt.value = t.name;
-    opt.textContent = `${t.name} (port ${targetPort(t)})`;
-    tsel.appendChild(opt);
-  }
-  if (tprev) tsel.value = tprev;
-
-  // refresh device select in read form
-  const sel = document.getElementById('r-device');
-  const prev = sel.value;
-  sel.innerHTML = '<option value="">— select device —</option>';
-  if (data.devices) {
-    for (const d of data.devices) {
+  for (const selId of ['ad-target', 'ed-target']) {
+    const tsel = document.getElementById(selId);
+    const tprev = tsel.value;
+    tsel.innerHTML = '<option value="">— select target —</option>';
+    for (const t of targets) {
       const opt = document.createElement('option');
-      opt.value = d.id;
-      opt.textContent = `${d.id}${d.name ? ' — ' + d.name : ''} (unit ${d.unitId != null ? d.unitId : '?'})`;
-      sel.appendChild(opt);
+      opt.value = t.name;
+      opt.textContent = `${t.name} (port ${targetPort(t)})`;
+      tsel.appendChild(opt);
     }
+    if (tprev) tsel.value = tprev;
   }
-  if (prev) sel.value = prev;
+
+  renderDeviceWorkspace();
 
   // If the config viewer tab is open, keep it in sync with the latest compiled output.
   await refreshConfigViewerIfActive();
@@ -1023,79 +1114,63 @@ async function deleteTarget(name) {
   }
 }
 
-// ── Add Device ───────────────────────────────────────────────────────────────
+// ── Add Device (dialog) ──────────────────────────────────────────────────────
 
-document.getElementById('device-form').addEventListener('submit', async e => {
+function openAddDevice() {
+  const model = _currentModel || {};
+  document.getElementById('add-device-form').reset();
+  document.getElementById('ad-port').value = '502';
+  document.getElementById('ad-unit').value = '1';
+  document.getElementById('ad-mma-unit').value = '1';
+  document.getElementById('ad-status-slot').value = '0';
+  document.getElementById('add-device-banner').className = 'banner';
+
+  // Populate target dropdown
+  const targets = (model.system && model.system.targets) || [];
+  const tsel = document.getElementById('ad-target');
+  tsel.innerHTML = '<option value="">— select target —</option>';
+  for (const t of targets) {
+    const opt = document.createElement('option');
+    opt.value = t.name;
+    opt.textContent = `${t.name} (port ${targetPort(t)})`;
+    tsel.appendChild(opt);
+  }
+
+  document.getElementById('add-device-dialog').showModal();
+}
+
+document.getElementById('add-device-form').addEventListener('submit', async e => {
   e.preventDefault();
-  const banner = document.getElementById('device-banner');
+  const banner = document.getElementById('add-device-banner');
   banner.className = 'banner';
 
   const payload = {
     device: {
-      id:             document.getElementById('d-id').value.trim(),
-      name:           document.getElementById('d-name').value.trim(),
-      groupId:        document.getElementById('d-group').value || null,
-      ipAddress:      document.getElementById('d-ip').value.trim(),
-      port:           Number(document.getElementById('d-port').value),
-      source_unit_id: Number(document.getElementById('d-unit').value),
-      unitId:         Number(document.getElementById('d-mma-unit').value),
-      status_slot:    Number(document.getElementById('d-status-slot').value) || 0,
-      target_name:    document.getElementById('d-target').value,
+      id:             document.getElementById('ad-id').value.trim(),
+      name:           document.getElementById('ad-name').value.trim(),
+      groupId:        document.getElementById('ad-group').value || null,
+      ipAddress:      document.getElementById('ad-ip').value.trim(),
+      port:           Number(document.getElementById('ad-port').value),
+      source_unit_id: Number(document.getElementById('ad-unit').value),
+      unitId:         Number(document.getElementById('ad-mma-unit').value),
+      status_slot:    Number(document.getElementById('ad-status-slot').value) || 0,
+      target_name:    document.getElementById('ad-target').value,
     }
   };
 
   const { ok, data } = await api('POST', '/device', payload);
   if (ok) {
+    document.getElementById('add-device-dialog').close();
+    _selectedDeviceId = payload.device.id;
     await loadModel();
-    banner.textContent = `✓ Device "${payload.device.id}" added — MMA unit ${payload.device.unitId}`;
-    banner.className = 'banner show ok';
-    document.getElementById('device-form').reset();
-    document.getElementById('d-port').value = '502';
-    document.getElementById('d-unit').value = '1';
-    document.getElementById('d-mma-unit').value = '1';
-    document.getElementById('d-status-slot').value = '0';
   } else {
     banner.textContent = `✗ ${data.error || 'Unknown error'}`;
     banner.className = 'banner show err';
   }
 });
 
-// ── Add Read ─────────────────────────────────────────────────────────────────
-
-document.getElementById('read-form').addEventListener('submit', async e => {
-  e.preventDefault();
-  const banner = document.getElementById('read-banner');
-  banner.className = 'banner';
-
-  const payload = {
-    device_id: document.getElementById('r-device').value,
-    read: {
-      id:             document.getElementById('r-id').value.trim(),
-      name:           document.getElementById('r-name').value.trim(),
-      source_area:    document.getElementById('r-src-area').value,
-      source_address: Number(document.getElementById('r-src-addr').value),
-      source_count:   Number(document.getElementById('r-count').value),
-      poll_interval:  Number(document.getElementById('r-poll').value),
-    }
-  };
-
-  if (!payload.device_id) {
-    banner.textContent = '✗ Please select a device first.';
-    banner.className = 'banner show err';
-    return;
-  }
-
-  const { ok, data } = await api('POST', '/read', payload);
-  if (ok) {
-    banner.textContent = `✓ Read "${payload.read.id}" added to device "${payload.device_id}".`;
-    banner.className = 'banner show ok';
-    document.getElementById('read-form').reset();
-    document.getElementById('r-poll').value = '2000';
-    await loadModel();
-  } else {
-    banner.textContent = `✗ ${data.error || 'Unknown error'}`;
-    banner.className = 'banner show err';
-  }
+document.getElementById('ad-cancel').addEventListener('click', () => {
+  document.getElementById('add-device-dialog').close();
 });
 
 // ── Compile ──────────────────────────────────────────────────────────────────
@@ -1121,15 +1196,6 @@ async function compile() {
   await loadModel();
 }
 
-// ── Model display: Edit/Delete from table ────────────────────────────────────
-
-document.getElementById('model-display').addEventListener('click', async e => {
-  const editBtn = e.target.closest('.btn-edit-device');
-  if (editBtn) { openEditDevice(editBtn.dataset.editDevice); return; }
-  const delBtn = e.target.closest('.btn-delete-device');
-  if (delBtn) { await deleteDevice(delBtn.dataset.deleteDevice); }
-});
-
 // ── Device Delete ────────────────────────────────────────────────────────────
 
 async function deleteDevice(id) {
@@ -1145,15 +1211,8 @@ async function deleteDevice(id) {
 
 // ── Tree ─────────────────────────────────────────────────────────────────────
 
-const TREE_THRESHOLD = 3;
 let _selectedDeviceId = null;
-let _selectedReadKey = null; // "deviceId::readId"
 const _collapsedGroups = new Set();
-const _collapsedDevices = new Set();
-
-function findDeviceRow(deviceId) {
-  return document.querySelector(`#model-display tr[data-device-id="${CSS.escape(deviceId)}"]`);
-}
 
 function buildTreeGroups(data) {
   const groups = (data && data.groups) || [];
@@ -1181,24 +1240,19 @@ function buildTreeGroups(data) {
 
 function renderTree(data) {
   const panel = document.getElementById('tree-panel');
-  const devices = (data && data.devices) || [];
-  const groups = (data && data.groups) || [];
-
-  // Show tree when there are groups defined OR device count exceeds threshold
-  if (groups.length === 0 && devices.length <= TREE_THRESHOLD) {
-    panel.classList.remove('active');
-    document.body.classList.remove('tree-active');
-    return;
-  }
-
-  panel.classList.add('active');
-  document.body.classList.add('tree-active');
-
   const treeGroups = buildTreeGroups(data);
+
   let html = `<div class="tree-panel-header">
     <span class="tree-panel-title">Devices</span>
-    <button class="tree-add-group-btn" id="btn-add-group" title="Add new group">+ Group</button>
+    <div class="tree-header-actions">
+      <button class="tree-add-btn" id="btn-add-group" title="Add group">+ Group</button>
+      <button class="tree-add-btn" id="btn-add-device-tree" title="Add device">+ Device</button>
+    </div>
   </div>`;
+
+  if (treeGroups.length === 0) {
+    html += `<div class="tree-empty">No devices yet. Click + Device to add one.</div>`;
+  }
 
   for (const group of treeGroups) {
     const collapsed = _collapsedGroups.has(group.id);
@@ -1206,62 +1260,42 @@ function renderTree(data) {
     const grpActions = group.isUngrouped ? '' :
       `<span class="tree-group-actions">
         <button class="tree-btn tree-btn-grp-edit" data-edit-group="${escapeHtml(group.id)}" title="Rename group">✎</button>
-        <button class="tree-btn tree-btn-grp-del" data-del-group="${escapeHtml(group.id)}" title="Remove group — devices move to Ungrouped">✕</button>
+        <button class="tree-btn tree-btn-grp-del" data-del-group="${escapeHtml(group.id)}" title="Remove group">✕</button>
       </span>`;
 
-    html += `<div class="tree-group">`;
-    html += `<div class="tree-group-header" data-toggle-group="${escapeHtml(group.id)}">
-      <span class="tree-toggle">${toggle}</span>
-      <span class="tree-group-name">${escapeHtml(group.name)}</span>
-      ${grpActions}
-    </div>`;
+    html += `<div class="tree-group">
+      <div class="tree-group-header" data-toggle-group="${escapeHtml(group.id)}">
+        <span class="tree-toggle">${toggle}</span>
+        <span class="tree-group-name">${escapeHtml(group.name)}</span>
+        ${grpActions}
+      </div>`;
 
     if (!collapsed) {
       for (const d of group.devices) {
         const sel = d.id === _selectedDeviceId ? ' selected' : '';
-        const devCollapsed = _collapsedDevices.has(d.id);
-        const devToggle = (d.reads && d.reads.length > 0) ? (devCollapsed ? '▶' : '▼') : '·';
         const label = d.name
           ? `${escapeHtml(d.id)} <span style="color:#94a3b8;font-size:.72rem">— ${escapeHtml(d.name)}</span>`
           : escapeHtml(d.id);
         html += `<div class="tree-device${sel}" data-device-id="${escapeHtml(d.id)}">
-          <span class="tree-device-toggle" data-toggle-device="${escapeHtml(d.id)}">${devToggle}</span>
           <span class="tree-device-name">${label}</span>
-          <span class="tree-device-actions">
-            <button class="tree-btn tree-btn-edit" data-edit-device="${escapeHtml(d.id)}" title="Edit">✎</button>
-            <button class="tree-btn tree-btn-del" data-delete-device="${escapeHtml(d.id)}" title="Delete">✕</button>
-          </span>
         </div>`;
-        if (!devCollapsed) {
-          for (const r of (d.reads || [])) {
-            const readKey = `${d.id}::${r.id}`;
-            const readSel = readKey === _selectedReadKey ? ' selected' : '';
-            html += `<div class="tree-read${readSel}" data-device-id="${escapeHtml(d.id)}" data-read-id="${escapeHtml(r.id)}">
-              <span class="tree-read-name">${escapeHtml(r.id)}${r.name ? ` — ${escapeHtml(r.name)}` : ''}</span>
-              <span class="tree-read-actions">
-                <button class="tree-btn tree-btn-edit" data-edit-read="${escapeHtml(r.id)}" data-read-device="${escapeHtml(d.id)}" title="Edit read">✎</button>
-                <button class="tree-btn tree-btn-del" data-delete-read="${escapeHtml(r.id)}" data-read-device="${escapeHtml(d.id)}" title="Delete read">✕</button>
-              </span>
-            </div>`;
-          }
-        }
       }
     }
     html += `</div>`;
   }
+
   panel.innerHTML = html;
 
-  // Attach add-group button
-  const addGrpBtn = panel.querySelector('#btn-add-group');
-  if (addGrpBtn) addGrpBtn.addEventListener('click', openAddGroup);
+  panel.querySelector('#btn-add-group')?.addEventListener('click', openAddGroup);
+  panel.querySelector('#btn-add-device-tree')?.addEventListener('click', openAddDevice);
 }
 
 document.getElementById('tree-panel').addEventListener('click', async e => {
-  // Delete group button
+  // Delete group
   const delGroup = e.target.closest('[data-del-group]');
   if (delGroup) { e.stopPropagation(); await deleteGroup(delGroup.dataset.delGroup); return; }
 
-  // Edit group button
+  // Edit group
   const editGroup = e.target.closest('[data-edit-group]');
   if (editGroup) { e.stopPropagation(); openEditGroup(editGroup.dataset.editGroup); return; }
 
@@ -1275,66 +1309,12 @@ document.getElementById('tree-panel').addEventListener('click', async e => {
     return;
   }
 
-  // Toggle device reads collapse
-  const toggleDev = e.target.closest('[data-toggle-device]');
-  if (toggleDev) {
-    e.stopPropagation();
-    const id = toggleDev.dataset.toggleDevice;
-    if (_collapsedDevices.has(id)) _collapsedDevices.delete(id);
-    else _collapsedDevices.add(id);
-    renderTree(_currentModel);
-    return;
-  }
-
-  // Edit read
-  const editRead = e.target.closest('[data-edit-read]');
-  if (editRead) {
-    openEditRead(editRead.dataset.readDevice, editRead.dataset.editRead);
-    return;
-  }
-
-  // Delete read
-  const delRead = e.target.closest('[data-delete-read]');
-  if (delRead) {
-    await deleteRead(delRead.dataset.readDevice, delRead.dataset.deleteRead);
-    return;
-  }
-
-  // Edit device from tree
-  const editBtn = e.target.closest('[data-edit-device]');
-  if (editBtn) { openEditDevice(editBtn.dataset.editDevice); return; }
-
-  // Delete device from tree
-  const delBtn = e.target.closest('[data-delete-device]');
-  if (delBtn) { await deleteDevice(delBtn.dataset.deleteDevice); return; }
-
-  // Select read node
-  const readRow = e.target.closest('.tree-read[data-read-id]');
-  if (readRow) {
-    _selectedReadKey = `${readRow.dataset.deviceId}::${readRow.dataset.readId}`;
-    _selectedDeviceId = readRow.dataset.deviceId;
-    renderTree(_currentModel);
-    const tr = findDeviceRow(_selectedDeviceId);
-    if (tr) {
-      tr.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      tr.classList.add('row-highlight');
-      setTimeout(() => tr.classList.remove('row-highlight'), 2000);
-    }
-    return;
-  }
-
-  // Select device — highlight in main table
+  // Select device → drive workspace
   const deviceRow = e.target.closest('.tree-device[data-device-id]');
   if (deviceRow) {
     _selectedDeviceId = deviceRow.dataset.deviceId;
-    _selectedReadKey = null;
     renderTree(_currentModel);
-    const tr = findDeviceRow(_selectedDeviceId);
-    if (tr) {
-      tr.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      tr.classList.add('row-highlight');
-      setTimeout(() => tr.classList.remove('row-highlight'), 2000);
-    }
+    renderDeviceWorkspace();
   }
 });
 
@@ -1452,7 +1432,6 @@ async function deleteRead(deviceId, readId) {
   if (!confirm(`Delete read "${readId}" from device "${deviceId}"?`)) return;
   const { ok, data } = await api('DELETE', `/read/${encodeURIComponent(deviceId)}/${encodeURIComponent(readId)}`);
   if (ok) {
-    if (_selectedReadKey === `${deviceId}::${readId}`) _selectedReadKey = null;
     await loadModel();
   } else {
     alert(`Error: ${data.error || 'Unknown error'}`);
