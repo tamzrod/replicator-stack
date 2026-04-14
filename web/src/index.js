@@ -1,5 +1,6 @@
 const express = require('express');
 const fs = require('fs');
+const http = require('http');
 const path = require('path');
 const { randomUUID } = require('crypto');
 
@@ -1257,6 +1258,198 @@ app.get('/validate', rateLimit, (req, res) => {
         }
 
         res.json(result);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ---------------------------------------------------------------------------
+// Docker runtime control (via Docker socket)
+// ---------------------------------------------------------------------------
+
+const DOCKER_SOCKET = process.env.DOCKER_SOCKET || '/var/run/docker.sock';
+const ALLOWED_SERVICES = new Set(['mma', 'replicator']);
+
+/**
+ * Make an HTTP request to the Docker daemon socket.
+ * @param {string} method - HTTP method (GET, POST, etc.)
+ * @param {string} apiPath - Docker API path (e.g. '/containers/mma/json')
+ * @returns {Promise<{status: number, body: any}>}
+ */
+function dockerApi(method, apiPath) {
+    return new Promise((resolve, reject) => {
+        const opts = {
+            socketPath: DOCKER_SOCKET,
+            method,
+            path: apiPath,
+            headers: { 'Content-Type': 'application/json' },
+        };
+        const req = http.request(opts, (dockerRes) => {
+            let data = '';
+            dockerRes.on('data', chunk => { data += chunk; });
+            dockerRes.on('end', () => {
+                let body = null;
+                if (data) {
+                    try { body = JSON.parse(data); } catch (parseErr) {
+                        console.warn(`[dockerApi] Failed to parse Docker response for ${method} ${apiPath}: ${parseErr.message}`);
+                        body = data;
+                    }
+                }
+                resolve({ status: dockerRes.statusCode, body });
+            });
+        });
+        req.on('error', reject);
+        req.end();
+    });
+}
+
+// GET /runtime/status — return running state of mma and replicator containers
+app.get('/runtime/status', async (req, res) => {
+    try {
+        const [mmaRes, repRes] = await Promise.all([
+            dockerApi('GET', '/containers/mma/json'),
+            dockerApi('GET', '/containers/replicator/json'),
+        ]);
+
+        const extractStatus = (r) => {
+            if (r.status === 404) return 'not_found';
+            if (r.status !== 200 || !r.body || !r.body.State) return 'unknown';
+            return r.body.State.Status || 'unknown';
+        };
+
+        res.json({
+            mma: { status: extractStatus(mmaRes) },
+            replicator: { status: extractStatus(repRes) },
+        });
+    } catch (err) {
+        res.status(500).json({ error: `Docker socket error: ${err.message}` });
+    }
+});
+
+// POST /runtime/:service/start|stop|restart — control a service container
+app.post('/runtime/:service/:action', async (req, res) => {
+    try {
+        const { service, action } = req.params;
+        if (!ALLOWED_SERVICES.has(service)) {
+            return res.status(400).json({ error: `Unknown service "${service}"` });
+        }
+        const allowedActions = new Set(['start', 'stop', 'restart']);
+        if (!allowedActions.has(action)) {
+            return res.status(400).json({ error: `Unknown action "${action}"` });
+        }
+        const result = await dockerApi('POST', `/containers/${service}/${action}`);
+        // Docker returns 204 on success, 304 if already in that state — both are OK
+        if (result.status === 204 || result.status === 304) {
+            return res.json({ ok: true, service, action });
+        }
+        const msg = (result.body && result.body.message) ? result.body.message : `HTTP ${result.status}`;
+        return res.status(502).json({ error: `Docker error: ${msg}` });
+    } catch (err) {
+        res.status(500).json({ error: `Docker socket error: ${err.message}` });
+    }
+});
+
+/**
+ * Count routes (reads) for all devices whose target port is not in excludedPortNums.
+ * @param {object} model
+ * @param {Set<number>} excludedPortNums
+ * @returns {number}
+ */
+function countRoutes(model, excludedPortNums) {
+    let count = 0;
+    for (const device of (model.devices || [])) {
+        const targetPort = endpointPort(device.target_endpoint);
+        if (targetPort !== null && excludedPortNums.has(targetPort)) continue;
+        count += (device.reads || []).length;
+    }
+    return count;
+}
+
+// POST /runtime/apply — compile configs and write to disk (no service restart)
+app.post('/runtime/apply', async (req, res) => {
+    try {
+        const model = readModel();
+
+        const excludedPortsList = Array.isArray(req.body && req.body.excluded_ports)
+            ? req.body.excluded_ports : [];
+        const excludedPortNums = new Set(excludedPortsList.map(Number).filter(Number.isFinite));
+
+        const missingPorts = getMissingTargetPorts(model).filter(p => !excludedPortNums.has(p));
+        if (missingPorts.length > 0) {
+            return res.status(422).json({
+                error: `Compilation blocked — MMA port(s) ${missingPorts.join(', ')} do not exist and require confirmation`,
+                missing_ports: missingPorts,
+            });
+        }
+
+        const result = compileAndWrite(model, excludedPortNums);
+        if (!result.ok) {
+            return res.status(400).json({
+                error: 'Config validation failed — generated configs violate separation rules',
+                mma_errors: result.mmaErrors,
+                replicator_errors: result.replicatorErrors,
+            });
+        }
+
+        res.json({ ok: true, routes: countRoutes(model, excludedPortNums), blocksCreated: result.blocksCreated || 0, excluded_ports: [...excludedPortNums] });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /runtime/apply-restart — compile configs and restart both services
+app.post('/runtime/apply-restart', async (req, res) => {
+    try {
+        const model = readModel();
+
+        const excludedPortsList = Array.isArray(req.body && req.body.excluded_ports)
+            ? req.body.excluded_ports : [];
+        const excludedPortNums = new Set(excludedPortsList.map(Number).filter(Number.isFinite));
+
+        const missingPorts = getMissingTargetPorts(model).filter(p => !excludedPortNums.has(p));
+        if (missingPorts.length > 0) {
+            return res.status(422).json({
+                error: `Compilation blocked — MMA port(s) ${missingPorts.join(', ')} do not exist and require confirmation`,
+                missing_ports: missingPorts,
+            });
+        }
+
+        const result = compileAndWrite(model, excludedPortNums);
+        if (!result.ok) {
+            return res.status(400).json({
+                error: 'Config validation failed — generated configs violate separation rules',
+                mma_errors: result.mmaErrors,
+                replicator_errors: result.replicatorErrors,
+            });
+        }
+
+        const routes = countRoutes(model, excludedPortNums);
+
+        // Restart both services sequentially: MMA first, then Replicator
+        const restartErrors = [];
+        for (const service of ['mma', 'replicator']) {
+            try {
+                const r = await dockerApi('POST', `/containers/${service}/restart`);
+                if (r.status !== 204 && r.status !== 304) {
+                    const msg = (r.body && r.body.message) ? r.body.message : `HTTP ${r.status}`;
+                    restartErrors.push(`${service}: ${msg}`);
+                }
+            } catch (dockerErr) {
+                restartErrors.push(`${service}: ${dockerErr.message}`);
+            }
+        }
+
+        if (restartErrors.length > 0) {
+            return res.status(207).json({
+                ok: false,
+                routes,
+                blocksCreated: result.blocksCreated || 0,
+                error: `Configs applied but some restarts failed: ${restartErrors.join('; ')}`,
+                restart_errors: restartErrors,
+            });
+        }
+
+        res.json({ ok: true, routes, blocksCreated: result.blocksCreated || 0, excluded_ports: [...excludedPortNums] });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
