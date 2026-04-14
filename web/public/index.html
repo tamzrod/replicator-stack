@@ -241,6 +241,160 @@
     tbody tr.row-highlight { background: #dbeafe !important; }
     .btn-edit { background: #e0f2fe; color: #0369a1; font-size: 0.75rem; padding: 4px 10px; }
     .btn-edit:not(:disabled):hover { background: #bae6fd; }
+
+    /* ── Top-level Tab Bar ──────────────────────────────────────────── */
+    #tab-bar {
+      background: #1a2744;
+      display: flex;
+      align-items: flex-end;
+      padding: 0 24px;
+      gap: 4px;
+      border-bottom: 2px solid #0f172a;
+    }
+    .tab-btn {
+      padding: 10px 20px;
+      background: none;
+      border: none;
+      border-radius: 6px 6px 0 0;
+      color: #94a3b8;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .15s, color .15s;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+    }
+    .tab-btn:hover { color: #e2e8f0; background: rgba(255,255,255,.06); }
+    .tab-btn.active { color: #fff; background: #f0f2f5; border-color: #f0f2f5; }
+
+    /* ── Config Viewer ──────────────────────────────────────────────── */
+    #config-viewer-container {
+      display: none;
+      max-width: 960px;
+      margin: 32px auto;
+      padding: 0 16px;
+      gap: 24px;
+      flex-direction: column;
+    }
+    #config-viewer-container.active { display: flex; }
+
+    .cv-card {
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+      overflow: hidden;
+    }
+    .cv-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 20px;
+      border-bottom: 1px solid #e2e8f0;
+      background: #f8fafc;
+    }
+    .cv-card-header h2 {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: #16213e;
+      margin: 0;
+    }
+    .cv-card-header .cv-badge {
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: #64748b;
+      background: #e2e8f0;
+      border-radius: 99px;
+      padding: 2px 9px;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+    }
+    .cv-actions { display: flex; align-items: center; gap: 8px; }
+    .cv-search-wrap {
+      position: relative;
+    }
+    .cv-search {
+      font-size: 0.78rem;
+      padding: 5px 10px 5px 28px;
+      border: 1px solid #cbd5e1;
+      border-radius: 5px;
+      background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E") no-repeat 8px center;
+      color: #1a1a2e;
+      width: 160px;
+      transition: border-color .15s;
+    }
+    .cv-search:focus { outline: none; border-color: #3b82f6; }
+    .cv-search-count {
+      font-size: 0.7rem;
+      color: #94a3b8;
+      min-width: 40px;
+    }
+    .btn-copy {
+      font-size: 0.75rem;
+      padding: 5px 12px;
+      background: #e2e8f0;
+      color: #475569;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background .15s;
+    }
+    .btn-copy:hover { background: #cbd5e1; }
+    .btn-copy.copied { background: #d1fae5; color: #065f46; }
+
+    .cv-pre-wrap {
+      position: relative;
+      overflow: hidden;
+    }
+    .cv-pre {
+      margin: 0;
+      padding: 16px 20px;
+      font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', 'Monaco', monospace;
+      font-size: 0.82rem;
+      line-height: 1.6;
+      overflow: auto;
+      max-height: 480px;
+      background: #0f1923;
+      color: #e2e8f0;
+      tab-size: 2;
+    }
+    .cv-pre.no-content {
+      color: #64748b;
+      font-style: italic;
+    }
+
+    /* YAML syntax highlight tokens */
+    .yt-key    { color: #7dd3fc; }  /* keys */
+    .yt-str    { color: #86efac; }  /* string values */
+    .yt-num    { color: #fbbf24; }  /* numbers */
+    .yt-bool   { color: #f472b6; }  /* booleans */
+    .yt-null   { color: #f472b6; }  /* null */
+    .yt-comment{ color: #6b7280; font-style: italic; } /* # comments */
+    .yt-dash   { color: #94a3b8; }  /* list dashes */
+    .yt-anchor { color: #c084fc; }  /* anchors/aliases */
+
+    /* search highlight */
+    mark.cv-hl { background: #fbbf24; color: #0f1923; border-radius: 2px; }
+    mark.cv-hl.cv-hl-active { background: #f97316; }
+
+    .cv-refresh-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 20px 14px;
+    }
+    .cv-status { font-size: 0.8rem; color: #64748b; }
+    .btn-cv-refresh {
+      font-size: 0.75rem;
+      padding: 5px 12px;
+      background: #e2e8f0;
+      color: #475569;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .btn-cv-refresh:hover { background: #cbd5e1; }
   </style>
 </head>
 <body>
@@ -249,6 +403,11 @@
   <h1>⚡ Replicator Stack</h1>
   <span>Control Plane</span>
 </header>
+
+<div id="tab-bar">
+  <button class="tab-btn active" data-tab="model">Model</button>
+  <button class="tab-btn" data-tab="config-viewer">🔍 Config Viewer</button>
+</div>
 
 <div id="app-container">
 <aside id="tree-panel"></aside>
@@ -402,6 +561,56 @@
 
 </div><!-- #main-wrapper -->
 </div><!-- #app-container -->
+
+<!-- ── Config Viewer Tab ───────────────────────────────────────────── -->
+<div id="config-viewer-container">
+
+  <div class="cv-refresh-bar">
+    <button class="btn-cv-refresh" id="btn-cv-refresh">↻ Refresh</button>
+    <span class="cv-status" id="cv-status"></span>
+  </div>
+
+  <!-- Replicator Config -->
+  <div class="cv-card" id="cv-replicator-card">
+    <div class="cv-card-header">
+      <div style="display:flex;align-items:center;gap:10px">
+        <h2>Replicator Config</h2>
+        <span class="cv-badge">READ-ONLY</span>
+      </div>
+      <div class="cv-actions">
+        <div class="cv-search-wrap">
+          <input class="cv-search" type="search" placeholder="Search… (Ctrl+F)" id="cv-search-replicator" autocomplete="off" />
+        </div>
+        <span class="cv-search-count" id="cv-search-count-replicator"></span>
+        <button class="btn-copy" id="btn-copy-replicator" data-target="replicator">⎘ Copy</button>
+      </div>
+    </div>
+    <div class="cv-pre-wrap">
+      <pre class="cv-pre" id="cv-pre-replicator"><span style="color:#64748b;font-style:italic">Loading…</span></pre>
+    </div>
+  </div>
+
+  <!-- MMA Config -->
+  <div class="cv-card" id="cv-mma-card">
+    <div class="cv-card-header">
+      <div style="display:flex;align-items:center;gap:10px">
+        <h2>MMA Config</h2>
+        <span class="cv-badge">READ-ONLY</span>
+      </div>
+      <div class="cv-actions">
+        <div class="cv-search-wrap">
+          <input class="cv-search" type="search" placeholder="Search… (Ctrl+F)" id="cv-search-mma" autocomplete="off" />
+        </div>
+        <span class="cv-search-count" id="cv-search-count-mma"></span>
+        <button class="btn-copy" id="btn-copy-mma" data-target="mma">⎘ Copy</button>
+      </div>
+    </div>
+    <div class="cv-pre-wrap">
+      <pre class="cv-pre" id="cv-pre-mma"><span style="color:#64748b;font-style:italic">Loading…</span></pre>
+    </div>
+  </div>
+
+</div><!-- #config-viewer-container -->
 
 <!-- ── Edit Device Dialog ────────────────────────────────────────── -->
 <dialog id="edit-device-dialog">
@@ -1245,6 +1454,237 @@ document.getElementById('edit-device-form').addEventListener('submit', async e =
 
 document.getElementById('ed-cancel').addEventListener('click', () => {
   document.getElementById('edit-device-dialog').close();
+});
+
+// ── Config Viewer ────────────────────────────────────────────────────────────
+
+// Raw config snapshots (strings)
+const _cvRaw = { replicator: null, mma: null };
+// Per-panel search state
+const _cvSearch = {
+  replicator: { matches: [], current: 0 },
+  mma: { matches: [], current: 0 },
+};
+
+function highlightYaml(text) {
+  // Escape HTML entities first (operates on plain text)
+  const safe = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  return safe.split('\n').map(line => {
+    // Comment lines
+    if (/^\s*#/.test(line)) {
+      return `<span class="yt-comment">${line}</span>`;
+    }
+    // List dash — highlight just the dash
+    line = line.replace(/^(\s*)(- )/, (_, ws, dash) =>
+      `${ws}<span class="yt-dash">${dash}</span>`
+    );
+    // Key: value pairs — key gets coloured, value parsed separately
+    line = line.replace(
+      /^((?:\s*(?:- )?)?)([A-Za-z_][\w.-]*)(\s*:\s*)(.*)?$/,
+      (_, prefix, key, colon, value) => {
+        const coloredKey = `${prefix}<span class="yt-key">${key}</span>${colon}`;
+        if (!value) return coloredKey;
+        return coloredKey + colorValue(value);
+      }
+    );
+    return line;
+  }).join('\n');
+}
+
+function colorValue(val) {
+  // Note: val is already HTML-escaped by highlightYaml before this is called.
+  const trimmed = val.trim();
+  if (trimmed === 'true' || trimmed === 'false') return `<span class="yt-bool">${val}</span>`;
+  if (trimmed === 'null' || trimmed === '~') return `<span class="yt-null">${val}</span>`;
+  if (/^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(trimmed)) return `<span class="yt-num">${val}</span>`;
+  if (/^[*&]/.test(trimmed)) return `<span class="yt-anchor">${val}</span>`;
+  if (/^['"]/.test(trimmed) || /^[^{[]/.test(trimmed)) return `<span class="yt-str">${val}</span>`;
+  return val;
+}
+
+function applySearchHighlight(panelId, query) {
+  const preEl = document.getElementById(`cv-pre-${panelId}`);
+  const countEl = document.getElementById(`cv-search-count-${panelId}`);
+  const raw = _cvRaw[panelId];
+  if (raw === null) return;
+
+  // Re-render highlighted YAML (clears previous search marks)
+  preEl.innerHTML = highlightYaml(raw);
+
+  if (!query || query.length < 1) {
+    countEl.textContent = '';
+    _cvSearch[panelId] = { matches: [], current: 0 };
+    return;
+  }
+
+  // Walk text nodes and wrap matches in <mark>
+  const lowerQuery = query.toLowerCase();
+  let matchIdx = 0;
+  const allMarks = [];
+
+  function walkNode(node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const text = node.textContent;
+      const lower = text.toLowerCase();
+      let pos = 0;
+      let idx;
+      const frag = document.createDocumentFragment();
+      let found = false;
+      while ((idx = lower.indexOf(lowerQuery, pos)) !== -1) {
+        if (idx > pos) frag.appendChild(document.createTextNode(text.slice(pos, idx)));
+        const mark = document.createElement('mark');
+        mark.className = 'cv-hl';
+        mark.dataset.idx = matchIdx++;
+        mark.textContent = text.slice(idx, idx + query.length);
+        frag.appendChild(mark);
+        allMarks.push(mark);
+        pos = idx + query.length;
+        found = true;
+      }
+      if (found) {
+        if (pos < text.length) frag.appendChild(document.createTextNode(text.slice(pos)));
+        node.parentNode.replaceChild(frag, node);
+      }
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      for (const child of [...node.childNodes]) walkNode(child);
+    }
+  }
+  walkNode(preEl);
+
+  _cvSearch[panelId] = { matches: allMarks, current: 0 };
+
+  if (allMarks.length > 0) {
+    allMarks[0].classList.add('cv-hl-active');
+    allMarks[0].scrollIntoView({ block: 'nearest' });
+    countEl.textContent = `1 / ${allMarks.length}`;
+  } else {
+    countEl.textContent = '0 results';
+  }
+}
+
+function cvSearchNext(panelId) {
+  const state = _cvSearch[panelId];
+  if (!state.matches.length) return;
+  state.matches[state.current].classList.remove('cv-hl-active');
+  state.current = (state.current + 1) % state.matches.length;
+  const m = state.matches[state.current];
+  m.classList.add('cv-hl-active');
+  m.scrollIntoView({ block: 'nearest' });
+  document.getElementById(`cv-search-count-${panelId}`).textContent =
+    `${state.current + 1} / ${state.matches.length}`;
+}
+
+function renderCvPanel(panelId, text) {
+  const preEl = document.getElementById(`cv-pre-${panelId}`);
+  const copyBtn = document.getElementById(`btn-copy-${panelId}`);
+  if (text === null) {
+    preEl.innerHTML = `<span style="color:#64748b;font-style:italic">Not available — run Compile to generate this config file.</span>`;
+    preEl.classList.add('no-content');
+    copyBtn.disabled = true;
+    _cvRaw[panelId] = null;
+    return;
+  }
+  _cvRaw[panelId] = text;
+  preEl.classList.remove('no-content');
+  preEl.innerHTML = highlightYaml(text);
+  copyBtn.disabled = false;
+  // Re-apply any active search
+  const searchEl = document.getElementById(`cv-search-${panelId}`);
+  if (searchEl.value) applySearchHighlight(panelId, searchEl.value);
+}
+
+async function loadConfigs() {
+  const statusEl = document.getElementById('cv-status');
+  statusEl.textContent = 'Loading…';
+  const { ok, data } = await api('GET', '/config');
+  if (!ok) {
+    statusEl.textContent = `✗ Failed to load configs: ${data.error || 'Unknown error'}`;
+    return;
+  }
+  const now = new Date().toLocaleTimeString();
+  statusEl.textContent = `Snapshot loaded at ${now} — read-only`;
+  renderCvPanel('replicator', data.replicator);
+  renderCvPanel('mma', data.mma);
+}
+
+// Copy to clipboard
+['replicator', 'mma'].forEach(panelId => {
+  document.getElementById(`btn-copy-${panelId}`).addEventListener('click', async () => {
+    const raw = _cvRaw[panelId];
+    if (!raw) return;
+    try {
+      await navigator.clipboard.writeText(raw);
+    } catch (_) {
+      // Fallback for environments without clipboard API
+      const ta = document.createElement('textarea');
+      ta.value = raw;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+    const btn = document.getElementById(`btn-copy-${panelId}`);
+    btn.textContent = '✓ Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = '⎘ Copy'; btn.classList.remove('copied'); }, 2000);
+  });
+
+  const searchEl = document.getElementById(`cv-search-${panelId}`);
+  let searchDebounce = null;
+  searchEl.addEventListener('input', () => {
+    clearTimeout(searchDebounce);
+    searchDebounce = setTimeout(() => applySearchHighlight(panelId, searchEl.value), 120);
+  });
+  searchEl.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); cvSearchNext(panelId); }
+    if (e.key === 'Escape') { searchEl.value = ''; applySearchHighlight(panelId, ''); }
+  });
+});
+
+document.getElementById('btn-cv-refresh').addEventListener('click', loadConfigs);
+
+// Global Ctrl+F intercept — redirect to whichever config panel is in view
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+    const container = document.getElementById('config-viewer-container');
+    if (!container.classList.contains('active')) return;
+    e.preventDefault();
+    document.getElementById('cv-search-replicator').focus();
+  }
+});
+
+// ── Tab Navigation ───────────────────────────────────────────────────────────
+
+let _configViewerLoaded = false;
+
+document.getElementById('tab-bar').addEventListener('click', e => {
+  const btn = e.target.closest('.tab-btn');
+  if (!btn) return;
+  const tab = btn.dataset.tab;
+
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+
+  const appContainer = document.getElementById('app-container');
+  const cvContainer = document.getElementById('config-viewer-container');
+
+  if (tab === 'model') {
+    appContainer.style.display = '';
+    cvContainer.classList.remove('active');
+  } else if (tab === 'config-viewer') {
+    appContainer.style.display = 'none';
+    cvContainer.classList.add('active');
+    if (!_configViewerLoaded) {
+      _configViewerLoaded = true;
+      loadConfigs();
+    }
+  }
 });
 
 // ── Init ─────────────────────────────────────────────────────────────────────

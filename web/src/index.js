@@ -561,6 +561,21 @@ app.delete('/read/:deviceId/:readId', (req, res) => {
 });
 
 
+// GET /config — return raw YAML snapshots for Config Viewer (read-only)
+app.get('/config', (req, res) => {
+    try {
+        const replicatorYaml = fs.existsSync(REPLICATOR_CONFIG_PATH)
+            ? fs.readFileSync(REPLICATOR_CONFIG_PATH, 'utf-8')
+            : null;
+        const mmaYaml = fs.existsSync(MMA_CONFIG_PATH)
+            ? fs.readFileSync(MMA_CONFIG_PATH, 'utf-8')
+            : null;
+        res.json({ replicator: replicatorYaml, mma: mmaYaml });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.post('/compile', (req, res) => {
     try {
         const model = readModel();
