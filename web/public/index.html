@@ -1157,8 +1157,13 @@ function renderDeviceWorkspace() {
   html += `<div class="card pipeline-section pipeline-section-read">
     <div class="ws-card-header">
       <h2><span class="pipeline-label pipeline-label-read">READ</span>📋 Reads <span style="color:#9CA3AF;font-size:.8rem;font-weight:400">(register reads)</span></h2>
-      <button class="btn-primary" id="ws-btn-show-add-read" style="font-size:.8rem;padding:7px 14px">+ Add Read</button>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn-refresh" id="ws-btn-import-reads-csv" style="font-size:.8rem;padding:7px 14px">⬆ Import CSV</button>
+        <button class="btn-refresh" id="ws-btn-export-reads-csv" style="font-size:.8rem;padding:7px 14px">⬇ Export CSV</button>
+        <button class="btn-primary" id="ws-btn-show-add-read" style="font-size:.8rem;padding:7px 14px">+ Add Read</button>
+      </div>
     </div>
+    <input type="file" id="ws-reads-csv-file-input" accept=".csv,text/plain" style="display:none" />
     <div id="ws-read-inline-error" class="banner" style="margin-bottom:8px"></div>
     <div class="reads-table-wrap">
       <table>
@@ -1376,6 +1381,25 @@ function renderDeviceWorkspace() {
 
   el.querySelectorAll('.ws-del-read').forEach(btn => {
     btn.addEventListener('click', () => deleteRead(device.id, btn.dataset.readId));
+  });
+
+  // CSV Export
+  document.getElementById('ws-btn-export-reads-csv').addEventListener('click', () => {
+    exportReadsCsv(device.id);
+  });
+
+  // CSV Import — trigger file picker, then send file content to backend
+  document.getElementById('ws-btn-import-reads-csv').addEventListener('click', () => {
+    const fileInput = document.getElementById('ws-reads-csv-file-input');
+    fileInput.value = '';
+    fileInput.click();
+  });
+  document.getElementById('ws-reads-csv-file-input').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const banner = document.getElementById('ws-read-inline-error');
+    banner.className = 'banner';
+    await importReadsCsv(device.id, file, banner);
   });
 }
 
@@ -1759,6 +1783,43 @@ async function deleteRead(deviceId, readId) {
     await loadModel();
   } else {
     alert(`Error: ${data.error || 'Unknown error'}`);
+  }
+}
+
+function exportReadsCsv(deviceId) {
+  const a = document.createElement('a');
+  a.href = `/read/${encodeURIComponent(deviceId)}/export-csv`;
+  a.download = `reads_${deviceId}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+async function importReadsCsv(deviceId, file, banner) {
+  let text;
+  try {
+    text = await file.text();
+  } catch (e) {
+    banner.textContent = `✗ Could not read file: ${e.message}`;
+    banner.className = 'banner show err';
+    return;
+  }
+  const resp = await fetch(`/read/${encodeURIComponent(deviceId)}/import-csv`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body: text,
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (resp.ok && data.ok) {
+    const warn = data.errors && data.errors.length > 0
+      ? ` (${data.errors.length} row(s) skipped: ${data.errors[0]}${data.errors.length > 1 ? '…' : ''})`
+      : '';
+    banner.textContent = `✓ Imported ${data.imported} read(s)${warn}`;
+    banner.className = 'banner show ok';
+    await loadModel();
+  } else {
+    banner.textContent = `✗ ${(data && data.error) || 'Import failed'}`;
+    banner.className = 'banner show err';
   }
 }
 
