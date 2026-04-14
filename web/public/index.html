@@ -477,6 +477,10 @@
           <label>Port</label>
           <input id="t-port" type="number" placeholder="502" min="1" max="65535" required />
         </div>
+        <div class="field">
+          <label>Status Unit ID <span style="color:#94a3b8;font-weight:400">(optional)</span></label>
+          <input id="t-status-unit" type="number" placeholder="e.g. 100" min="0" />
+        </div>
       </div>
       <div id="target-banner" class="banner"></div>
       <div><button type="submit" class="btn-primary">Add Target</button></div>
@@ -515,6 +519,10 @@
         <div class="field">
           <label>MMA Unit ID <span style="color:#64748b;font-size:.75rem;font-weight:400">(target memory unit)</span></label>
           <input id="d-mma-unit" type="number" value="1" min="1" required />
+        </div>
+        <div class="field">
+          <label>Status Slot <span style="color:#94a3b8;font-weight:400">(optional)</span></label>
+          <input id="d-status-slot" type="number" value="0" min="0" />
         </div>
         <div class="field">
           <label>Target</label>
@@ -687,6 +695,10 @@
         <div class="field">
           <label>MMA Unit ID <span style="color:#64748b;font-size:.75rem;font-weight:400">(target memory unit)</span></label>
           <input id="ed-mma-unit" type="number" min="1" required />
+        </div>
+        <div class="field">
+          <label>Status Slot <span style="color:#94a3b8;font-weight:400">(optional)</span></label>
+          <input id="ed-status-slot" type="number" min="0" />
         </div>
         <div class="field">
           <label>Target</label>
@@ -969,6 +981,9 @@ document.getElementById('target-form').addEventListener('submit', async e => {
     target: {
       name: document.getElementById('t-name').value.trim(),
       port: Number(document.getElementById('t-port').value),
+      status_unit_id: document.getElementById('t-status-unit').value !== ''
+        ? Number(document.getElementById('t-status-unit').value)
+        : null,
     }
   };
 
@@ -1013,6 +1028,7 @@ document.getElementById('device-form').addEventListener('submit', async e => {
       port:           Number(document.getElementById('d-port').value),
       source_unit_id: Number(document.getElementById('d-unit').value),
       unitId:         Number(document.getElementById('d-mma-unit').value),
+      status_slot:    Number(document.getElementById('d-status-slot').value) || 0,
       target_name:    document.getElementById('d-target').value,
     }
   };
@@ -1026,6 +1042,7 @@ document.getElementById('device-form').addEventListener('submit', async e => {
     document.getElementById('d-port').value = '502';
     document.getElementById('d-unit').value = '1';
     document.getElementById('d-mma-unit').value = '1';
+    document.getElementById('d-status-slot').value = '0';
   } else {
     banner.textContent = `✗ ${data.error || 'Unknown error'}`;
     banner.className = 'banner show err';
@@ -1442,6 +1459,7 @@ function openEditDevice(deviceId) {
   document.getElementById('ed-port').value = device.port || '';
   document.getElementById('ed-unit').value = device.source_unit_id || '';
   document.getElementById('ed-mma-unit').value = device.unitId || '';
+  document.getElementById('ed-status-slot').value = device.status_slot != null ? device.status_slot : 0;
 
   // Populate group dropdown and select current
   refreshGroupDropdowns(model);
@@ -1476,6 +1494,7 @@ document.getElementById('edit-device-form').addEventListener('submit', async e =
       port:           Number(document.getElementById('ed-port').value),
       source_unit_id: Number(document.getElementById('ed-unit').value),
       unitId:         Number(document.getElementById('ed-mma-unit').value),
+      status_slot:    Number(document.getElementById('ed-status-slot').value) || 0,
       target_name:    document.getElementById('ed-target').value,
     }
   };

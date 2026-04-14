@@ -56,14 +56,19 @@ function readModel() {
             device.unitId = device.assigned_unit_id;
             migrated = true;
         }
-        // Remove stale auto-assigned / status fields
-        for (const field of ['assigned_unit_id', 'status_slot', 'status_start']) {
-            if (field in device) { delete device[field]; migrated = true; }
+        if ('assigned_unit_id' in device) {
+            delete device.assigned_unit_id;
+            migrated = true;
+        }
+        // Ensure status_slot defaults to 0
+        if (!('status_slot' in device)) {
+            device.status_slot = 0;
+            migrated = true;
         }
     }
-    // Remove memory-config fields that no longer belong on targets
+    // Remove memory-config fields that no longer belong on targets (keep status_unit_id)
     for (const target of model.system.targets) {
-        for (const field of ['status_unit_id', 'status_slot_size']) {
+        for (const field of ['status_slot_size']) {
             if (field in target) { delete target[field]; migrated = true; }
         }
     }
@@ -121,12 +126,24 @@ function findDevice(model, deviceId) {
 
 
 
-function toReplicatorYaml(system, devices, groups) {
+// Maps Modbus area names to function codes (per Modbus protocol spec).
+const AREA_TO_FC = {
+    holding_registers: 3,
+    coils: 1,
+    input_registers: 4,
+    discrete_inputs: 2,
+    input_status: 2,
+};
+
+function toReplicatorYaml(system, devices) {
     // Replicator orchestration config.
-    // Format per docs/COMPILATION.md:
-    //   - top-level mma: { host, port } connection section (Replicator needs this to reach MMA)
-    //   - routes: list, each with source, target (unit/area/address), poll_interval, ref
-    //   - ref contains group_id, device_id, block_id for traceability back to model
+    // Format per docs/sample yaml/replicator.yaml:
+    //   - top-level replicator: block
+    //   - replicator.units: list, one per device
+    //   - each unit: source (endpoint, unit_id, device_name, status_slot),
+    //                reads (fc, address, quantity),
+    //                targets (id, endpoint, unit_id, status_unit_id, memories),
+    //                poll (interval_ms)
     const targets = (system && system.targets) || [];
 
     // Build a lookup map from target name → target object.
@@ -135,80 +152,108 @@ function toReplicatorYaml(system, devices, groups) {
         targetByName[t.name] = t;
     }
 
-    // Build a lookup map from group id → group object.
-    const groupById = {};
-    for (const g of (groups || [])) {
-        groupById[g.id] = g;
-    }
-
-    // Derive the global MMA connection from the first defined target.
-    const firstTarget = targets[0] || {};
-    const endpointParts = (firstTarget.endpoint || '').split(':');
-    const mmaHost = endpointParts[0] || TARGET_HOST;
-    const rawPort = firstTarget.port != null ? Number(firstTarget.port)
-        : Number(endpointParts[1] || '');
-    const mmaPort = Number.isFinite(rawPort) && rawPort > 0 ? rawPort : 502;
-
-    const indent = '  ';
-    const lines = [
-        'mma:',
-        `${indent}host: ${mmaHost}`,
-        `${indent}port: ${mmaPort}`,
-        '',
-        'routes:'
-    ];
+    const lines = ['replicator:', '  units:'];
 
     for (const device of devices) {
-        const group = groupById[device.groupId] || null;
-        for (const read of (device.reads || [])) {
-            // Route ID: {group_id}__{device_id}__{block_id}  (docs/COMPILATION.md naming)
-            const routeId = group
-                ? `${group.id}__${device.id}__${read.id}`
-                : `${device.id}__${read.id}`;
-            lines.push(`${indent}- id: ${routeId}`);
-            lines.push(`${indent}  source:`);
-            lines.push(`${indent}    host: ${device.ipAddress}`);
-            lines.push(`${indent}    port: ${device.port}`);
-            lines.push(`${indent}    unit_id: ${device.source_unit_id}`);
-            lines.push(`${indent}    area: ${read.source_area}`);
-            lines.push(`${indent}    address: ${read.source_address}`);
-            lines.push(`${indent}    count: ${read.source_count}`);
-            lines.push(`${indent}  target:`);
-            // target: unit, area, address — per docs/COMPILATION.md (no mma_port)
-            lines.push(`${indent}    unit: ${device.unitId}`);
-            lines.push(`${indent}    area: ${read.target_area}`);
-            lines.push(`${indent}    address: ${read.target_address}`);
-            lines.push(`${indent}  poll_interval: ${read.poll_interval}`);
-            lines.push(`${indent}  ref:`);
-            // ref: group_id + device_id + block_id — per docs/COMPILATION.md
-            if (group) lines.push(`${indent}    group_id: ${group.id}`);
-            lines.push(`${indent}    device_id: ${device.id}`);
-            lines.push(`${indent}    block_id: ${read.id}`);
+        const deviceReads = device.reads || [];
+        if (deviceReads.length === 0) continue;
+
+        const sourceEndpoint = `${device.ipAddress}:${device.port}`;
+        const statusSlot = device.status_slot != null ? Number(device.status_slot) : 0;
+
+        // Poll interval: use minimum across all reads for this device.
+        const pollMs = Math.min(...deviceReads.map(r => Number(r.poll_interval) || 1000));
+
+        const target = targetByName[device.target_name] || {};
+        const targetEndpointParts = (target.endpoint || `${TARGET_HOST}:502`).split(':');
+        const targetHost = targetEndpointParts[0] || TARGET_HOST;
+        const targetPort = Number(targetEndpointParts[1]) || 502;
+        const targetEndpoint = `${targetHost}:${targetPort}`;
+        const statusUnitId = target.status_unit_id != null ? Number(target.status_unit_id) : null;
+
+        lines.push(`    - id: "${device.id}"`);
+        lines.push(`      source:`);
+        lines.push(`        endpoint: "${sourceEndpoint}"`);
+        lines.push(`        unit_id: ${device.source_unit_id}`);
+        lines.push(`        device_name: "${device.id}"`);
+        lines.push(`        status_slot: ${statusSlot}`);
+        lines.push(`      reads:`);
+        for (const read of deviceReads) {
+            const fc = AREA_TO_FC[read.source_area] || 3;
+            lines.push(`        - fc: ${fc}`);
+            lines.push(`          address: ${read.source_address}`);
+            lines.push(`          quantity: ${read.source_count}`);
         }
+        lines.push(`      targets:`);
+        lines.push(`        - id: ${device.unitId}`);
+        lines.push(`          endpoint: "${targetEndpoint}"`);
+        lines.push(`          unit_id: ${device.unitId}`);
+        if (statusUnitId != null) {
+            lines.push(`          status_unit_id: ${statusUnitId}`);
+        }
+        lines.push(`          memories:`);
+        lines.push(`            - memory_id: ${device.unitId}`);
+        lines.push(`              offsets: {}`);
+        lines.push(`      poll:`);
+        lines.push(`        interval_ms: ${pollMs}`);
     }
     return lines.join('\n') + '\n';
 }
 
 function toMmaYaml(system, devices) {
+    // MMA runtime config.
+    // Format per docs/sample yaml/mma.yaml:
+    //   - top-level listeners: array
+    //   - each listener has id, listen (":PORT"), and memory
+    //   - memory is a list of unit entries with unit_id, holding_registers (start/count), and policy
     const targets = (system && system.targets) || [];
     const firstTarget = targets[0] || {};
     const endpointParts = (firstTarget.endpoint || 'mma:502').split(':');
     const port = Number(endpointParts[1]) || 502;
-    const unitMemorySize = 100; // Fixed per-unit register space.
-    const indent = '  ';
+
     const lines = [
-        `port: ${port}`,
-        '',
-        'units:'
+        'listeners:',
+        '  - id: main',
+        `    listen: ":${port}"`,
+        '    memory:'
     ];
-    // Emit one unit entry per unique device unitId.
-    const seenUnitIds = new Set();
+
+    // Group reads by MMA unit_id to compute register ranges.
+    const unitReads = {}; // unitId → [{source_address, source_count, source_area}]
     for (const device of devices) {
         const uid = Number(device.unitId);
-        if (Number.isFinite(uid) && !seenUnitIds.has(uid)) {
-            seenUnitIds.add(uid);
-            lines.push(`${indent}- id: ${uid}`);
-            lines.push(`${indent}  size: ${unitMemorySize}`);
+        if (!Number.isFinite(uid)) continue;
+        if (!unitReads[uid]) unitReads[uid] = [];
+        for (const read of (device.reads || [])) {
+            unitReads[uid].push({
+                source_address: Number(read.source_address),
+                source_count: Number(read.source_count),
+                source_area: read.source_area,
+            });
+        }
+    }
+
+    const sortedUids = Object.keys(unitReads).map(Number).sort((a, b) => a - b);
+
+    for (const uid of sortedUids) {
+        const reads = unitReads[uid];
+        // Only allocate for holding registers (FC3); coils/inputs are separate areas.
+        const holdingReads = reads.filter(r => r.source_area === 'holding_registers');
+        if (holdingReads.length > 0) {
+            const start = Math.min(...holdingReads.map(r => r.source_address));
+            const end = Math.max(...holdingReads.map(r => r.source_address + r.source_count));
+            const count = end - start;
+            lines.push(`      - unit_id: ${uid}`);
+            lines.push(`        holding_registers:`);
+            lines.push(`          start: ${start}`);
+            lines.push(`          count: ${count}`);
+            lines.push(`        policy:`);
+            lines.push(`          rules:`);
+            lines.push(`            - id: read-only`);
+            lines.push(`              source_ip:`);
+            lines.push(`                - 0.0.0.0/0`);
+            lines.push(`                - ::/0`);
+            lines.push(`              allow_fc: [3]`);
         }
     }
     return lines.join('\n') + '\n';
@@ -219,8 +264,15 @@ function toMmaYaml(system, devices) {
 // ---------------------------------------------------------------------------
 
 // MMA config must contain ONLY runtime listener definitions — no orchestration data.
+// Format: top-level listeners: block with memory definitions per unit.
 function validateMmaConfig(yaml) {
     const errors = [];
+    if (!/^listeners\s*:/m.test(yaml)) {
+        errors.push('MMA config must have a top-level listeners block — use listeners: format');
+    }
+    if (/^replicator\s*:/m.test(yaml)) {
+        errors.push('MMA config must not contain a replicator block — that belongs in Replicator config');
+    }
     if (/^routes\s*:/m.test(yaml)) {
         errors.push('MMA config must not contain routes — routes belong in Replicator config');
     }
@@ -237,32 +289,17 @@ function validateMmaConfig(yaml) {
 }
 
 // Replicator config must contain orchestration data only — no MMA listener/memory definitions.
-// An mma: { host, port } connection section is permitted and expected (Replicator needs it to
-// reach MMA), but must not contain routes, device references, or memory block definitions.
+// Format: top-level replicator: block with units list.
 function validateReplicatorConfig(yaml) {
     const errors = [];
+    if (!/^replicator\s*:/m.test(yaml)) {
+        errors.push('Replicator config must have a top-level replicator block — use replicator: format');
+    }
     if (/^listeners\s*:/m.test(yaml)) {
         errors.push('Replicator config must not contain a top-level listeners block — listeners belong in MMA config');
     }
     if (/^memory\s*:/m.test(yaml)) {
         errors.push('Replicator config must not contain a top-level memory block — memory definitions belong in MMA config');
-    }
-    // The mma: block is permitted only for connection settings (host, port).
-    // Contamination would be routes or memory definitions inside the mma: block.
-    const lines = yaml.split('\n');
-    let inMmaBlock = false;
-    for (const line of lines) {
-        if (/^mma\s*:/.test(line)) { inMmaBlock = true; continue; }
-        if (inMmaBlock) {
-            if (/^\S/.test(line)) { inMmaBlock = false; continue; }
-            if (/^\s+routes\s*:/.test(line)) {
-                errors.push('Replicator mma: block must not contain routes — routes must be at the top level');
-                inMmaBlock = false;
-            } else if (/^\s+memory\s*:/.test(line)) {
-                errors.push('Replicator mma: block must not contain memory definitions — those belong in MMA config');
-                inMmaBlock = false;
-            }
-        }
     }
     return errors;
 }
@@ -328,6 +365,7 @@ app.post('/device', (req, res) => {
             source_unit_id: device.source_unit_id,
             unitId,
             target_name: device.target_name,
+            status_slot: Number.isFinite(Number(device.status_slot)) ? Number(device.status_slot) : 0,
             reads: []
         });
         writeModel(model);
@@ -379,6 +417,7 @@ app.put('/device/:id', (req, res) => {
             existing.groupId = device.groupId || null;
         }
         if (device.source_unit_id !== undefined) existing.source_unit_id = Number(device.source_unit_id);
+        if (device.status_slot !== undefined) existing.status_slot = Number(device.status_slot);
         if (device.target_name !== undefined) {
             const target = model.system.targets.find(t => t.name === device.target_name);
             if (!target) {
@@ -453,6 +492,7 @@ app.post('/target', (req, res) => {
             // `port` is the canonical user-facing value.
             endpoint: `${TARGET_HOST}:${port}`,
             port,
+            status_unit_id: target.status_unit_id != null ? Number(target.status_unit_id) : null,
         });
         writeModel(model);
         res.status(201).json({ ok: true });
@@ -673,14 +713,13 @@ app.post('/compile', (req, res) => {
         const model = readModel();
         const system = model.system || DEFAULT_SYSTEM;
         const devices = model.devices || [];
-        const groups = model.groups || [];
 
         let routeCount = 0;
         for (const device of devices) {
             routeCount += (device.reads || []).length;
         }
 
-        const replicatorYaml = toReplicatorYaml(system, devices, groups);
+        const replicatorYaml = toReplicatorYaml(system, devices);
         const mmaYaml = toMmaYaml(system, devices);
 
         // Validate generated configs before writing to disk.

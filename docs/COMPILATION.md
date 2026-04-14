@@ -4,57 +4,114 @@
 
 The Web App compiles `/data/model.json` into `/data/replicator/config.yaml`.
 
-Replicator receives only the flat output. It has no knowledge of groups, devices, or blocks.
+Replicator receives only the flat output. It has no knowledge of groups, devices, or blocks beyond what is encoded in unit IDs.
 
 ---
 
 ## How It Works
 
-The compiler walks the model hierarchy and emits one flat route per block:
+The compiler walks the model hierarchy and emits one unit per device:
 
 ```
-for each group:
-  for each device in group.devices:
-    for each block in device.blocks:
-      emit route
+for each device:
+  emit unit with source, reads (one per block), targets, and poll interval
+```
+
+---
+
+## Replicator Config Format
+
+The compiled replicator config uses the `replicator.units` format:
+
+```yaml
+replicator:
+  units:
+    - id: "<device.id>"
+      source:
+        endpoint: "<device.ipAddress>:<device.port>"
+        unit_id: <device.source_unit_id>
+        device_name: "<device.id>"
+        status_slot: <device.status_slot>
+      reads:
+        - fc: <function_code>         # derived from block.source_area
+          address: <block.source_address>
+          quantity: <block.source_count>
+      targets:
+        - id: <device.unitId>
+          endpoint: "<target.endpoint>"
+          unit_id: <device.unitId>
+          status_unit_id: <target.status_unit_id>   # if configured
+          memories:
+            - memory_id: <device.unitId>
+              offsets: {}
+      poll:
+        interval_ms: <min(block.poll_interval) across device>
+```
+
+---
+
+## MMA Config Format
+
+The compiled MMA config uses the `listeners` format:
+
+```yaml
+listeners:
+  - id: main
+    listen: ":<port>"
+    memory:
+      - unit_id: <device.unitId>
+        holding_registers:
+          start: <min source_address across blocks for this unit>
+          count: <span of address range for holding register blocks>
+        policy:
+          rules:
+            - id: read-only
+              source_ip:
+                - 0.0.0.0/0
+                - ::/0
+              allow_fc: [3]
 ```
 
 ---
 
 ## Mapping Rules
 
-Each route is derived as follows:
+### Replicator Unit
 
-| Route Field | Source |
+| Unit Field | Source |
 |---|---|
-| `id` | `{group.id}__{device.id}__{block.id}` |
-| `source.host` | `device.host` |
-| `source.port` | `device.port` |
-| `source.unit_id` | `device.unit_id` |
-| `source.area` | `block.source_area` |
-| `source.address` | `block.source_address` |
-| `source.count` | `block.source_count` |
-| `target.unit` | `block.target_unit` |
-| `target.area` | `block.target_area` |
-| `target.address` | `block.target_address` |
-| `poll_interval` | `block.poll_interval` |
-| `ref.group_id` | `group.id` |
-| `ref.device_id` | `device.id` |
-| `ref.block_id` | `block.id` |
+| `id` | `device.id` |
+| `source.endpoint` | `"{device.ipAddress}:{device.port}"` |
+| `source.unit_id` | `device.source_unit_id` |
+| `source.device_name` | `device.id` |
+| `source.status_slot` | `device.status_slot` (default 0) |
+| `reads[].fc` | Modbus FC from `block.source_area` (see table below) |
+| `reads[].address` | `block.source_address` |
+| `reads[].quantity` | `block.source_count` |
+| `targets[].id` | `device.unitId` |
+| `targets[].endpoint` | `target.endpoint` |
+| `targets[].unit_id` | `device.unitId` |
+| `targets[].status_unit_id` | `target.status_unit_id` (if set) |
+| `targets[].memories[].memory_id` | `device.unitId` |
+| `targets[].memories[].offsets` | `{}` (no address offset) |
+| `poll.interval_ms` | minimum `block.poll_interval` across device blocks |
 
----
+### Modbus Function Code Mapping
 
-## Route ID Naming Convention
+| `source_area` | FC |
+|---|---|
+| `holding_registers` | 3 |
+| `coils` | 1 |
+| `input_registers` | 4 |
+| `discrete_inputs` | 2 |
 
-```
-{group_id}__{device_id}__{block_id}
-```
+### MMA Unit
 
-- Uses double underscore (`__`) as separator
-- All segments must be unique within their parent scope
-- IDs should use lowercase letters, digits, and hyphens only
-
-Example: `group-site-a__device-inverter-1__block-power`
+| Field | Source |
+|---|---|
+| `unit_id` | `device.unitId` |
+| `holding_registers.start` | `min(block.source_address)` for holding register blocks on this unit |
+| `holding_registers.count` | `max(block.source_address + block.source_count) - start` |
 
 ---
 
@@ -95,27 +152,50 @@ Example: `group-site-a__device-inverter-1__block-power`
 }
 ```
 
-### Output: config.yaml
+### Output: replicator/config.yaml
 
 ```yaml
-routes:
-  - id: group-site-a__device-inverter-1__block-power
-    source:
-      host: 192.168.1.10
-      port: 502
-      unit_id: 1
-      area: holding_registers
-      address: 100
-      count: 4
-    target:
-      unit: 1
-      area: holding_registers
-      address: 0
-    poll_interval: 1000
-    ref:
-      group_id: group-site-a
-      device_id: device-inverter-1
-      block_id: block-power
+replicator:
+  units:
+    - id: "device-inverter-1"
+      source:
+        endpoint: "192.168.1.10:502"
+        unit_id: 1
+        device_name: "device-inverter-1"
+        status_slot: 0
+      reads:
+        - fc: 3
+          address: 100
+          quantity: 4
+      targets:
+        - id: 1
+          endpoint: "mma:502"
+          unit_id: 1
+          memories:
+            - memory_id: 1
+              offsets: {}
+      poll:
+        interval_ms: 1000
+```
+
+### Output: mma/config.yaml
+
+```yaml
+listeners:
+  - id: main
+    listen: ":502"
+    memory:
+      - unit_id: 1
+        holding_registers:
+          start: 100
+          count: 4
+        policy:
+          rules:
+            - id: read-only
+              source_ip:
+                - 0.0.0.0/0
+                - ::/0
+              allow_fc: [3]
 ```
 
 ---
