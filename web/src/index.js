@@ -594,7 +594,8 @@ app.delete('/device/:id', (req, res) => {
 app.get('/system', (req, res) => {
     try {
         const model = readModel();
-        res.json({ system: model.system || {}, defaultMmaEndpoint: TARGET_HOST });
+        const defaultMmaPort = (model.memory && model.memory.ports && model.memory.ports[0] && Number(model.memory.ports[0].port)) || 502;
+        res.json({ system: model.system || {}, defaultMmaEndpoint: TARGET_HOST, defaultMmaPort });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
