@@ -1051,6 +1051,12 @@ function groupName(model, groupId) {
 let _editingReadId = null;
 let _pendingReadId = null;
 
+function generateUniqueReadId(reads) {
+  const existingIds = new Set((reads || []).map(r => r.id));
+  let n = 1;
+  while (existingIds.has(`read_${n}`)) n++;
+  return `read_${n}`;
+}
 function renderDeviceWorkspace() {
   const el = document.getElementById('device-workspace');
 
@@ -1285,10 +1291,7 @@ function renderDeviceWorkspace() {
     document.getElementById('ws-add-read-panel').style.display = '';
     document.getElementById('ws-btn-show-add-read').style.display = 'none';
     // Auto-generate a unique read ID for this device
-    const existingIds = new Set((device.reads || []).map(r => r.id));
-    let n = 1;
-    while (existingIds.has(`read_${n}`)) n++;
-    _pendingReadId = `read_${n}`;
+    _pendingReadId = generateUniqueReadId(device.reads);
     document.getElementById('wr-id-display').textContent = _pendingReadId;
   });
   document.getElementById('ws-btn-cancel-read').addEventListener('click', () => {
@@ -1303,12 +1306,10 @@ function renderDeviceWorkspace() {
     e.preventDefault();
     const banner = document.getElementById('ws-read-banner');
     banner.className = 'banner';
-    // Regenerate the ID at submit time to guarantee uniqueness (in case concurrent changes occurred)
-    if (!_pendingReadId) {
-      const existingIds = new Set((device.reads || []).map(r => r.id));
-      let n = 1;
-      while (existingIds.has(`read_${n}`)) n++;
-      _pendingReadId = `read_${n}`;
+    // Ensure the pending ID is still unique against current device state before submitting
+    const currentIds = new Set((device.reads || []).map(r => r.id));
+    if (!_pendingReadId || currentIds.has(_pendingReadId)) {
+      _pendingReadId = generateUniqueReadId(device.reads);
     }
     const payload = {
       device_id: device.id,
