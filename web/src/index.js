@@ -23,6 +23,16 @@ const STATUS_SLOT_SIZE = 30;
 // Helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Validate that a value is a required positive integer (e.g. for unit IDs).
+ * Returns true if valid, false otherwise.
+ */
+function isRequiredPositiveInt(value) {
+    if (value == null || value === '') return false;
+    const n = Number(value);
+    return Number.isFinite(n) && n >= 1;
+}
+
 function initialModel() {
     return { system: DEFAULT_SYSTEM, groups: [], devices: [], memory: { ports: [] } };
 }
@@ -474,7 +484,7 @@ app.post('/device', (req, res) => {
             return res.status(400).json({ error: 'device.unitId must be a positive integer (MMA unit ID)' });
         }
         const sourceUnitId = Number(device.source_unit_id);
-        if (device.source_unit_id == null || device.source_unit_id === '' || !Number.isFinite(sourceUnitId) || sourceUnitId < 1) {
+        if (!isRequiredPositiveInt(device.source_unit_id)) {
             return res.status(400).json({ error: 'device.source_unit_id is required and must be a positive integer' });
         }
         const model = readModel();
@@ -616,14 +626,11 @@ app.post('/config/save', (req, res) => {
         const { deviceId, sourceConfig, targetConfig, mmaEndpointConfig } = req.body;
 
         // Validate Source Unit ID — required
-        const sourceUnitId = sourceConfig && sourceConfig.source_unit_id;
-        if (sourceUnitId == null || sourceUnitId === '') {
-            return res.status(400).json({ error: 'sourceConfig.source_unit_id is required' });
+        const rawSourceUnitId = sourceConfig && sourceConfig.source_unit_id;
+        if (!isRequiredPositiveInt(rawSourceUnitId)) {
+            return res.status(400).json({ error: 'sourceConfig.source_unit_id is required and must be a positive integer' });
         }
-        const sourceUnitIdNum = Number(sourceUnitId);
-        if (!Number.isFinite(sourceUnitIdNum) || sourceUnitIdNum < 1) {
-            return res.status(400).json({ error: 'sourceConfig.source_unit_id must be a positive integer' });
-        }
+        const sourceUnitIdNum = Number(rawSourceUnitId);
 
         // Validate source endpoint
         if (!sourceConfig || !isValidEndpoint(sourceConfig.source_endpoint)) {
