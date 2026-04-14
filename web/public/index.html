@@ -739,12 +739,8 @@
       </div>
       <div class="row">
         <div class="field">
-          <label>IP Address</label>
-          <input id="ad-ip" type="text" placeholder="192.168.1.100" pattern="^(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)$" title="Valid IPv4 address required (e.g. 192.168.1.100)" required />
-        </div>
-        <div class="field">
-          <label>Port</label>
-          <input id="ad-port" type="number" value="502" min="1" max="65535" required />
+          <label>Source Endpoint <span style="color:#64748b;font-size:.75rem;font-weight:400">(host:port)</span></label>
+          <input id="ad-src-endpoint" type="text" placeholder="192.168.1.100:502" required />
         </div>
         <div class="field">
           <label>Source Unit ID</label>
@@ -753,19 +749,25 @@
       </div>
       <div class="row">
         <div class="field">
-          <label>MMA Unit ID <span style="color:#64748b;font-size:.75rem;font-weight:400">(memory unit)</span></label>
-          <input id="ad-mma-unit" type="number" value="1" min="1" required />
+          <label>Target Endpoint <span style="color:#64748b;font-size:.75rem;font-weight:400">(host:port)</span></label>
+          <input id="ad-tgt-endpoint" type="text" placeholder="mma:502" required />
         </div>
         <div class="field">
-          <label>Status Slot <span style="color:#94a3b8;font-weight:400">(default 0)</span></label>
-          <input id="ad-status-slot" type="number" value="0" min="0" />
+          <label>MMA Unit ID <span style="color:#64748b;font-size:.75rem;font-weight:400">(memory unit)</span></label>
+          <input id="ad-mma-unit" type="number" value="1" min="1" required />
         </div>
       </div>
       <div class="row">
         <div class="field">
+          <label>Status Slot <span style="color:#94a3b8;font-weight:400">(default 0)</span></label>
+          <input id="ad-status-slot" type="number" value="0" min="0" />
+        </div>
+        <div class="field">
           <label>Status Unit ID <span style="color:#94a3b8;font-weight:400">(optional, MMA unit for status)</span></label>
           <input id="ad-status-unit" type="number" placeholder="e.g. 100" min="1" />
         </div>
+      </div>
+      <div class="row">
         <div class="field">
           <label>Group <span style="color:#94a3b8;font-weight:400">(optional)</span></label>
           <select id="ad-group">
@@ -869,14 +871,9 @@ function renderDeviceWorkspace() {
           <input class="info-edit-input" type="text" id="ws-ed-name" value="${escapeHtml(device.name || '')}" placeholder="My Device" />
         </div>
         <div class="info-field">
-          <label>IP Address</label>
-          <input class="info-edit-input" type="text" id="ws-ed-ip" value="${escapeHtml(device.ipAddress || '')}"
-            pattern="^(25[0-5]|2[0-4]\\d|1\\d{2}|[1-9]?\\d)\\.(25[0-5]|2[0-4]\\d|1\\d{2}|[1-9]?\\d)\\.(25[0-5]|2[0-4]\\d|1\\d{2}|[1-9]?\\d)\\.(25[0-5]|2[0-4]\\d|1\\d{2}|[1-9]?\\d)$"
-            title="Valid IPv4 address required (e.g. 192.168.1.100)" required />
-        </div>
-        <div class="info-field">
-          <label>Port</label>
-          <input class="info-edit-input" type="number" id="ws-ed-port" value="${escapeHtml(String(device.port ?? ''))}" min="1" max="65535" required />
+          <label>Source Endpoint <span style="color:#94a3b8;font-weight:400">(host:port)</span></label>
+          <input class="info-edit-input" type="text" id="ws-ed-src-endpoint" value="${escapeHtml(device.source_endpoint || '')}"
+            placeholder="e.g. 10.5.1.29:502 or mydevice:502" required />
         </div>
         <div class="info-field">
           <label>Source Unit ID <span style="color:#94a3b8;font-weight:400">(optional)</span></label>
@@ -982,12 +979,6 @@ function renderDeviceWorkspace() {
   html += `<div class="pipeline-arrow">↓</div>`;
 
   // ── C. TARGET Section ──────────────────────────────────────────────
-  // Compute displayed MMA endpoint from model memory ports + system settings
-  const mmaHost = (model.system && model.system.mma_endpoint) || 'mma';
-  const memPorts = (model.memory && model.memory.ports) || [];
-  const matchedPort = memPorts.find(p => (p.blocks || []).some(b => Number(b.unit_id) === Number(device.unitId)));
-  const targetPortNum = (matchedPort || memPorts[0] || {}).port || 502;
-  const targetEndpointDisplay = `${mmaHost}:${targetPortNum}`;
 
   html += `<div class="card pipeline-section pipeline-section-target">
     <div class="ws-card-header">
@@ -995,7 +986,11 @@ function renderDeviceWorkspace() {
     </div>
     <form id="ws-target-form">
       <div class="info-grid">
-        <div class="info-field"><label>Endpoint</label><div class="info-val">${escapeHtml(targetEndpointDisplay)}</div></div>
+        <div class="info-field">
+          <label>Target Endpoint <span style="color:#94a3b8;font-weight:400">(host:port)</span></label>
+          <input class="info-edit-input" type="text" id="ws-tgt-endpoint" value="${escapeHtml(device.target_endpoint || '')}"
+            placeholder="e.g. mma2:501" required />
+        </div>
         <div class="info-field">
           <label>Unit ID <span style="color:#94a3b8;font-weight:400">(MMA unit)</span></label>
           <input class="info-edit-input" type="number" id="ws-tgt-unit" value="${escapeHtml(String(device.unitId ?? ''))}" min="1" required />
@@ -1024,8 +1019,7 @@ function renderDeviceWorkspace() {
     const payload = {
       device: {
         name:           document.getElementById('ws-ed-name').value.trim(),
-        ipAddress:      document.getElementById('ws-ed-ip').value.trim(),
-        port:           Number(document.getElementById('ws-ed-port').value),
+        source_endpoint: document.getElementById('ws-ed-src-endpoint').value.trim(),
         source_unit_id: document.getElementById('ws-ed-src-unit').value !== ''
                           ? Number(document.getElementById('ws-ed-src-unit').value)
                           : device.source_unit_id,
@@ -1051,6 +1045,7 @@ function renderDeviceWorkspace() {
     banner.className = 'banner';
     const payload = {
       device: {
+        target_endpoint: document.getElementById('ws-tgt-endpoint').value.trim(),
         unitId: Number(document.getElementById('ws-tgt-unit').value),
         status_unit_id: document.getElementById('ws-tgt-status-unit').value !== ''
                           ? Number(document.getElementById('ws-tgt-status-unit').value)
@@ -1215,7 +1210,8 @@ async function loadModel() {
 
 function openAddDevice() {
   document.getElementById('add-device-form').reset();
-  document.getElementById('ad-port').value = '502';
+  document.getElementById('ad-src-endpoint').value = '';
+  document.getElementById('ad-tgt-endpoint').value = 'mma:502';
   document.getElementById('ad-unit').value = '1';
   document.getElementById('ad-mma-unit').value = '1';
   document.getElementById('ad-status-slot').value = '0';
@@ -1235,9 +1231,9 @@ document.getElementById('add-device-form').addEventListener('submit', async e =>
       id:             document.getElementById('ad-id').value.trim(),
       name:           document.getElementById('ad-name').value.trim(),
       groupId:        document.getElementById('ad-group').value || null,
-      ipAddress:      document.getElementById('ad-ip').value.trim(),
-      port:           Number(document.getElementById('ad-port').value),
+      source_endpoint: document.getElementById('ad-src-endpoint').value.trim(),
       source_unit_id: Number(document.getElementById('ad-unit').value),
+      target_endpoint: document.getElementById('ad-tgt-endpoint').value.trim(),
       unitId:         Number(document.getElementById('ad-mma-unit').value),
       status_slot:    Number(document.getElementById('ad-status-slot').value) || 0,
       status_unit_id: document.getElementById('ad-status-unit').value !== ''
