@@ -1,2 +1,20 @@
 replicator:
   units:
+    - id: "95190220-c333-4e40-8eed-47940f6af26c"
+      source:
+        endpoint: "modbus-sim:502"
+        unit_id: 1
+        device_name: "95190220-c333-4e40-8eed-47940f6af26c"
+      reads:
+        - fc: 3
+          address: 0
+          quantity: 10
+      targets:
+        - id: 1
+          endpoint: "mma:502"
+          unit_id: 1
+          memories:
+            - memory_id: 1
+              offsets: {}
+      poll:
+        interval_ms: 1000
