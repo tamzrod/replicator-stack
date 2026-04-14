@@ -1101,7 +1101,7 @@ function compileAndWrite(model, excludedPortNums = new Set()) {
         writeModel(model);
     }
 
-    // Step 2: Validate that no port has an empty memory block list.
+    // Validate that no included port has an empty memory block list.
     // A port with no blocks is invalid — it cannot serve any Replicator target.
     const emptyPorts = (model.memory.ports || [])
         .filter(p => !excludedPortNums.has(Number(p.port)) && (p.blocks || []).length === 0)
