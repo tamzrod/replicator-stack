@@ -1049,6 +1049,7 @@ function groupName(model, groupId) {
 // ── Device Workspace ─────────────────────────────────────────────────────────
 
 let _editingReadId = null;
+let _pendingReadId = null;
 
 function renderDeviceWorkspace() {
   const el = document.getElementById('device-workspace');
@@ -1164,7 +1165,10 @@ function renderDeviceWorkspace() {
     <div id="ws-add-read-panel" style="display:none;margin-top:16px;border-top:1px solid #E5E7EB;padding-top:16px">
       <form id="ws-read-form">
         <div class="row">
-          <div class="field"><label>Read ID</label><input id="wr-id" type="text" placeholder="read-1" required /></div>
+          <div class="field">
+            <label>Read ID <span style="color:#9CA3AF;font-weight:400">(auto)</span></label>
+            <div class="info-val" id="wr-id-display" style="font-family:monospace;font-size:.85rem"></div>
+          </div>
           <div class="field"><label>Name</label><input id="wr-name" type="text" placeholder="My Read" /></div>
         </div>
         <div class="row">
@@ -1280,22 +1284,36 @@ function renderDeviceWorkspace() {
   document.getElementById('ws-btn-show-add-read').addEventListener('click', () => {
     document.getElementById('ws-add-read-panel').style.display = '';
     document.getElementById('ws-btn-show-add-read').style.display = 'none';
+    // Auto-generate a unique read ID for this device
+    const existingIds = new Set((device.reads || []).map(r => r.id));
+    let n = 1;
+    while (existingIds.has(`read_${n}`)) n++;
+    _pendingReadId = `read_${n}`;
+    document.getElementById('wr-id-display').textContent = _pendingReadId;
   });
   document.getElementById('ws-btn-cancel-read').addEventListener('click', () => {
     document.getElementById('ws-add-read-panel').style.display = 'none';
     document.getElementById('ws-btn-show-add-read').style.display = '';
     document.getElementById('ws-read-form').reset();
     document.getElementById('wr-poll').value = '2000';
+    _pendingReadId = null;
   });
 
   document.getElementById('ws-read-form').addEventListener('submit', async e => {
     e.preventDefault();
     const banner = document.getElementById('ws-read-banner');
     banner.className = 'banner';
+    // Regenerate the ID at submit time to guarantee uniqueness (in case concurrent changes occurred)
+    if (!_pendingReadId) {
+      const existingIds = new Set((device.reads || []).map(r => r.id));
+      let n = 1;
+      while (existingIds.has(`read_${n}`)) n++;
+      _pendingReadId = `read_${n}`;
+    }
     const payload = {
       device_id: device.id,
       read: {
-        id:             document.getElementById('wr-id').value.trim(),
+        id:             _pendingReadId,
         name:           document.getElementById('wr-name').value.trim(),
         source_area:    document.getElementById('wr-src-area').value,
         source_address: Number(document.getElementById('wr-src-addr').value),
@@ -1305,6 +1323,7 @@ function renderDeviceWorkspace() {
     };
     const { ok, data } = await api('POST', '/read', payload);
     if (ok) {
+      _pendingReadId = null;
       await loadModel();
     } else {
       banner.textContent = `✗ ${data.error || 'Unknown error'}`;
@@ -1544,7 +1563,10 @@ async function compile() {
 // ── Device Delete ────────────────────────────────────────────────────────────
 
 async function deleteDevice(id) {
-  if (!confirm(`Delete device "${id}"? This cannot be undone.`)) return;
+  const model = _currentModel || {};
+  const device = (model.devices || []).find(d => d.id === id);
+  const label = (device && device.name) ? `"${device.name}" (${id})` : `"${id}"`;
+  if (!confirm(`Delete device ${label}? This cannot be undone.`)) return;
   const { ok, data } = await api('DELETE', `/device/${encodeURIComponent(id)}`);
   if (ok) {
     if (_selectedDeviceId === id) _selectedDeviceId = null;
@@ -1619,7 +1641,7 @@ function renderTree(data) {
       for (const d of group.devices) {
         const sel = d.id === _selectedDeviceId ? ' selected' : '';
         const label = d.name
-          ? `${escapeHtml(d.id)} <span style="color:#9CA3AF;font-size:.72rem">— ${escapeHtml(d.name)}</span>`
+          ? `${escapeHtml(d.name)} <span style="color:#9CA3AF;font-size:.72rem">— ${escapeHtml(d.id)}</span>`
           : escapeHtml(d.id);
         html += `<div class="tree-device${sel}" data-device-id="${escapeHtml(d.id)}">
           <span class="tree-device-name">${label}</span>
@@ -1727,7 +1749,10 @@ document.getElementById('grp-cancel').addEventListener('click', () => {
 // ── Read CRUD ────────────────────────────────────────────────────────────────
 
 async function deleteRead(deviceId, readId) {
-  if (!confirm(`Delete read "${readId}" from device "${deviceId}"?`)) return;
+  const model = _currentModel || {};
+  const device = (model.devices || []).find(d => d.id === deviceId);
+  const devLabel = (device && device.name) ? device.name : deviceId;
+  if (!confirm(`Delete read "${readId}" from device "${devLabel}"?`)) return;
   const { ok, data } = await api('DELETE', `/read/${encodeURIComponent(deviceId)}/${encodeURIComponent(readId)}`);
   if (ok) {
     await loadModel();
