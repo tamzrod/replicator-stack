@@ -1,22 +1,21 @@
-mma:
-  host: mma
-  port: 502
-
-routes:
-  - id: group-test__device-test__block-registers
-    source:
-      host: modbus-sim
-      port: 502
-      unit_id: 1
-      area: holding_registers
-      address: 0
-      count: 10
-    target:
-      unit: 1
-      area: holding_registers
-      address: 0
-    poll_interval: 2000
-    ref:
-      group_id: group-test
-      device_id: device-test
-      block_id: block-registers
+replicator:
+  units:
+    - id: "device-test"
+      source:
+        endpoint: "modbus-sim:502"
+        unit_id: 1
+        device_name: "device-test"
+        status_slot: 0
+      reads:
+        - fc: 3
+          address: 0
+          quantity: 10
+      targets:
+        - id: 1
+          endpoint: "mma:502"
+          unit_id: 1
+          memories:
+            - memory_id: 1
+              offsets: {}
+      poll:
+        interval_ms: 2000
