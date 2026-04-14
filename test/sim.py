@@ -10,7 +10,7 @@ The verify script reads MMA and checks that the values arrived.
 
 from pymodbus.server import StartTcpServer
 from pymodbus.datastore import (
-    ModbusSlaveContext,
+    ModbusDeviceContext,
     ModbusServerContext,
     ModbusSequentialDataBlock,
 )
@@ -18,8 +18,8 @@ from pymodbus.datastore import (
 REGISTER_VALUES = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
 
 hr = ModbusSequentialDataBlock(0, REGISTER_VALUES)
-store = ModbusSlaveContext(hr=hr)
-context = ModbusServerContext(slaves=store, single=True)
+store = ModbusDeviceContext(hr=hr)
+context = ModbusServerContext(devices=store, single=True)
 
 print(f"[sim] Modbus TCP server listening on 0.0.0.0:502")
 print(f"[sim] Holding registers 0-9: {REGISTER_VALUES}")
