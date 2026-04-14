@@ -210,12 +210,43 @@
     .tree-empty { padding: 16px 14px; font-size: .78rem; color: #94a3b8; font-style: italic; }
 
     /* ── Device Workspace ───────────────────────────────────────────── */
-    #device-workspace { display: grid; gap: 24px; }
+    #device-workspace { display: grid; gap: 0; }
     .ws-placeholder {
       text-align: center; color: #94a3b8; padding: 64px 0; font-size: .9rem;
     }
     .ws-placeholder .ws-icon { font-size: 2.5rem; margin-bottom: 12px; }
     .info-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; margin-bottom: 0; }
+
+    /* ── Pipeline Flow Layout ───────────────────────────────────────── */
+    .pipeline-section { margin-bottom: 0; border-radius: 0; }
+    .pipeline-section:first-child { border-radius: 8px 8px 0 0; }
+    .pipeline-section:last-child  { border-radius: 0 0 8px 8px; }
+    .pipeline-section-source { border-left: 4px solid #3b82f6; }
+    .pipeline-section-read   { border-left: 4px solid #f59e0b; }
+    .pipeline-section-target { border-left: 4px solid #10b981; }
+    .pipeline-arrow {
+      text-align: center;
+      padding: 6px 0;
+      font-size: 1.4rem;
+      color: #94a3b8;
+      user-select: none;
+      background: #f0f2f5;
+      line-height: 1;
+    }
+    .pipeline-label {
+      display: inline-block;
+      font-size: .6rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      padding: 2px 7px;
+      border-radius: 4px;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+    .pipeline-label-source { background: #dbeafe; color: #1d4ed8; }
+    .pipeline-label-read   { background: #fef3c7; color: #b45309; }
+    .pipeline-label-target { background: #d1fae5; color: #065f46; }
     .info-field label {
       display: block; font-size: .75rem; font-weight: 600; color: #64748b;
       margin-bottom: 4px; text-transform: uppercase; letter-spacing: .04em;
@@ -765,10 +796,10 @@ function renderDeviceWorkspace() {
   const tPortRaw = target ? targetPort(target) : null;
   const reads = device.reads || [];
 
-  // ── Device Info (inline editable: name, ipAddress, port) ───────────
-  let html = `<div class="card">
+  // ── A. SOURCE Section ──────────────────────────────────────────────
+  let html = `<div class="card pipeline-section pipeline-section-source">
     <div class="ws-card-header">
-      <h2>📟 ${escapeHtml(device.name || device.id)}</h2>
+      <h2><span class="pipeline-label pipeline-label-source">SOURCE</span>📟 ${escapeHtml(device.name || device.id)}</h2>
       <div class="ws-card-actions">
         <button class="btn-danger" id="ws-btn-del-device">✕ Delete</button>
       </div>
@@ -790,35 +821,23 @@ function renderDeviceWorkspace() {
           <label>Port</label>
           <input class="info-edit-input" type="number" id="ws-ed-port" value="${escapeHtml(String(device.port ?? ''))}" min="1" max="65535" required />
         </div>
+        <div class="info-field">
+          <label>Source Unit ID <span style="color:#94a3b8;font-weight:400">(optional)</span></label>
+          <input class="info-edit-input" type="number" id="ws-ed-src-unit" value="${escapeHtml(String(device.source_unit_id ?? ''))}" placeholder="e.g. 1" />
+        </div>
         <div class="info-field"><label>Group</label><div class="info-val">${escapeHtml(grpName)}</div></div>
-        <div class="info-field"><label>Source Unit ID</label><div class="info-val">${escapeHtml(String(device.source_unit_id ?? '—'))}</div></div>
-        <div class="info-field"><label>MMA Unit ID</label><div class="info-val">${escapeHtml(String(device.unitId ?? '—'))}</div></div>
-        <div class="info-field"><label>Status Slot</label><div class="info-val">${escapeHtml(String(device.status_slot ?? 0))}</div></div>
       </div>
       <div id="ws-device-banner" class="banner" style="margin-top:10px"></div>
       <div style="margin-top:10px">
-        <button type="submit" class="btn-primary" style="font-size:.8rem;padding:7px 14px">Save Device</button>
+        <button type="submit" class="btn-primary" style="font-size:.8rem;padding:7px 14px">Save Source</button>
       </div>
     </form>
   </div>`;
 
-  // ── Target Section (inline editable port) ──────────────────────────
-  html += `<div class="card">
-    <div class="ws-card-header"><h2>🎯 Target Configuration</h2></div>
-    <form id="ws-target-form">
-      <div class="info-grid" style="margin-bottom:12px">
-        <div class="info-field"><label>Target Name</label><div class="info-val">${escapeHtml(device.target_name || '—')}</div></div>
-        <div class="info-field">
-          <label>MMA Port</label>
-          <input class="info-edit-input" type="number" id="ws-t-port" value="${tPortRaw != null ? escapeHtml(String(tPortRaw)) : ''}" min="1" max="65535" ${!device.target_name ? 'disabled' : ''} />
-        </div>
-      </div>
-      <div id="ws-target-banner" class="banner"></div>
-      <div><button type="submit" class="btn-primary" style="font-size:.8rem;padding:7px 14px" ${!device.target_name ? 'disabled' : ''}>Save Port</button></div>
-    </form>
-  </div>`;
+  // ── Pipeline Arrow ─────────────────────────────────────────────────
+  html += `<div class="pipeline-arrow">↓</div>`;
 
-  // ── Reads Section (inline editing per row) ─────────────────────────
+  // ── B. READ Section (inline editing per row) ───────────────────────
   let readsBody;
   if (reads.length === 0) {
     readsBody = `<tr><td colspan="7"><div class="empty-state" style="padding:16px 0">No reads configured yet.</div></td></tr>`;
@@ -855,9 +874,9 @@ function renderDeviceWorkspace() {
     }).join('');
   }
 
-  html += `<div class="card">
+  html += `<div class="card pipeline-section pipeline-section-read">
     <div class="ws-card-header">
-      <h2>📋 Reads <span style="color:#94a3b8;font-size:.8rem;font-weight:400">(register reads)</span></h2>
+      <h2><span class="pipeline-label pipeline-label-read">READ</span>📋 Reads <span style="color:#94a3b8;font-size:.8rem;font-weight:400">(register reads)</span></h2>
       <button class="btn-primary" id="ws-btn-show-add-read" style="font-size:.8rem;padding:7px 14px">+ Add Read</button>
     </div>
     <div id="ws-read-inline-error" class="banner" style="margin-bottom:8px"></div>
@@ -898,6 +917,27 @@ function renderDeviceWorkspace() {
     </div>
   </div>`;
 
+  // ── Pipeline Arrow ─────────────────────────────────────────────────
+  html += `<div class="pipeline-arrow">↓</div>`;
+
+  // ── C. TARGET Section ─────────────────────────────────────────────
+  html += `<div class="card pipeline-section pipeline-section-target">
+    <div class="ws-card-header"><h2><span class="pipeline-label pipeline-label-target">TARGET</span>🎯 ${escapeHtml(device.target_name || '— No Target —')}</h2></div>
+    <form id="ws-target-form">
+      <div class="info-grid" style="margin-bottom:12px">
+        <div class="info-field"><label>Target Name</label><div class="info-val">${escapeHtml(device.target_name || '—')}</div></div>
+        <div class="info-field">
+          <label>MMA Port</label>
+          <input class="info-edit-input" type="number" id="ws-t-port" value="${tPortRaw != null ? escapeHtml(String(tPortRaw)) : ''}" min="1" max="65535" ${!device.target_name ? 'disabled' : ''} />
+        </div>
+        <div class="info-field"><label>MMA Unit ID <span style="color:#94a3b8;font-weight:400">(unit mapping)</span></label><div class="info-val">${escapeHtml(String(device.unitId ?? '—'))}</div></div>
+        <div class="info-field"><label>Status Slot <span style="color:#94a3b8;font-weight:400">(address mapping)</span></label><div class="info-val">${escapeHtml(String(device.status_slot ?? 0))}</div></div>
+      </div>
+      <div id="ws-target-banner" class="banner"></div>
+      <div><button type="submit" class="btn-primary" style="font-size:.8rem;padding:7px 14px" ${!device.target_name ? 'disabled' : ''}>Save Target</button></div>
+    </form>
+  </div>`;
+
   el.innerHTML = html;
 
   // ── Event Listeners ────────────────────────────────────────────────
@@ -912,8 +952,10 @@ function renderDeviceWorkspace() {
         name:           document.getElementById('ws-ed-name').value.trim(),
         ipAddress:      document.getElementById('ws-ed-ip').value.trim(),
         port:           Number(document.getElementById('ws-ed-port').value),
+        source_unit_id: document.getElementById('ws-ed-src-unit').value !== ''
+                          ? Number(document.getElementById('ws-ed-src-unit').value)
+                          : device.source_unit_id,
         groupId:        device.groupId || null,
-        source_unit_id: device.source_unit_id,
         unitId:         device.unitId,
         status_slot:    device.status_slot ?? 0,
         target_name:    device.target_name,
