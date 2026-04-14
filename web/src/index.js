@@ -202,6 +202,9 @@ function toReplicatorYaml(model) {
         lines.push(`        - id: ${device.unitId}`);
         lines.push(`          endpoint: "${targetEndpoint}"`);
         lines.push(`          unit_id: ${device.unitId}`);
+        if (device.status_unit_id != null) {
+            lines.push(`          status_unit_id: ${Number(device.status_unit_id)}`);
+        }
         lines.push(`          memories:`);
         lines.push(`            - memory_id: ${device.unitId}`);
         lines.push(`              offsets: {}`);
@@ -225,9 +228,13 @@ function toMmaYaml(model) {
 
     const lines = ['listeners:'];
 
-    for (const port of memoryPorts) {
+    for (let pi = 0; pi < memoryPorts.length; pi++) {
+        const port = memoryPorts[pi];
         const portNum = Number(port.port) || 502;
-        lines.push(`  - id: port-${portNum}`);
+        // First listener is named "main" (matches sample YAML convention); additional
+        // listeners use port-based IDs to stay unique.
+        const listenerId = pi === 0 ? 'main' : `port-${portNum}`;
+        lines.push(`  - id: ${listenerId}`);
         lines.push(`    listen: ":${portNum}"`);
         lines.push(`    memory:`);
         const blocks = port.blocks || [];
@@ -352,6 +359,8 @@ app.post('/device', (req, res) => {
             port,
             source_unit_id: device.source_unit_id,
             unitId,
+            status_slot: device.status_slot != null ? Number(device.status_slot) : 0,
+            status_unit_id: device.status_unit_id != null ? Number(device.status_unit_id) : null,
             reads: []
         });
         writeModel(model);
@@ -404,6 +413,10 @@ app.put('/device/:id', (req, res) => {
             existing.groupId = device.groupId || null;
         }
         if (device.source_unit_id !== undefined) existing.source_unit_id = Number(device.source_unit_id);
+        if (device.status_slot !== undefined) existing.status_slot = Number(device.status_slot);
+        if (device.status_unit_id !== undefined) {
+            existing.status_unit_id = device.status_unit_id != null ? Number(device.status_unit_id) : null;
+        }
         writeModel(model);
         autoCompile(model);
         res.json({ ok: true });

@@ -742,6 +742,16 @@
           <input id="ad-mma-unit" type="number" value="1" min="1" required />
         </div>
         <div class="field">
+          <label>Status Slot <span style="color:#94a3b8;font-weight:400">(default 0)</span></label>
+          <input id="ad-status-slot" type="number" value="0" min="0" />
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Status Unit ID <span style="color:#94a3b8;font-weight:400">(optional, MMA unit for status)</span></label>
+          <input id="ad-status-unit" type="number" placeholder="e.g. 100" min="1" />
+        </div>
+        <div class="field">
           <label>Group <span style="color:#94a3b8;font-weight:400">(optional)</span></label>
           <select id="ad-group">
             <option value="">— Ungrouped —</option>
@@ -858,6 +868,14 @@ function renderDeviceWorkspace() {
           <input class="info-edit-input" type="number" id="ws-ed-src-unit" value="${escapeHtml(String(device.source_unit_id ?? ''))}" placeholder="e.g. 1" />
         </div>
         <div class="info-field"><label>MMA Unit ID</label><div class="info-val">${escapeHtml(String(device.unitId ?? '—'))}</div></div>
+        <div class="info-field">
+          <label>Status Slot</label>
+          <input class="info-edit-input" type="number" id="ws-ed-status-slot" value="${escapeHtml(String(device.status_slot ?? 0))}" min="0" />
+        </div>
+        <div class="info-field">
+          <label>Status Unit ID <span style="color:#94a3b8;font-weight:400">(optional, MMA unit for status)</span></label>
+          <input class="info-edit-input" type="number" id="ws-ed-status-unit" value="${escapeHtml(String(device.status_unit_id ?? ''))}" placeholder="e.g. 100" min="1" />
+        </div>
         <div class="info-field"><label>Group</label><div class="info-val">${escapeHtml(grpName)}</div></div>
       </div>
       <div id="ws-device-banner" class="banner" style="margin-top:10px"></div>
@@ -969,6 +987,10 @@ function renderDeviceWorkspace() {
                           : device.source_unit_id,
         groupId:        device.groupId || null,
         unitId:         device.unitId,
+        status_slot:    Number(document.getElementById('ws-ed-status-slot').value) || 0,
+        status_unit_id: document.getElementById('ws-ed-status-unit').value !== ''
+                          ? Number(document.getElementById('ws-ed-status-unit').value)
+                          : null,
       }
     };
     const { ok, data } = await api('PUT', `/device/${encodeURIComponent(device.id)}`, payload);
@@ -1106,6 +1128,8 @@ function openAddDevice() {
   document.getElementById('ad-port').value = '502';
   document.getElementById('ad-unit').value = '1';
   document.getElementById('ad-mma-unit').value = '1';
+  document.getElementById('ad-status-slot').value = '0';
+  document.getElementById('ad-status-unit').value = '';
   document.getElementById('add-device-banner').className = 'banner';
 
   document.getElementById('add-device-dialog').showModal();
@@ -1125,6 +1149,10 @@ document.getElementById('add-device-form').addEventListener('submit', async e =>
       port:           Number(document.getElementById('ad-port').value),
       source_unit_id: Number(document.getElementById('ad-unit').value),
       unitId:         Number(document.getElementById('ad-mma-unit').value),
+      status_slot:    Number(document.getElementById('ad-status-slot').value) || 0,
+      status_unit_id: document.getElementById('ad-status-unit').value !== ''
+                        ? Number(document.getElementById('ad-status-unit').value)
+                        : null,
     }
   };
 
@@ -1150,7 +1178,8 @@ async function compile() {
   el.textContent = '';
   const { ok, data } = await api('POST', '/compile');
   if (ok) {
-    el.innerHTML = `<div class="banner show ok">✓ Compiled successfully — ${escapeHtml(String(data.routes))} route(s) written to Replicator and MMA configs.</div>`;
+    const blocksMsg = data.blocksCreated > 0 ? ` (${data.blocksCreated} memory block(s) auto-created)` : '';
+    el.innerHTML = `<div class="banner show ok">✓ Compiled successfully — ${escapeHtml(String(data.routes))} route(s) written to Replicator and MMA configs${blocksMsg}.</div>`;
     // Refresh config viewer immediately so it reflects the latest compiled output.
     await refreshConfigViewerIfActive();
   } else if (data.mma_errors || data.replicator_errors) {
