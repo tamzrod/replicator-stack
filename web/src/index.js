@@ -369,6 +369,7 @@ app.post('/device', (req, res) => {
             reads: []
         });
         writeModel(model);
+        autoCompile(model);
 
         res.status(201).json({ ok: true, unitId });
     } catch (err) {
@@ -426,6 +427,7 @@ app.put('/device/:id', (req, res) => {
             existing.target_name = device.target_name;
         }
         writeModel(model);
+        autoCompile(model);
         res.json({ ok: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -445,6 +447,7 @@ app.delete('/device/:id', (req, res) => {
 
         model.devices.splice(idx, 1);
         writeModel(model);
+        autoCompile(model);
         res.json({ ok: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -462,6 +465,7 @@ app.put('/system', (req, res) => {
         model.system = { ...model.system, ...system };
         if (!Array.isArray(model.system.targets)) model.system.targets = [];
         writeModel(model);
+        autoCompile(model);
         res.json({ ok: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -495,6 +499,7 @@ app.post('/target', (req, res) => {
             status_unit_id: target.status_unit_id != null ? Number(target.status_unit_id) : null,
         });
         writeModel(model);
+        autoCompile(model);
         res.status(201).json({ ok: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -519,6 +524,7 @@ app.delete('/target/:name', (req, res) => {
 
         model.system.targets.splice(idx, 1);
         writeModel(model);
+        autoCompile(model);
         res.json({ ok: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -559,6 +565,7 @@ app.post('/read', (req, res) => {
 
         device.reads.push(read);
         writeModel(model);
+        autoCompile(model);
 
         res.status(201).json({ ok: true });
     } catch (err) {
@@ -581,6 +588,7 @@ app.post('/group', (req, res) => {
         const newGroup = { id: randomUUID(), name: group.name.trim() };
         model.groups.push(newGroup);
         writeModel(model);
+        autoCompile(model);
         res.status(201).json({ ok: true, group: newGroup });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -606,6 +614,7 @@ app.put('/group/:id', (req, res) => {
         }
         existing.name = group.name.trim();
         writeModel(model);
+        autoCompile(model);
         res.json({ ok: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -626,6 +635,7 @@ app.delete('/group/:id', (req, res) => {
             if (device.groupId === id) device.groupId = null;
         }
         writeModel(model);
+        autoCompile(model);
         res.json({ ok: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -665,6 +675,7 @@ app.put('/read/:deviceId/:readId', (req, res) => {
         if (read.source_count !== undefined) existing.source_count = Number(read.source_count);
         if (read.poll_interval !== undefined) existing.poll_interval = Number(read.poll_interval);
         writeModel(model);
+        autoCompile(model);
         res.json({ ok: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -686,6 +697,7 @@ app.delete('/read/:deviceId/:readId', (req, res) => {
         }
         device.reads.splice(idx, 1);
         writeModel(model);
+        autoCompile(model);
         res.json({ ok: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -708,10 +720,41 @@ app.get('/config', (req, res) => {
     }
 });
 
+// ---------------------------------------------------------------------------
+// Compile helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Compile model → YAML and write to disk.
+ * Returns { ok, mmaErrors, replicatorErrors }.
+ * Does NOT throw — callers that want to surface errors should check the return value.
+ */
+function compileAndWrite(model) {
+    const system = model.system || DEFAULT_SYSTEM;
+    const devices = model.devices || [];
+    const replicatorYaml = toReplicatorYaml(system, devices);
+    const mmaYaml = toMmaYaml(system, devices);
+    const mmaErrors = validateMmaConfig(mmaYaml);
+    const replicatorErrors = validateReplicatorConfig(replicatorYaml);
+    if (mmaErrors.length > 0 || replicatorErrors.length > 0) {
+        return { ok: false, mmaErrors, replicatorErrors };
+    }
+    atomicWrite(REPLICATOR_CONFIG_PATH, replicatorYaml);
+    atomicWrite(MMA_CONFIG_PATH, mmaYaml);
+    return { ok: true };
+}
+
+/**
+ * Silently auto-compile after a model mutation.
+ * Any errors are swallowed — the model is always saved regardless.
+ */
+function autoCompile(model) {
+    try { compileAndWrite(model); } catch (_) { /* best-effort */ }
+}
+
 app.post('/compile', (req, res) => {
     try {
         const model = readModel();
-        const system = model.system || DEFAULT_SYSTEM;
         const devices = model.devices || [];
 
         let routeCount = 0;
@@ -719,22 +762,14 @@ app.post('/compile', (req, res) => {
             routeCount += (device.reads || []).length;
         }
 
-        const replicatorYaml = toReplicatorYaml(system, devices);
-        const mmaYaml = toMmaYaml(system, devices);
-
-        // Validate generated configs before writing to disk.
-        const mmaErrors = validateMmaConfig(mmaYaml);
-        const replicatorErrors = validateReplicatorConfig(replicatorYaml);
-        if (mmaErrors.length > 0 || replicatorErrors.length > 0) {
+        const result = compileAndWrite(model);
+        if (!result.ok) {
             return res.status(400).json({
                 error: 'Config validation failed — generated configs violate separation rules',
-                mma_errors: mmaErrors,
-                replicator_errors: replicatorErrors,
+                mma_errors: result.mmaErrors,
+                replicator_errors: result.replicatorErrors,
             });
         }
-
-        atomicWrite(REPLICATOR_CONFIG_PATH, replicatorYaml);
-        atomicWrite(MMA_CONFIG_PATH, mmaYaml);
 
         res.json({ ok: true, routes: routeCount });
     } catch (err) {
