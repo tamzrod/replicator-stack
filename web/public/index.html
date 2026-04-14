@@ -985,14 +985,8 @@ function renderDeviceWorkspace() {
   // Compute displayed MMA endpoint from model memory ports + system settings
   const mmaHost = (model.system && model.system.mma_endpoint) || 'mma';
   const memPorts = (model.memory && model.memory.ports) || [];
-  let targetPortNum = null;
-  outer: for (const p of memPorts) {
-    for (const b of (p.blocks || [])) {
-      if (Number(b.unit_id) === Number(device.unitId)) { targetPortNum = p.port; break outer; }
-    }
-  }
-  if (!targetPortNum && memPorts.length > 0) targetPortNum = memPorts[0].port || 502;
-  if (!targetPortNum) targetPortNum = 502;
+  const matchedPort = memPorts.find(p => (p.blocks || []).some(b => Number(b.unit_id) === Number(device.unitId)));
+  const targetPortNum = (matchedPort || memPorts[0] || {}).port || 502;
   const targetEndpointDisplay = `${mmaHost}:${targetPortNum}`;
 
   html += `<div class="card pipeline-section pipeline-section-target">
@@ -1007,7 +1001,7 @@ function renderDeviceWorkspace() {
           <input class="info-edit-input" type="number" id="ws-tgt-unit" value="${escapeHtml(String(device.unitId ?? ''))}" min="1" required />
         </div>
         <div class="info-field">
-          <label>Status Unit ID <span style="color:#94a3b8;font-weight:400">(optional, shared memory group)</span></label>
+          <label>Status Unit ID <span style="color:#94a3b8;font-weight:400">(optional, MMA unit for status)</span></label>
           <input class="info-edit-input" type="number" id="ws-tgt-status-unit" value="${escapeHtml(String(device.status_unit_id ?? ''))}" placeholder="e.g. 100" min="1" />
         </div>
       </div>
