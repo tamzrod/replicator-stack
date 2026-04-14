@@ -9,7 +9,6 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 
 const DATA_DIR = process.env.DATA_DIR || '/app/data';
 const TARGET_HOST = process.env.TARGET_HOST || 'mma';
-const DEVICE_HOST = process.env.DEVICE_HOST || 'localhost';
 const MODEL_PATH = path.join(DATA_DIR, 'model.json');
 const REPLICATOR_CONFIG_PATH = path.join(DATA_DIR, 'replicator/config.yaml');
 const MMA_CONFIG_PATH = path.join(DATA_DIR, 'mma/config.yaml');
@@ -33,9 +32,9 @@ function readModel() {
     if (!Array.isArray(model.groups)) model.groups = [];
     if (!model.system) model.system = {};
     if (!Array.isArray(model.system.targets)) model.system.targets = [];
-    // Migrate old free-text device.group → device.groupId using group entities
     let migrated = false;
     for (const device of model.devices) {
+        // Migrate old free-text device.group → device.groupId using group entities
         if (device.group && !device.groupId) {
             let grp = model.groups.find(g => g.name === device.group);
             if (!grp) {
@@ -46,9 +45,37 @@ function readModel() {
             delete device.group;
             migrated = true;
         }
+        // Migrate old device.host → device.ipAddress
+        if (device.host && !device.ipAddress) {
+            device.ipAddress = device.host;
+            delete device.host;
+            migrated = true;
+        }
+        // Migrate old auto-assigned assigned_unit_id → explicit unitId
+        if ('assigned_unit_id' in device && !('unitId' in device)) {
+            device.unitId = device.assigned_unit_id;
+            migrated = true;
+        }
+        // Remove stale auto-assigned / status fields
+        for (const field of ['assigned_unit_id', 'status_slot', 'status_start']) {
+            if (field in device) { delete device[field]; migrated = true; }
+        }
+    }
+    // Remove memory-config fields that no longer belong on targets
+    for (const target of model.system.targets) {
+        for (const field of ['status_unit_id', 'status_slot_size']) {
+            if (field in target) { delete target[field]; migrated = true; }
+        }
     }
     if (migrated) writeModel(model);
     return model;
+}
+
+function isValidIp(ip) {
+    if (typeof ip !== 'string' || !ip.trim()) return false;
+    const parts = ip.trim().split('.');
+    if (parts.length !== 4) return false;
+    return parts.every(p => /^\d+$/.test(p) && Number(p) >= 0 && Number(p) <= 255);
 }
 
 function findGroup(model, groupId) {
@@ -92,21 +119,7 @@ function findDevice(model, deviceId) {
     return (model.devices || []).find(d => d.id === deviceId) || null;
 }
 
-function nextAssignedUnitId(model) {
-    const targets = (model.system && model.system.targets) || [];
-    const statusUnitIds = new Set(targets.map(t => Number(t.status_unit_id)).filter(Number.isFinite));
-    const used = (model.devices || []).map(d => d.assigned_unit_id).filter(Number.isFinite);
-    let next = 1;
-    while (used.includes(next) || statusUnitIds.has(next)) next++;
-    return next;
-}
 
-function nextStatusSlot(model) {
-    const used = (model.devices || []).map(d => d.status_slot).filter(Number.isFinite);
-    let next = 0;
-    while (used.includes(next)) next++;
-    return next;
-}
 
 function toReplicatorYaml(system, devices) {
     // Uses the first target's endpoint for the global MMA connection.
@@ -129,14 +142,14 @@ function toReplicatorYaml(system, devices) {
             const routeId = `${device.id}__${read.id}`;
             lines.push(`${indent}- id: ${routeId}`);
             lines.push(`${indent}  source:`);
-            lines.push(`${indent}    host: ${device.host}`);
+            lines.push(`${indent}    host: ${device.ipAddress}`);
             lines.push(`${indent}    port: ${device.port}`);
             lines.push(`${indent}    unit_id: ${device.source_unit_id}`);
             lines.push(`${indent}    area: ${read.source_area}`);
             lines.push(`${indent}    address: ${read.source_address}`);
             lines.push(`${indent}    count: ${read.source_count}`);
             lines.push(`${indent}  target:`);
-            lines.push(`${indent}    unit: ${device.assigned_unit_id}`);
+            lines.push(`${indent}    unit: ${device.unitId}`);
             lines.push(`${indent}    area: ${read.target_area}`);
             lines.push(`${indent}    address: ${read.target_address}`);
             lines.push(`${indent}  poll_interval: ${read.poll_interval}`);
@@ -153,27 +166,21 @@ function toMmaYaml(system, devices) {
     const firstTarget = targets[0] || {};
     const endpointParts = (firstTarget.endpoint || 'mma:502').split(':');
     const port = Number(endpointParts[1]) || 502;
-    const unitMemorySize = 100; // Fixed per-unit register space; configurable per-target support is a future enhancement.
+    const unitMemorySize = 100; // Fixed per-unit register space.
     const indent = '  ';
     const lines = [
         `port: ${port}`,
         '',
         'units:'
     ];
+    // Emit one unit entry per unique device unitId.
+    const seenUnitIds = new Set();
     for (const device of devices) {
-        lines.push(`${indent}- id: ${device.assigned_unit_id}`);
-        lines.push(`${indent}  size: ${unitMemorySize}`);
-    }
-    const seenStatusUnitIds = new Set();
-    for (const target of targets) {
-        const statusUnitId = Number(target.status_unit_id);
-        if (!Number.isFinite(statusUnitId) || seenStatusUnitIds.has(statusUnitId)) continue;
-        const devCount = devices.filter(d => d.target_name === target.name).length;
-        if (devCount > 0) {
-            seenStatusUnitIds.add(statusUnitId);
-            const statusSize = (target.status_slot_size || 10) * devCount;
-            lines.push(`${indent}- id: ${statusUnitId}`);
-            lines.push(`${indent}  size: ${statusSize}`);
+        const uid = Number(device.unitId);
+        if (Number.isFinite(uid) && !seenUnitIds.has(uid)) {
+            seenUnitIds.add(uid);
+            lines.push(`${indent}- id: ${uid}`);
+            lines.push(`${indent}  size: ${unitMemorySize}`);
         }
     }
     return lines.join('\n') + '\n';
@@ -192,7 +199,7 @@ app.get('/model', (req, res) => {
     }
 });
 
-// POST /device — add device with auto-assigned unit_id and status_slot
+// POST /device — add device
 app.post('/device', (req, res) => {
     try {
         const { device } = req.body;
@@ -202,9 +209,16 @@ app.post('/device', (req, res) => {
         if (!device.target_name) {
             return res.status(400).json({ error: 'device.target_name is required' });
         }
+        if (!isValidIp(device.ipAddress)) {
+            return res.status(400).json({ error: 'device.ipAddress must be a valid IPv4 address' });
+        }
         const port = Number(device.port);
         if (!Number.isFinite(port) || port < 1 || port > 65535) {
             return res.status(400).json({ error: 'device.port must be a valid port number (1–65535)' });
+        }
+        const unitId = Number(device.unitId);
+        if (!Number.isFinite(unitId) || unitId < 1) {
+            return res.status(400).json({ error: 'device.unitId must be a positive integer (MMA target unit)' });
         }
         const model = readModel();
 
@@ -224,32 +238,26 @@ app.post('/device', (req, res) => {
             return res.status(409).json({ error: `Device ${device.id} already exists` });
         }
 
-        const assigned_unit_id = nextAssignedUnitId(model);
-        const status_slot = nextStatusSlot(model);
-        const status_start = status_slot * target.status_slot_size;
-
         model.devices.push({
             id: device.id,
             name: device.name || '',
             groupId: device.groupId || null,
-            host: DEVICE_HOST,
+            ipAddress: device.ipAddress.trim(),
             port,
             source_unit_id: device.source_unit_id,
+            unitId,
             target_name: device.target_name,
-            assigned_unit_id,
-            status_slot,
-            status_start,
             reads: []
         });
         writeModel(model);
 
-        res.status(201).json({ ok: true, assigned_unit_id, status_slot, status_start });
+        res.status(201).json({ ok: true, unitId });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-// PUT /device/:id — update editable device fields (name, group, port, source_unit_id, target_name)
+// PUT /device/:id — update editable device fields (name, group, ipAddress, port, source_unit_id, unitId, target_name)
 app.put('/device/:id', (req, res) => {
     try {
         const { id } = req.params;
@@ -268,6 +276,19 @@ app.put('/device/:id', (req, res) => {
                 return res.status(400).json({ error: 'device.port must be a valid port number (1–65535)' });
             }
             existing.port = port;
+        }
+        if (device.ipAddress !== undefined) {
+            if (!isValidIp(device.ipAddress)) {
+                return res.status(400).json({ error: 'device.ipAddress must be a valid IPv4 address' });
+            }
+            existing.ipAddress = device.ipAddress.trim();
+        }
+        if (device.unitId !== undefined) {
+            const unitId = Number(device.unitId);
+            if (!Number.isFinite(unitId) || unitId < 1) {
+                return res.status(400).json({ error: 'device.unitId must be a positive integer (MMA target unit)' });
+            }
+            existing.unitId = unitId;
         }
         if (device.name !== undefined) existing.name = device.name;
         if (device.groupId !== undefined) {
@@ -327,7 +348,7 @@ app.put('/system', (req, res) => {
     }
 });
 
-// POST /target — add a target destination
+// POST /target — add a target destination (MMA 2.0 runtime endpoint)
 app.post('/target', (req, res) => {
     try {
         const { target } = req.body;
@@ -337,14 +358,6 @@ app.post('/target', (req, res) => {
         const port = Number(target.port);
         if (!Number.isFinite(port) || port < 1 || port > 65535) {
             return res.status(400).json({ error: 'target.port must be a valid port number (1–65535)' });
-        }
-        const statusUnitId = Number(target.status_unit_id);
-        if (!Number.isFinite(statusUnitId)) {
-            return res.status(400).json({ error: 'target.status_unit_id must be a number' });
-        }
-        const statusSlotSize = Number(target.status_slot_size);
-        if (!Number.isFinite(statusSlotSize) || statusSlotSize < 1) {
-            return res.status(400).json({ error: 'target.status_slot_size must be >= 1' });
         }
 
         const model = readModel();
@@ -359,8 +372,6 @@ app.post('/target', (req, res) => {
             // `port` is the canonical user-facing value.
             endpoint: `${TARGET_HOST}:${port}`,
             port,
-            status_unit_id: statusUnitId,
-            status_slot_size: statusSlotSize
         });
         writeModel(model);
         res.status(201).json({ ok: true });
