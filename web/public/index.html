@@ -9,21 +9,21 @@
 
     body {
       font-family: 'Segoe UI', system-ui, sans-serif;
-      background: #f0f2f5;
-      color: #1a1a2e;
+      background: #F5F7FA;
+      color: #1F2933;
       min-height: 100vh;
     }
 
     header {
-      background: #16213e;
-      color: #e2e8f0;
+      background: #0B3C5D;
+      color: #E2E8F0;
       padding: 16px 24px;
       display: flex;
       align-items: center;
       gap: 12px;
     }
     header h1 { font-size: 1.25rem; font-weight: 600; }
-    header span { font-size: 0.8rem; color: #94a3b8; }
+    header span { font-size: 0.8rem; color: #93C5D8; }
 
     main {
       padding: 24px 24px;
@@ -32,17 +32,17 @@
     }
 
     .card {
-      background: #fff;
-      border-radius: 8px;
-      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+      background: #FFFFFF;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.07);
       padding: 20px 24px;
     }
     .card h2 {
       font-size: 1rem;
       font-weight: 600;
       margin-bottom: 16px;
-      color: #16213e;
-      border-bottom: 2px solid #e2e8f0;
+      color: #0B3C5D;
+      border-bottom: 2px solid #E5E7EB;
       padding-bottom: 8px;
     }
 
@@ -55,7 +55,7 @@
       display: block;
       font-size: 0.75rem;
       font-weight: 600;
-      color: #64748b;
+      color: #6B7280;
       margin-bottom: 4px;
       text-transform: uppercase;
       letter-spacing: .04em;
@@ -63,17 +63,18 @@
     .field input, .field select {
       width: 100%;
       padding: 8px 10px;
-      border: 1px solid #cbd5e1;
+      border: 1px solid #D1D5DB;
       border-radius: 6px;
       font-size: 0.875rem;
-      background: #f8fafc;
-      color: #1a1a2e;
+      background: #F9FAFB;
+      color: #1F2933;
       transition: border-color .15s;
     }
     .field input:focus, .field select:focus {
       outline: none;
-      border-color: #3b82f6;
+      border-color: #00AEEF;
       background: #fff;
+      box-shadow: 0 0 0 2px rgba(0,174,239,.12);
     }
 
     button {
@@ -87,17 +88,17 @@
     }
     button:disabled { opacity: .5; cursor: default; }
 
-    .btn-primary { background: #3b82f6; color: #fff; }
-    .btn-primary:not(:disabled):hover { background: #2563eb; }
+    .btn-primary { background: #0B3C5D; color: #fff; }
+    .btn-primary:not(:disabled):hover { background: #145DA0; }
 
-    .btn-danger { background: #ef4444; color: #fff; font-size: 0.75rem; padding: 4px 10px; }
-    .btn-danger:not(:disabled):hover { background: #dc2626; }
+    .btn-danger { background: #EF4444; color: #fff; font-size: 0.75rem; padding: 4px 10px; }
+    .btn-danger:not(:disabled):hover { background: #DC2626; }
 
-    .btn-compile { background: #10b981; color: #fff; font-size: 1rem; padding: 12px 28px; }
-    .btn-compile:not(:disabled):hover { background: #059669; }
+    .btn-compile { background: #22C55E; color: #fff; font-size: 1rem; padding: 12px 28px; }
+    .btn-compile:not(:disabled):hover { background: #16A34A; }
 
-    .btn-refresh { background: #e2e8f0; color: #475569; font-size: 0.75rem; padding: 5px 12px; margin-left: auto; }
-    .btn-refresh:hover { background: #cbd5e1; }
+    .btn-refresh { background: #E5E7EB; color: #374151; font-size: 0.75rem; padding: 5px 12px; margin-left: auto; }
+    .btn-refresh:hover { background: #D1D5DB; }
     .btn-tab-bar-refresh { margin-left: auto; margin-right: 8px; align-self: center; }
 
     .banner {
@@ -108,38 +109,38 @@
       display: none;
     }
     .banner.show { display: block; }
-    .banner.ok  { background: #d1fae5; color: #065f46; }
-    .banner.err { background: #fee2e2; color: #991b1b; }
+    .banner.ok  { background: #DCFCE7; color: #166534; }
+    .banner.err { background: #FEF2F2; color: #991B1B; }
 
     .model-header {
       display: flex;
       align-items: center;
       margin-bottom: 16px;
-      border-bottom: 2px solid #e2e8f0;
+      border-bottom: 2px solid #E5E7EB;
       padding-bottom: 8px;
     }
     .model-header h2 { margin-bottom: 0; border: none; padding: 0; }
 
     pre {
-      background: #f1f5f9;
+      background: #F3F4F6;
       border-radius: 6px;
       padding: 14px;
       font-size: 0.8rem;
       line-height: 1.5;
       overflow: auto;
       max-height: 360px;
-      color: #334155;
+      color: #374151;
     }
 
     .empty-state {
       text-align: center;
-      color: #94a3b8;
+      color: #9CA3AF;
       padding: 32px 0;
       font-size: 0.875rem;
     }
 
     .compile-area { text-align: center; }
-    .compile-area p { color: #64748b; font-size: 0.85rem; margin-bottom: 16px; }
+    .compile-area p { color: #6B7280; font-size: 0.85rem; margin-bottom: 16px; }
 
     #compile-result {
       margin-top: 14px;
@@ -147,9 +148,9 @@
     }
 
     table { width: 100%; border-collapse: collapse; font-size: .85rem; }
-    th { text-align: left; color: #64748b; border-bottom: 1px solid #e2e8f0; padding: 6px 8px; font-weight: 600; }
+    th { text-align: left; color: #6B7280; border-bottom: 1px solid #E5E7EB; padding: 6px 8px; font-weight: 600; }
     td { padding: 6px 8px; vertical-align: top; }
-    tbody tr:hover { background: #f8fafc; }
+    tbody tr:hover { background: #F9FAFB; }
 
     /* ── Layout with Tree Panel ─────────────────────────────────────── */
     #app-container { display: flex; align-items: flex-start; }
@@ -157,7 +158,7 @@
       width: 260px;
       flex-shrink: 0;
       background: #fff;
-      border-right: 1px solid #e2e8f0;
+      border-right: 1px solid #E5E7EB;
       min-height: calc(100vh - 105px);
       overflow-y: auto;
     }
@@ -166,36 +167,36 @@
     /* ── Tree Panel ─────────────────────────────────────────────────── */
     .tree-panel-header {
       display: flex; align-items: center; justify-content: space-between;
-      padding: 14px 14px 10px; border-bottom: 1px solid #e2e8f0;
+      padding: 14px 14px 10px; border-bottom: 1px solid #E5E7EB;
     }
     .tree-panel-title {
-      font-size: .7rem; font-weight: 700; color: #64748b;
+      font-size: .7rem; font-weight: 700; color: #6B7280;
       text-transform: uppercase; letter-spacing: .06em;
     }
     .tree-header-actions { display: flex; gap: 4px; }
     .tree-add-btn {
-      background: none; border: 1px dashed #cbd5e1; border-radius: 4px;
-      color: #64748b; font-size: .65rem; padding: 2px 7px; cursor: pointer;
+      background: none; border: 1px dashed #D1D5DB; border-radius: 4px;
+      color: #6B7280; font-size: .65rem; padding: 2px 7px; cursor: pointer;
       font-weight: 600;
     }
-    .tree-add-btn:hover { background: #f1f5f9; border-color: #94a3b8; }
+    .tree-add-btn:hover { background: #F3F4F6; border-color: #9CA3AF; }
     .tree-group-header {
       display: flex; align-items: center;
       padding: 6px 10px; cursor: pointer; user-select: none; gap: 4px;
     }
-    .tree-group-header:hover { background: #f1f5f9; }
-    .tree-toggle { font-size: .65rem; width: 12px; color: #94a3b8; flex-shrink: 0; }
-    .tree-group-name { font-size: .78rem; font-weight: 700; color: #334155; flex: 1; }
+    .tree-group-header:hover { background: #F3F4F6; }
+    .tree-toggle { font-size: .65rem; width: 12px; color: #9CA3AF; flex-shrink: 0; }
+    .tree-group-name { font-size: .78rem; font-weight: 700; color: #1F2933; flex: 1; }
     .tree-group-actions { display: flex; gap: 2px; opacity: 0; transition: opacity .15s; }
     .tree-group-header:hover .tree-group-actions { opacity: 1; }
     .tree-device {
       padding: 5px 10px 5px 26px;
       display: flex; align-items: center; cursor: pointer;
     }
-    .tree-device:hover { background: #f8fafc; }
-    .tree-device.selected { background: #eff6ff; border-left: 3px solid #3b82f6; padding-left: 23px; }
+    .tree-device:hover { background: #F9FAFB; }
+    .tree-device.selected { background: #EFF6FF; border-left: 3px solid #145DA0; padding-left: 23px; }
     .tree-device-name {
-      font-size: .78rem; color: #1e293b;
+      font-size: .78rem; color: #1F2933;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     .tree-btn {
@@ -203,34 +204,34 @@
       font-size: .7rem; cursor: pointer; border-radius: 3px;
       line-height: 1; font-weight: 600;
     }
-    .tree-btn-grp-edit { color: #64748b; font-size: .65rem; }
-    .tree-btn-grp-edit:hover { background: #f1f5f9; }
-    .tree-btn-grp-del { color: #f59e0b; font-size: .65rem; }
-    .tree-btn-grp-del:hover { background: #fef3c7; }
-    .tree-empty { padding: 16px 14px; font-size: .78rem; color: #94a3b8; font-style: italic; }
+    .tree-btn-grp-edit { color: #6B7280; font-size: .65rem; }
+    .tree-btn-grp-edit:hover { background: #F3F4F6; }
+    .tree-btn-grp-del { color: #F59E0B; font-size: .65rem; }
+    .tree-btn-grp-del:hover { background: #FEF3C7; }
+    .tree-empty { padding: 16px 14px; font-size: .78rem; color: #9CA3AF; font-style: italic; }
 
     /* ── Device Workspace ───────────────────────────────────────────── */
     #device-workspace { display: grid; gap: 0; }
     .ws-placeholder {
-      text-align: center; color: #94a3b8; padding: 64px 0; font-size: .9rem;
+      text-align: center; color: #9CA3AF; padding: 64px 0; font-size: .9rem;
     }
     .ws-placeholder .ws-icon { font-size: 2.5rem; margin-bottom: 12px; }
     .info-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; margin-bottom: 0; }
 
     /* ── Pipeline Flow Layout ───────────────────────────────────────── */
     .pipeline-section { margin-bottom: 0; border-radius: 0; }
-    .pipeline-section:first-child { border-radius: 8px 8px 0 0; }
-    .pipeline-section:last-child  { border-radius: 0 0 8px 8px; }
-    .pipeline-section-source  { border-left: 4px solid #3b82f6; }
-    .pipeline-section-read    { border-left: 4px solid #f59e0b; }
-    .pipeline-section-target  { border-left: 4px solid #10b981; }
+    .pipeline-section:first-child { border-radius: 10px 10px 0 0; }
+    .pipeline-section:last-child  { border-radius: 0 0 10px 10px; }
+    .pipeline-section-source  { border-left: 4px solid #145DA0; }
+    .pipeline-section-read    { border-left: 4px solid #F59E0B; }
+    .pipeline-section-target  { border-left: 4px solid #22C55E; }
     .pipeline-arrow {
       text-align: center;
       padding: 6px 0;
       font-size: 1.4rem;
-      color: #94a3b8;
+      color: #9CA3AF;
       user-select: none;
-      background: #f0f2f5;
+      background: #F5F7FA;
       line-height: 1;
     }
     .pipeline-label {
@@ -244,84 +245,84 @@
       margin-right: 8px;
       vertical-align: middle;
     }
-    .pipeline-label-source { background: #dbeafe; color: #1d4ed8; }
-    .pipeline-label-read   { background: #fef3c7; color: #b45309; }
-    .pipeline-label-target { background: #d1fae5; color: #065f46; }
+    .pipeline-label-source { background: #DBEAFE; color: #1D4ED8; }
+    .pipeline-label-read   { background: #FEF3C7; color: #B45309; }
+    .pipeline-label-target { background: #DCFCE7; color: #166534; }
     .info-field label {
-      display: block; font-size: .75rem; font-weight: 600; color: #64748b;
+      display: block; font-size: .75rem; font-weight: 600; color: #6B7280;
       margin-bottom: 4px; text-transform: uppercase; letter-spacing: .04em;
     }
     .info-field .info-val {
-      padding: 8px 10px; background: #f8fafc; border: 1px solid #e2e8f0;
-      border-radius: 6px; font-size: .875rem; color: #1a1a2e;
+      padding: 8px 10px; background: #F9FAFB; border: 1px solid #E5E7EB;
+      border-radius: 6px; font-size: .875rem; color: #1F2933;
     }
     .ws-card-header {
       display: flex; align-items: center; justify-content: space-between;
-      margin-bottom: 16px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px;
+      margin-bottom: 16px; border-bottom: 2px solid #E5E7EB; padding-bottom: 8px;
     }
-    .ws-card-header h2 { margin: 0; border: none; padding: 0; font-size: 1rem; font-weight: 600; color: #16213e; }
+    .ws-card-header h2 { margin: 0; border: none; padding: 0; font-size: 1rem; font-weight: 600; color: #0B3C5D; }
     .ws-card-actions { display: flex; gap: 8px; }
 
     /* ── Dialogs ─────────────────────────────────────────────────────── */
     dialog {
-      border: none; border-radius: 10px;
+      border: none; border-radius: 12px;
       box-shadow: 0 8px 32px rgba(0,0,0,.18); padding: 0;
     }
     dialog::backdrop { background: rgba(0,0,0,.35); }
 
     /* ── Table enhancements ─────────────────────────────────────────── */
-    tbody tr[data-device-id]:hover { background: #f0f9ff; }
-    tbody tr.row-highlight { background: #dbeafe !important; }
-    .btn-edit { background: #e0f2fe; color: #0369a1; font-size: 0.75rem; padding: 4px 10px; }
-    .btn-edit:not(:disabled):hover { background: #bae6fd; }
+    tbody tr[data-device-id]:hover { background: #F0F9FF; }
+    tbody tr.row-highlight { background: #DBEAFE !important; }
+    .btn-edit { background: #E0F2FE; color: #0369A1; font-size: 0.75rem; padding: 4px 10px; }
+    .btn-edit:not(:disabled):hover { background: #BAE6FD; }
 
     /* ── Inline editing inputs ──────────────────────────────────────── */
     .info-edit-input {
       width: 100%;
       padding: 8px 10px;
-      border: 1px solid #cbd5e1;
+      border: 1px solid #D1D5DB;
       border-radius: 6px;
       font-size: 0.875rem;
       background: #fff;
-      color: #1a1a2e;
+      color: #1F2933;
       transition: border-color .15s;
     }
     .info-edit-input:focus {
       outline: none;
-      border-color: #3b82f6;
-      box-shadow: 0 0 0 2px rgba(59,130,246,.15);
+      border-color: #00AEEF;
+      box-shadow: 0 0 0 2px rgba(0,174,239,.12);
     }
     .inline-input {
       padding: 4px 7px;
-      border: 1px solid #93c5fd;
+      border: 1px solid #7EC8E3;
       border-radius: 5px;
       font-size: 0.8rem;
-      background: #eff6ff;
-      color: #1a1a2e;
+      background: #E0F7FA;
+      color: #1F2933;
       width: 100%;
       min-width: 50px;
     }
-    .inline-input:focus { outline: none; border-color: #3b82f6; background: #fff; }
-    .btn-save-inline { background: #3b82f6; color: #fff; font-size: 0.75rem; padding: 4px 10px; }
-    .btn-save-inline:not(:disabled):hover { background: #2563eb; }
-    .btn-cancel-inline { background: #e2e8f0; color: #475569; font-size: 0.75rem; padding: 4px 10px; }
-    .btn-cancel-inline:not(:disabled):hover { background: #cbd5e1; }
+    .inline-input:focus { outline: none; border-color: #00AEEF; background: #fff; }
+    .btn-save-inline { background: #145DA0; color: #fff; font-size: 0.75rem; padding: 4px 10px; }
+    .btn-save-inline:not(:disabled):hover { background: #0B3C5D; }
+    .btn-cancel-inline { background: #E5E7EB; color: #374151; font-size: 0.75rem; padding: 4px 10px; }
+    .btn-cancel-inline:not(:disabled):hover { background: #D1D5DB; }
 
     /* ── Top-level Tab Bar ──────────────────────────────────────────── */
     #tab-bar {
-      background: #1a2744;
+      background: #0B3C5D;
       display: flex;
       align-items: flex-end;
       padding: 0 24px;
       gap: 4px;
-      border-bottom: 2px solid #0f172a;
+      border-bottom: 2px solid #083250;
     }
     .tab-btn {
       padding: 10px 20px;
       background: none;
       border: none;
       border-radius: 6px 6px 0 0;
-      color: #94a3b8;
+      color: #93C5D8;
       font-size: 0.875rem;
       font-weight: 600;
       cursor: pointer;
@@ -329,8 +330,8 @@
       border-bottom: 2px solid transparent;
       margin-bottom: -2px;
     }
-    .tab-btn:hover { color: #e2e8f0; background: rgba(255,255,255,.06); }
-    .tab-btn.active { color: #fff; background: #2563eb; border-color: #2563eb; }
+    .tab-btn:hover { color: #E2E8F0; background: rgba(255,255,255,.08); }
+    .tab-btn.active { color: #fff; background: #145DA0; border-color: #00AEEF; }
 
     /* ── Config Viewer ──────────────────────────────────────────────── */
     #config-viewer-container {
@@ -345,8 +346,8 @@
 
     .cv-card {
       background: #fff;
-      border-radius: 8px;
-      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.07);
       overflow: hidden;
     }
     .cv-card-header {
@@ -354,20 +355,20 @@
       align-items: center;
       justify-content: space-between;
       padding: 14px 20px;
-      border-bottom: 1px solid #e2e8f0;
-      background: #f8fafc;
+      border-bottom: 1px solid #E5E7EB;
+      background: #F9FAFB;
     }
     .cv-card-header h2 {
       font-size: 0.95rem;
       font-weight: 700;
-      color: #16213e;
+      color: #0B3C5D;
       margin: 0;
     }
     .cv-card-header .cv-badge {
       font-size: 0.7rem;
       font-weight: 600;
-      color: #64748b;
-      background: #e2e8f0;
+      color: #6B7280;
+      background: #E5E7EB;
       border-radius: 99px;
       padding: 2px 9px;
       text-transform: uppercase;
@@ -380,32 +381,32 @@
     .cv-search {
       font-size: 0.78rem;
       padding: 5px 10px 5px 28px;
-      border: 1px solid #cbd5e1;
+      border: 1px solid #D1D5DB;
       border-radius: 5px;
-      background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E") no-repeat 8px center;
-      color: #1a1a2e;
+      background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='%239CA3AF' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E") no-repeat 8px center;
+      color: #1F2933;
       width: 160px;
       transition: border-color .15s;
     }
-    .cv-search:focus { outline: none; border-color: #3b82f6; }
+    .cv-search:focus { outline: none; border-color: #00AEEF; }
     .cv-search-count {
       font-size: 0.7rem;
-      color: #94a3b8;
+      color: #9CA3AF;
       min-width: 40px;
     }
     .btn-copy {
       font-size: 0.75rem;
       padding: 5px 12px;
-      background: #e2e8f0;
-      color: #475569;
+      background: #E5E7EB;
+      color: #374151;
       border: none;
       border-radius: 5px;
       cursor: pointer;
       font-weight: 600;
       transition: background .15s;
     }
-    .btn-copy:hover { background: #cbd5e1; }
-    .btn-copy.copied { background: #d1fae5; color: #065f46; }
+    .btn-copy:hover { background: #D1D5DB; }
+    .btn-copy.copied { background: #DCFCE7; color: #166534; }
 
     .cv-pre-wrap {
       position: relative;
@@ -448,37 +449,37 @@
       gap: 10px;
       padding: 10px 20px 14px;
     }
-    .cv-status { font-size: 0.8rem; color: #64748b; }
+    .cv-status { font-size: 0.8rem; color: #6B7280; }
     .btn-cv-refresh {
       font-size: 0.75rem;
       padding: 5px 12px;
-      background: #e2e8f0;
-      color: #475569;
+      background: #E5E7EB;
+      color: #374151;
       border: none;
       border-radius: 5px;
       cursor: pointer;
       font-weight: 600;
     }
-    .btn-cv-refresh:hover { background: #cbd5e1; }
+    .btn-cv-refresh:hover { background: #D1D5DB; }
 
     /* ── Validation bar ─────────────────────────────────────────────── */
     .cv-validation-bar {
       padding: 8px 20px;
       font-size: 0.8rem;
       font-weight: 500;
-      border-top: 1px solid #e2e8f0;
+      border-top: 1px solid #E5E7EB;
       display: none;
     }
     .cv-validation-bar.show { display: block; }
     .cv-validation-bar.valid {
-      background: #f0fdf4;
+      background: #F0FDF4;
       color: #166534;
-      border-color: #bbf7d0;
+      border-color: #BBF7D0;
     }
     .cv-validation-bar.invalid {
-      background: #fef2f2;
-      color: #991b1b;
-      border-color: #fecaca;
+      background: #FEF2F2;
+      color: #991B1B;
+      border-color: #FECACA;
     }
     .cv-validation-errors {
       margin-top: 4px;
@@ -495,8 +496,8 @@
       text-transform: uppercase;
       letter-spacing: .05em;
     }
-    .cv-valid-badge.valid { background: #d1fae5; color: #065f46; }
-    .cv-valid-badge.invalid { background: #fee2e2; color: #991b1b; }
+    .cv-valid-badge.valid { background: #DCFCE7; color: #166534; }
+    .cv-valid-badge.invalid { background: #FEE2E2; color: #991B1B; }
 
     /* ── Memory Tab ──────────────────────────────────────────────────── */
     #memory-tab-container {
@@ -509,10 +510,10 @@
 
     .mem-port-card {
       background: #fff;
-      border-radius: 8px;
-      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.07);
       margin-bottom: 20px;
-      border-left: 4px solid #10b981;
+      border-left: 4px solid #22C55E;
       overflow: hidden;
     }
     .mem-port-header {
@@ -520,13 +521,13 @@
       align-items: center;
       justify-content: space-between;
       padding: 14px 20px;
-      border-bottom: 1px solid #e2e8f0;
-      background: #f0fdf4;
+      border-bottom: 1px solid #E5E7EB;
+      background: #F0FDF4;
     }
     .mem-port-title {
       font-size: 1rem;
       font-weight: 700;
-      color: #065f46;
+      color: #166534;
     }
     .mem-port-body { padding: 16px 20px; }
     .mem-block-row {
@@ -534,7 +535,7 @@
       align-items: center;
       gap: 8px;
       padding: 6px 0;
-      border-bottom: 1px solid #f1f5f9;
+      border-bottom: 1px solid #F3F4F6;
       font-size: .85rem;
     }
     .mem-block-row:last-child { border-bottom: none; }
@@ -548,23 +549,23 @@
     .mem-block-field label {
       font-size: .65rem;
       font-weight: 700;
-      color: #64748b;
+      color: #6B7280;
       text-transform: uppercase;
       letter-spacing: .04em;
     }
     .mem-block-field .mem-val {
       font-size: .82rem;
-      color: #1a1a2e;
+      color: #1F2933;
     }
     .mem-block-field code {
       font-size: .78rem;
-      color: #0369a1;
-      background: #e0f2fe;
+      color: #0369A1;
+      background: #E0F2FE;
       border-radius: 4px;
       padding: 1px 5px;
     }
-    .btn-mem { background: #d1fae5; color: #065f46; font-size: .75rem; padding: 4px 10px; font-weight: 600; border-radius: 5px; border: none; cursor: pointer; }
-    .btn-mem:hover { background: #a7f3d0; }
+    .btn-mem { background: #DCFCE7; color: #166534; font-size: .75rem; padding: 4px 10px; font-weight: 600; border-radius: 5px; border: none; cursor: pointer; }
+    .btn-mem:hover { background: #BBF7D0; }
 
     /* ── Runtime Tab ──────────────────────────────────────────────────── */
     #runtime-tab-container {
@@ -579,8 +580,8 @@
 
     .rt-card {
       background: #fff;
-      border-radius: 8px;
-      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.07);
       overflow: hidden;
     }
     .rt-card-header {
@@ -588,13 +589,13 @@
       align-items: center;
       justify-content: space-between;
       padding: 14px 20px;
-      border-bottom: 1px solid #e2e8f0;
-      background: #f8fafc;
+      border-bottom: 1px solid #E5E7EB;
+      background: #F9FAFB;
     }
     .rt-card-header h2 {
       font-size: 0.95rem;
       font-weight: 700;
-      color: #16213e;
+      color: #0B3C5D;
       margin: 0;
     }
     .rt-card-body {
@@ -616,50 +617,50 @@
       height: 10px;
       border-radius: 50%;
       flex-shrink: 0;
-      background: #94a3b8;
+      background: #9CA3AF;
     }
-    .rt-status-dot.running  { background: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,.2); }
-    .rt-status-dot.stopped  { background: #ef4444; }
-    .rt-status-dot.exited   { background: #ef4444; }
-    .rt-status-dot.unknown  { background: #94a3b8; }
-    .rt-status-dot.not_found { background: #f59e0b; }
+    .rt-status-dot.running  { background: #22C55E; box-shadow: 0 0 0 3px rgba(34,197,94,.2); }
+    .rt-status-dot.stopped  { background: #EF4444; }
+    .rt-status-dot.exited   { background: #EF4444; }
+    .rt-status-dot.unknown  { background: #9CA3AF; }
+    .rt-status-dot.not_found { background: #F59E0B; }
     .rt-status-label {
       font-size: 0.875rem;
       font-weight: 600;
-      color: #334155;
+      color: #374151;
     }
     .rt-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-    .btn-rt-start { background: #22c55e; color: #fff; font-size: .8rem; padding: 7px 14px; }
-    .btn-rt-start:not(:disabled):hover { background: #16a34a; }
-    .btn-rt-stop  { background: #ef4444; color: #fff; font-size: .8rem; padding: 7px 14px; }
-    .btn-rt-stop:not(:disabled):hover { background: #dc2626; }
-    .btn-rt-restart { background: #f59e0b; color: #fff; font-size: .8rem; padding: 7px 14px; }
-    .btn-rt-restart:not(:disabled):hover { background: #d97706; }
+    .btn-rt-start { background: #22C55E; color: #fff; font-size: .8rem; padding: 7px 14px; }
+    .btn-rt-start:not(:disabled):hover { background: #16A34A; }
+    .btn-rt-stop  { background: #EF4444; color: #fff; font-size: .8rem; padding: 7px 14px; }
+    .btn-rt-stop:not(:disabled):hover { background: #DC2626; }
+    .btn-rt-restart { background: #F59E0B; color: #fff; font-size: .8rem; padding: 7px 14px; }
+    .btn-rt-restart:not(:disabled):hover { background: #D97706; }
 
     .rt-global-card {
       background: #fff;
-      border-radius: 8px;
-      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.07);
       padding: 20px 24px;
     }
     .rt-global-card h2 {
       font-size: 0.95rem;
       font-weight: 700;
-      color: #16213e;
+      color: #0B3C5D;
       margin-bottom: 8px;
-      border-bottom: 2px solid #e2e8f0;
+      border-bottom: 2px solid #E5E7EB;
       padding-bottom: 8px;
     }
     .rt-global-card p {
       font-size: .85rem;
-      color: #64748b;
+      color: #6B7280;
       margin-bottom: 16px;
     }
     .rt-global-actions { display: flex; gap: 12px; flex-wrap: wrap; }
-    .btn-apply { background: #3b82f6; color: #fff; font-size: .9rem; padding: 10px 22px; }
-    .btn-apply:not(:disabled):hover { background: #2563eb; }
-    .btn-apply-restart { background: #7c3aed; color: #fff; font-size: .9rem; padding: 10px 22px; }
-    .btn-apply-restart:not(:disabled):hover { background: #6d28d9; }
+    .btn-apply { background: #145DA0; color: #fff; font-size: .9rem; padding: 10px 22px; }
+    .btn-apply:not(:disabled):hover { background: #0B3C5D; }
+    .btn-apply-restart { background: #7C3AED; color: #fff; font-size: .9rem; padding: 10px 22px; }
+    .btn-apply-restart:not(:disabled):hover { background: #6D28D9; }
     .rt-result { margin-top: 14px; font-size: .875rem; }
 
     /* ── Advanced Configuration ─────────────────────────────────────────── */
@@ -670,11 +671,11 @@
       user-select: none;
       gap: 10px;
     }
-    .adv-config-toggle:hover .adv-config-title { color: #2563eb; }
+    .adv-config-toggle:hover .adv-config-title { color: #145DA0; }
     .adv-config-title {
       font-size: 1rem;
       font-weight: 600;
-      color: #16213e;
+      color: #0B3C5D;
       border-bottom: none;
       padding-bottom: 0;
       margin-bottom: 0;
@@ -682,7 +683,7 @@
     }
     .adv-summary-text {
       font-size: .78rem;
-      color: #64748b;
+      color: #6B7280;
       font-style: italic;
       white-space: nowrap;
       overflow: hidden;
@@ -691,14 +692,14 @@
     }
     .adv-chevron {
       font-size: .65rem;
-      color: #94a3b8;
+      color: #9CA3AF;
       transition: transform .2s;
       flex-shrink: 0;
     }
     .adv-chevron.open { transform: rotate(90deg); }
     .adv-config-body {
       margin-top: 14px;
-      border-top: 1px solid #e2e8f0;
+      border-top: 1px solid #E5E7EB;
       padding-top: 14px;
     }
     .adv-override-row {
@@ -713,14 +714,14 @@
       gap: 8px;
       font-size: .875rem;
       font-weight: 500;
-      color: #334155;
+      color: #374151;
       cursor: pointer;
     }
     .adv-override-label input[type="checkbox"] {
       width: 16px;
       height: 16px;
       cursor: pointer;
-      accent-color: #3b82f6;
+      accent-color: #145DA0;
     }
   </style>
 </head>
@@ -774,7 +775,7 @@
           </div>
         </div>
       </div>
-      <small id="adv-endpoint-hint" style="color:#64748b;font-size:.75rem;display:block;margin-top:8px"></small>
+      <small id="adv-endpoint-hint" style="color:#6B7280;font-size:.75rem;display:block;margin-top:8px"></small>
     </div>
   </div>
 
@@ -817,7 +818,7 @@
     </div>
     <div class="cv-validation-bar" id="cv-validation-bar-replicator"></div>
     <div class="cv-pre-wrap">
-      <pre class="cv-pre" id="cv-pre-replicator"><span style="color:#64748b;font-style:italic">Loading…</span></pre>
+      <pre class="cv-pre" id="cv-pre-replicator"><span style="color:#6B7280;font-style:italic">Loading…</span></pre>
     </div>
   </div>
 
@@ -839,7 +840,7 @@
     </div>
     <div class="cv-validation-bar" id="cv-validation-bar-mma"></div>
     <div class="cv-pre-wrap">
-      <pre class="cv-pre" id="cv-pre-mma"><span style="color:#64748b;font-style:italic">Loading…</span></pre>
+      <pre class="cv-pre" id="cv-pre-mma"><span style="color:#6B7280;font-style:italic">Loading…</span></pre>
     </div>
   </div>
 
@@ -849,8 +850,8 @@
 <div id="memory-tab-container">
 
   <div class="card" style="margin-bottom:20px">
-    <h2>Memory <span style="color:#94a3b8;font-size:.8rem;font-weight:400">(MMA runtime memory layout)</span></h2>
-    <p style="color:#64748b;font-size:.85rem;margin-bottom:16px">
+    <h2>Memory <span style="color:#9CA3AF;font-size:.8rem;font-weight:400">(MMA runtime memory layout)</span></h2>
+    <p style="color:#6B7280;font-size:.85rem;margin-bottom:16px">
       Define MMA listener ports. Memory blocks are automatically computed from device reads on every compile —
       they always reflect the current YAML model exactly and cannot be edited manually.
     </p>
@@ -875,7 +876,7 @@
   <!-- MMA Service -->
   <div class="rt-card" id="rt-mma-card">
     <div class="rt-card-header">
-      <h2>🔌 MMA <span style="color:#94a3b8;font-size:.8rem;font-weight:400">(Modbus Memory Appliance)</span></h2>
+      <h2>🔌 MMA <span style="color:#9CA3AF;font-size:.8rem;font-weight:400">(Modbus Memory Appliance)</span></h2>
       <button class="btn-refresh" id="btn-rt-refresh" style="font-size:.75rem;padding:5px 12px">↻ Refresh Status</button>
     </div>
     <div class="rt-card-body">
@@ -957,7 +958,7 @@
       </div>
       <div class="row">
         <div class="field">
-          <label>Source Endpoint <span style="color:#64748b;font-size:.75rem;font-weight:400">(host:port)</span></label>
+          <label>Source Endpoint <span style="color:#6B7280;font-size:.75rem;font-weight:400">(host:port)</span></label>
           <input id="ad-src-endpoint" type="text" placeholder="192.168.1.100:502" required />
         </div>
         <div class="field">
@@ -967,27 +968,27 @@
       </div>
       <div class="row">
         <div class="field">
-          <label>Target Endpoint <span style="color:#64748b;font-size:.75rem;font-weight:400">(host:port)</span></label>
+          <label>Target Endpoint <span style="color:#6B7280;font-size:.75rem;font-weight:400">(host:port)</span></label>
           <input id="ad-tgt-endpoint" type="text" placeholder="mma:502" required />
         </div>
         <div class="field">
-          <label>MMA Unit ID <span style="color:#64748b;font-size:.75rem;font-weight:400">(memory unit)</span></label>
+          <label>MMA Unit ID <span style="color:#6B7280;font-size:.75rem;font-weight:400">(memory unit)</span></label>
           <input id="ad-mma-unit" type="number" value="0" min="0" required />
         </div>
       </div>
       <div class="row">
         <div class="field">
-          <label>Status Slot <span style="color:#94a3b8;font-weight:400">(default 0)</span></label>
+          <label>Status Slot <span style="color:#9CA3AF;font-weight:400">(default 0)</span></label>
           <input id="ad-status-slot" type="number" value="0" min="0" />
         </div>
         <div class="field">
-          <label>Status Unit ID <span style="color:#94a3b8;font-weight:400">(optional, MMA unit for status)</span></label>
+          <label>Status Unit ID <span style="color:#9CA3AF;font-weight:400">(optional, MMA unit for status)</span></label>
           <input id="ad-status-unit" type="number" placeholder="e.g. 100" min="0" />
         </div>
       </div>
       <div class="row">
         <div class="field">
-          <label>Group <span style="color:#94a3b8;font-weight:400">(optional)</span></label>
+          <label>Group <span style="color:#9CA3AF;font-weight:400">(optional)</span></label>
           <select id="ad-group">
             <option value="">— Ungrouped —</option>
           </select>
@@ -1089,7 +1090,7 @@ function renderDeviceWorkspace() {
           <input class="info-edit-input" type="text" id="ws-ed-name" value="${escapeHtml(device.name || '')}" placeholder="My Device" />
         </div>
         <div class="info-field">
-          <label>Source Endpoint <span style="color:#94a3b8;font-weight:400">(host:port)</span></label>
+          <label>Source Endpoint <span style="color:#9CA3AF;font-weight:400">(host:port)</span></label>
           <input class="info-edit-input" type="text" id="ws-ed-src-endpoint" value="${escapeHtml(device.source_endpoint || '')}"
             placeholder="e.g. 10.5.1.29:502 or mydevice:502" required />
         </div>
@@ -1133,7 +1134,7 @@ function renderDeviceWorkspace() {
       }
       return `<tr>
         <td>${escapeHtml(r.id)}</td>
-        <td>${r.name ? escapeHtml(r.name) : '<span style="color:#cbd5e1">—</span>'}</td>
+        <td>${r.name ? escapeHtml(r.name) : '<span style="color:#D1D5DB">—</span>'}</td>
         <td><code style="font-size:.78rem">${escapeHtml(r.source_area || '—')}</code></td>
         <td>${escapeHtml(String(r.source_address ?? '—'))}</td>
         <td>${escapeHtml(String(r.source_count ?? '—'))}</td>
@@ -1148,7 +1149,7 @@ function renderDeviceWorkspace() {
 
   html += `<div class="card pipeline-section pipeline-section-read">
     <div class="ws-card-header">
-      <h2><span class="pipeline-label pipeline-label-read">READ</span>📋 Reads <span style="color:#94a3b8;font-size:.8rem;font-weight:400">(register reads)</span></h2>
+      <h2><span class="pipeline-label pipeline-label-read">READ</span>📋 Reads <span style="color:#9CA3AF;font-size:.8rem;font-weight:400">(register reads)</span></h2>
       <button class="btn-primary" id="ws-btn-show-add-read" style="font-size:.8rem;padding:7px 14px">+ Add Read</button>
     </div>
     <div id="ws-read-inline-error" class="banner" style="margin-bottom:8px"></div>
@@ -1160,7 +1161,7 @@ function renderDeviceWorkspace() {
         <tbody>${readsBody}</tbody>
       </table>
     </div>
-    <div id="ws-add-read-panel" style="display:none;margin-top:16px;border-top:1px solid #e2e8f0;padding-top:16px">
+    <div id="ws-add-read-panel" style="display:none;margin-top:16px;border-top:1px solid #E5E7EB;padding-top:16px">
       <form id="ws-read-form">
         <div class="row">
           <div class="field"><label>Read ID</label><input id="wr-id" type="text" placeholder="read-1" required /></div>
@@ -1196,20 +1197,20 @@ function renderDeviceWorkspace() {
 
   html += `<div class="card pipeline-section pipeline-section-target">
     <div class="ws-card-header">
-      <h2><span class="pipeline-label pipeline-label-target">TARGET</span>🎯 Target <span style="color:#94a3b8;font-size:.8rem;font-weight:400">(MMA destination)</span></h2>
+      <h2><span class="pipeline-label pipeline-label-target">TARGET</span>🎯 Target <span style="color:#9CA3AF;font-size:.8rem;font-weight:400">(MMA destination)</span></h2>
     </div>
     <div class="info-grid">
       <div class="info-field">
-        <label>Target Endpoint <span style="color:#94a3b8;font-weight:400">(host:port)</span></label>
+        <label>Target Endpoint <span style="color:#9CA3AF;font-weight:400">(host:port)</span></label>
         <input class="info-edit-input" type="text" id="ws-tgt-endpoint" value="${escapeHtml(device.target_endpoint || '')}"
           form="ws-config-form" placeholder="e.g. mma2:501" required />
       </div>
       <div class="info-field">
-        <label>Unit ID <span style="color:#94a3b8;font-weight:400">(MMA unit)</span></label>
+        <label>Unit ID <span style="color:#9CA3AF;font-weight:400">(MMA unit)</span></label>
         <input class="info-edit-input" type="number" id="ws-tgt-unit" value="${escapeHtml(String(device.unitId ?? ''))}" form="ws-config-form" min="0" required />
       </div>
       <div class="info-field">
-        <label>Status Unit ID <span style="color:#94a3b8;font-weight:400">(optional, MMA unit for status)</span></label>
+        <label>Status Unit ID <span style="color:#9CA3AF;font-weight:400">(optional, MMA unit for status)</span></label>
         <input class="info-edit-input" type="number" id="ws-tgt-status-unit" value="${escapeHtml(String(device.status_unit_id ?? ''))}" form="ws-config-form" placeholder="e.g. 100" min="0" />
       </div>
     </div>
@@ -1618,7 +1619,7 @@ function renderTree(data) {
       for (const d of group.devices) {
         const sel = d.id === _selectedDeviceId ? ' selected' : '';
         const label = d.name
-          ? `${escapeHtml(d.id)} <span style="color:#94a3b8;font-size:.72rem">— ${escapeHtml(d.name)}</span>`
+          ? `${escapeHtml(d.id)} <span style="color:#9CA3AF;font-size:.72rem">— ${escapeHtml(d.name)}</span>`
           : escapeHtml(d.id);
         html += `<div class="tree-device${sel}" data-device-id="${escapeHtml(d.id)}">
           <span class="tree-device-name">${label}</span>
@@ -1770,7 +1771,7 @@ function renderMemoryTab(data) {
         </div>
       </div>
       <div class="mem-port-body">
-        <p style="font-size:.78rem;color:#64748b;margin-bottom:8px">
+        <p style="font-size:.78rem;color:#6B7280;margin-bottom:8px">
           Memory blocks are auto-computed from device reads on compile. They cannot be edited manually.
         </p>
         <div class="mem-blocks-list">${blocksHtml}</div>
@@ -1955,7 +1956,7 @@ function renderCvPanel(panelId, text) {
   const preEl = document.getElementById(`cv-pre-${panelId}`);
   const copyBtn = document.getElementById(`btn-copy-${panelId}`);
   if (text === null) {
-    preEl.innerHTML = `<span style="color:#64748b;font-style:italic">Not available — run Compile to generate this config file.</span>`;
+    preEl.innerHTML = `<span style="color:#6B7280;font-style:italic">Not available — run Compile to generate this config file.</span>`;
     preEl.classList.add('no-content');
     copyBtn.disabled = true;
     _cvRaw[panelId] = null;
