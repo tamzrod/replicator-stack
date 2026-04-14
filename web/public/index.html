@@ -961,6 +961,12 @@ async function loadModel() {
     }
   }
   if (prev) sel.value = prev;
+
+  // If the config viewer tab is open, keep it in sync with the latest compiled output.
+  const cvContainer = document.getElementById('config-viewer-container');
+  if (cvContainer.classList.contains('active')) {
+    await loadConfigs();
+  }
 }
 
 // ── Targets ──────────────────────────────────────────────────────────────────
@@ -1095,6 +1101,11 @@ async function compile() {
   const { ok, data } = await api('POST', '/compile');
   if (ok) {
     el.innerHTML = `<div class="banner show ok">✓ Compiled successfully — ${escapeHtml(String(data.routes))} route(s) written to Replicator and MMA configs.</div>`;
+    // Refresh config viewer immediately so it reflects the latest compiled output.
+    const cvContainer = document.getElementById('config-viewer-container');
+    if (cvContainer.classList.contains('active')) {
+      await loadConfigs();
+    }
   } else if (data.mma_errors || data.replicator_errors) {
     const mmaItems = (data.mma_errors || []).map(e => `<li>${escapeHtml(e)}</li>`).join('');
     const repItems = (data.replicator_errors || []).map(e => `<li>${escapeHtml(e)}</li>`).join('');
@@ -1745,8 +1756,6 @@ document.addEventListener('keydown', e => {
 
 // ── Tab Navigation ───────────────────────────────────────────────────────────
 
-let _configViewerLoaded = false;
-
 document.getElementById('tab-bar').addEventListener('click', e => {
   const btn = e.target.closest('.tab-btn');
   if (!btn) return;
@@ -1764,10 +1773,7 @@ document.getElementById('tab-bar').addEventListener('click', e => {
   } else if (tab === 'config-viewer') {
     appContainer.style.display = 'none';
     cvContainer.classList.add('active');
-    if (!_configViewerLoaded) {
-      _configViewerLoaded = true;
-      loadConfigs();
-    }
+    loadConfigs();
   }
 });
 
