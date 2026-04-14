@@ -135,7 +135,7 @@ const AREA_TO_FC = {
     input_status: 2,
 };
 
-function toReplicatorYaml(system, devices, _groups) {
+function toReplicatorYaml(system, devices) {
     // Replicator orchestration config.
     // Format per docs/sample yaml/replicator.yaml:
     //   - top-level replicator: block
@@ -713,14 +713,13 @@ app.post('/compile', (req, res) => {
         const model = readModel();
         const system = model.system || DEFAULT_SYSTEM;
         const devices = model.devices || [];
-        const groups = model.groups || [];
 
         let routeCount = 0;
         for (const device of devices) {
             routeCount += (device.reads || []).length;
         }
 
-        const replicatorYaml = toReplicatorYaml(system, devices, groups);
+        const replicatorYaml = toReplicatorYaml(system, devices);
         const mmaYaml = toMmaYaml(system, devices);
 
         // Validate generated configs before writing to disk.
