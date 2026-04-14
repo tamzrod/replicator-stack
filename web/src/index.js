@@ -204,6 +204,7 @@ app.post('/device', (req, res) => {
         model.devices.push({
             id: device.id,
             name: device.name || '',
+            group: device.group || '',
             host: DEVICE_HOST,
             port,
             source_unit_id: device.source_unit_id,
@@ -216,6 +217,43 @@ app.post('/device', (req, res) => {
         writeModel(model);
 
         res.status(201).json({ ok: true, assigned_unit_id, status_slot, status_start });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// PUT /device/:id — update editable device fields (name, group, port, source_unit_id, target_name)
+app.put('/device/:id', (req, res) => {
+    try {
+        const { id } = req.params;
+        const { device } = req.body;
+        if (!device) {
+            return res.status(400).json({ error: 'device is required' });
+        }
+        const model = readModel();
+        const existing = findDevice(model, id);
+        if (!existing) {
+            return res.status(404).json({ error: `Device ${id} not found` });
+        }
+        if (device.port !== undefined) {
+            const port = Number(device.port);
+            if (!Number.isFinite(port) || port < 1 || port > 65535) {
+                return res.status(400).json({ error: 'device.port must be a valid port number (1–65535)' });
+            }
+            existing.port = port;
+        }
+        if (device.name !== undefined) existing.name = device.name;
+        if (device.group !== undefined) existing.group = device.group;
+        if (device.source_unit_id !== undefined) existing.source_unit_id = Number(device.source_unit_id);
+        if (device.target_name !== undefined) {
+            const target = model.system.targets.find(t => t.name === device.target_name);
+            if (!target) {
+                return res.status(400).json({ error: `Target "${device.target_name}" not found` });
+            }
+            existing.target_name = device.target_name;
+        }
+        writeModel(model);
+        res.json({ ok: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
