@@ -244,6 +244,38 @@
     .btn-edit { background: #e0f2fe; color: #0369a1; font-size: 0.75rem; padding: 4px 10px; }
     .btn-edit:not(:disabled):hover { background: #bae6fd; }
 
+    /* ── Inline editing inputs ──────────────────────────────────────── */
+    .info-edit-input {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 0.875rem;
+      background: #fff;
+      color: #1a1a2e;
+      transition: border-color .15s;
+    }
+    .info-edit-input:focus {
+      outline: none;
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 2px rgba(59,130,246,.15);
+    }
+    .inline-input {
+      padding: 4px 7px;
+      border: 1px solid #93c5fd;
+      border-radius: 5px;
+      font-size: 0.8rem;
+      background: #eff6ff;
+      color: #1a1a2e;
+      width: 100%;
+      min-width: 50px;
+    }
+    .inline-input:focus { outline: none; border-color: #3b82f6; background: #fff; }
+    .btn-save-inline { background: #3b82f6; color: #fff; font-size: 0.75rem; padding: 4px 10px; }
+    .btn-save-inline:not(:disabled):hover { background: #2563eb; }
+    .btn-cancel-inline { background: #e2e8f0; color: #475569; font-size: 0.75rem; padding: 4px 10px; }
+    .btn-cancel-inline:not(:disabled):hover { background: #cbd5e1; }
+
     /* ── Top-level Tab Bar ──────────────────────────────────────────── */
     #tab-bar {
       background: #1a2744;
@@ -549,61 +581,6 @@
 
 </div><!-- #config-viewer-container -->
 
-<!-- ── Edit Device Dialog ────────────────────────────────────────── -->
-<dialog id="edit-device-dialog">
-  <div class="card" style="margin:0;min-width:340px;max-width:480px">
-    <h2>Edit Device</h2>
-    <form id="edit-device-form">
-      <input type="hidden" id="ed-id" />
-      <div class="row">
-        <div class="field">
-          <label>Name</label>
-          <input id="ed-name" type="text" placeholder="My Device" />
-        </div>
-        <div class="field">
-          <label>Group <span style="color:#94a3b8;font-weight:400">(optional)</span></label>
-          <select id="ed-group">
-            <option value="">— Ungrouped —</option>
-          </select>
-        </div>
-      </div>
-      <div class="row">
-        <div class="field">
-          <label>IP Address</label>
-          <input id="ed-ip" type="text" placeholder="192.168.1.100" pattern="^(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)$" title="Valid IPv4 address required (e.g. 192.168.1.100)" required />
-        </div>
-        <div class="field">
-          <label>Port</label>
-          <input id="ed-port" type="number" min="1" max="65535" required />
-        </div>
-        <div class="field">
-          <label>Source Unit ID</label>
-          <input id="ed-unit" type="number" required />
-        </div>
-      </div>
-      <div class="row">
-        <div class="field">
-          <label>MMA Unit ID <span style="color:#64748b;font-size:.75rem;font-weight:400">(target memory unit)</span></label>
-          <input id="ed-mma-unit" type="number" min="1" required />
-        </div>
-        <div class="field">
-          <label>Status Slot <span style="color:#94a3b8;font-weight:400">(optional)</span></label>
-          <input id="ed-status-slot" type="number" min="0" />
-        </div>
-        <div class="field">
-          <label>Target</label>
-          <select id="ed-target" required></select>
-        </div>
-      </div>
-      <div id="edit-device-banner" class="banner"></div>
-      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
-        <button type="button" id="ed-cancel" class="btn-refresh">Cancel</button>
-        <button type="submit" class="btn-primary">Save</button>
-      </div>
-    </form>
-  </div>
-</dialog>
-
 <!-- ── Add / Edit Group Dialog ───────────────────────────────────── -->
 <dialog id="group-dialog">
   <div class="card" style="margin:0;min-width:300px;max-width:400px">
@@ -618,57 +595,6 @@
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
         <button type="button" id="grp-cancel" class="btn-refresh">Cancel</button>
         <button type="submit" class="btn-primary" id="grp-submit">Add</button>
-      </div>
-    </form>
-  </div>
-</dialog>
-
-<!-- ── Edit Read Dialog ──────────────────────────────────────────── -->
-<dialog id="edit-read-dialog">
-  <div class="card" style="margin:0;min-width:340px;max-width:480px">
-    <h2>Edit Read</h2>
-    <form id="edit-read-form">
-      <input type="hidden" id="er-device-id" />
-      <input type="hidden" id="er-read-id" />
-      <div class="row">
-        <div class="field">
-          <label>Read ID</label>
-          <input id="er-id-display" type="text" disabled style="background:#f1f5f9;color:#94a3b8" />
-        </div>
-        <div class="field">
-          <label>Name</label>
-          <input id="er-name" type="text" placeholder="My Read" />
-        </div>
-      </div>
-      <div class="row">
-        <div class="field">
-          <label>Source Area</label>
-          <select id="er-src-area">
-            <option value="holding_registers">holding_registers</option>
-            <option value="coils">coils</option>
-            <option value="input_registers">input_registers</option>
-            <option value="discrete_inputs">discrete_inputs</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>Source Address</label>
-          <input id="er-src-addr" type="number" value="0" required />
-        </div>
-        <div class="field">
-          <label>Count</label>
-          <input id="er-count" type="number" value="1" min="1" required />
-        </div>
-      </div>
-      <div class="row">
-        <div class="field">
-          <label>Poll Interval (ms)</label>
-          <input id="er-poll" type="number" value="2000" min="100" required />
-        </div>
-      </div>
-      <div id="edit-read-banner" class="banner"></div>
-      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
-        <button type="button" id="er-cancel" class="btn-refresh">Cancel</button>
-        <button type="submit" class="btn-primary">Save</button>
       </div>
     </form>
   </div>
@@ -811,6 +737,8 @@ function renderTargetsList(data) {
 
 // ── Device Workspace ─────────────────────────────────────────────────────────
 
+let _editingReadId = null;
+
 function renderDeviceWorkspace() {
   const el = document.getElementById('device-workspace');
 
@@ -835,66 +763,96 @@ function renderDeviceWorkspace() {
   const grpName = groupName(model, device.groupId) || '— Ungrouped —';
   const target = findTarget(model, device.target_name);
   const tPortRaw = target ? targetPort(target) : null;
-  const tPortDisplay = tPortRaw != null ? String(tPortRaw) : '—';
   const reads = device.reads || [];
 
-  // ── Device Info ────────────────────────────────────────────────────
+  // ── Device Info (inline editable: name, ipAddress, port) ───────────
   let html = `<div class="card">
     <div class="ws-card-header">
       <h2>📟 ${escapeHtml(device.name || device.id)}</h2>
       <div class="ws-card-actions">
-        <button class="btn-edit" id="ws-btn-edit-device">✎ Edit Device</button>
         <button class="btn-danger" id="ws-btn-del-device">✕ Delete</button>
       </div>
     </div>
-    <div class="info-grid">
-      <div class="info-field"><label>Device ID</label><div class="info-val">${escapeHtml(device.id)}</div></div>
-      <div class="info-field"><label>Name</label><div class="info-val">${escapeHtml(device.name || '—')}</div></div>
-      <div class="info-field"><label>IP Address</label><div class="info-val">${escapeHtml(device.ipAddress || '—')}</div></div>
-      <div class="info-field"><label>Port</label><div class="info-val">${escapeHtml(String(device.port ?? '—'))}</div></div>
-      <div class="info-field"><label>Group</label><div class="info-val">${escapeHtml(grpName)}</div></div>
-      <div class="info-field"><label>Source Unit ID</label><div class="info-val">${escapeHtml(String(device.source_unit_id ?? '—'))}</div></div>
-      <div class="info-field"><label>MMA Unit ID</label><div class="info-val">${escapeHtml(String(device.unitId ?? '—'))}</div></div>
-      <div class="info-field"><label>Status Slot</label><div class="info-val">${escapeHtml(String(device.status_slot ?? 0))}</div></div>
-    </div>
-  </div>`;
-
-  // ── Target Section ─────────────────────────────────────────────────
-  html += `<div class="card">
-    <div class="ws-card-header"><h2>🎯 Target Configuration</h2></div>
-    <div class="info-grid" style="margin-bottom:16px">
-      <div class="info-field"><label>Target Name</label><div class="info-val">${escapeHtml(device.target_name || '—')}</div></div>
-      <div class="info-field"><label>MMA Port</label><div class="info-val">${escapeHtml(tPortDisplay)}</div></div>
-    </div>
-    <form id="ws-target-form">
-      <div class="row">
-        <div class="field">
-          <label>Update MMA Port</label>
-          <input id="ws-t-port" type="number" value="${tPortRaw != null ? escapeHtml(String(tPortRaw)) : ''}" min="1" max="65535" ${!device.target_name ? 'disabled' : ''} />
+    <form id="ws-device-form">
+      <div class="info-grid">
+        <div class="info-field"><label>Device ID</label><div class="info-val">${escapeHtml(device.id)}</div></div>
+        <div class="info-field">
+          <label>Name</label>
+          <input class="info-edit-input" type="text" id="ws-ed-name" value="${escapeHtml(device.name || '')}" placeholder="My Device" />
         </div>
+        <div class="info-field">
+          <label>IP Address</label>
+          <input class="info-edit-input" type="text" id="ws-ed-ip" value="${escapeHtml(device.ipAddress || '')}"
+            pattern="^(25[0-5]|2[0-4]\\d|1\\d{2}|[1-9]?\\d)\\.(25[0-5]|2[0-4]\\d|1\\d{2}|[1-9]?\\d)\\.(25[0-5]|2[0-4]\\d|1\\d{2}|[1-9]?\\d)\\.(25[0-5]|2[0-4]\\d|1\\d{2}|[1-9]?\\d)$"
+            title="Valid IPv4 address required (e.g. 192.168.1.100)" required />
+        </div>
+        <div class="info-field">
+          <label>Port</label>
+          <input class="info-edit-input" type="number" id="ws-ed-port" value="${escapeHtml(String(device.port ?? ''))}" min="1" max="65535" required />
+        </div>
+        <div class="info-field"><label>Group</label><div class="info-val">${escapeHtml(grpName)}</div></div>
+        <div class="info-field"><label>Source Unit ID</label><div class="info-val">${escapeHtml(String(device.source_unit_id ?? '—'))}</div></div>
+        <div class="info-field"><label>MMA Unit ID</label><div class="info-val">${escapeHtml(String(device.unitId ?? '—'))}</div></div>
+        <div class="info-field"><label>Status Slot</label><div class="info-val">${escapeHtml(String(device.status_slot ?? 0))}</div></div>
       </div>
-      <div id="ws-target-banner" class="banner"></div>
-      <div><button type="submit" class="btn-primary" style="font-size:.8rem;padding:7px 14px" ${!device.target_name ? 'disabled' : ''}>Update Port</button></div>
+      <div id="ws-device-banner" class="banner" style="margin-top:10px"></div>
+      <div style="margin-top:10px">
+        <button type="submit" class="btn-primary" style="font-size:.8rem;padding:7px 14px">Save Device</button>
+      </div>
     </form>
   </div>`;
 
-  // ── Reads Section ──────────────────────────────────────────────────
+  // ── Target Section (inline editable port) ──────────────────────────
+  html += `<div class="card">
+    <div class="ws-card-header"><h2>🎯 Target Configuration</h2></div>
+    <form id="ws-target-form">
+      <div class="info-grid" style="margin-bottom:12px">
+        <div class="info-field"><label>Target Name</label><div class="info-val">${escapeHtml(device.target_name || '—')}</div></div>
+        <div class="info-field">
+          <label>MMA Port</label>
+          <input class="info-edit-input" type="number" id="ws-t-port" value="${tPortRaw != null ? escapeHtml(String(tPortRaw)) : ''}" min="1" max="65535" ${!device.target_name ? 'disabled' : ''} />
+        </div>
+      </div>
+      <div id="ws-target-banner" class="banner"></div>
+      <div><button type="submit" class="btn-primary" style="font-size:.8rem;padding:7px 14px" ${!device.target_name ? 'disabled' : ''}>Save Port</button></div>
+    </form>
+  </div>`;
+
+  // ── Reads Section (inline editing per row) ─────────────────────────
   let readsBody;
   if (reads.length === 0) {
     readsBody = `<tr><td colspan="7"><div class="empty-state" style="padding:16px 0">No reads configured yet.</div></td></tr>`;
   } else {
-    readsBody = reads.map(r => `<tr>
-      <td>${escapeHtml(r.id)}</td>
-      <td>${r.name ? escapeHtml(r.name) : '<span style="color:#cbd5e1">—</span>'}</td>
-      <td><code style="font-size:.78rem">${escapeHtml(r.source_area || '—')}</code></td>
-      <td>${escapeHtml(String(r.source_address ?? '—'))}</td>
-      <td>${escapeHtml(String(r.source_count ?? '—'))}</td>
-      <td>${escapeHtml(String(r.poll_interval ?? '—'))} ms</td>
-      <td style="white-space:nowrap">
-        <button class="btn-edit ws-edit-read" data-read-id="${escapeHtml(r.id)}">✎</button>
-        <button class="btn-danger ws-del-read" data-read-id="${escapeHtml(r.id)}">✕</button>
-      </td>
-    </tr>`).join('');
+    readsBody = reads.map(r => {
+      if (r.id === _editingReadId) {
+        const selOpts = ['holding_registers','coils','input_registers','discrete_inputs']
+          .map(v => `<option value="${v}"${r.source_area === v ? ' selected' : ''}>${v}</option>`).join('');
+        return `<tr class="row-highlight">
+          <td style="font-size:.78rem">${escapeHtml(r.id)}</td>
+          <td><input class="inline-input" type="text" id="ire-name" value="${escapeHtml(r.name || '')}" placeholder="Name" /></td>
+          <td><select class="inline-input" id="ire-area">${selOpts}</select></td>
+          <td><input class="inline-input" type="number" id="ire-addr" value="${escapeHtml(String(r.source_address ?? 0))}" style="width:70px" /></td>
+          <td><input class="inline-input" type="number" id="ire-count" value="${escapeHtml(String(r.source_count ?? 1))}" min="1" style="width:60px" /></td>
+          <td><input class="inline-input" type="number" id="ire-poll" value="${escapeHtml(String(r.poll_interval ?? 2000))}" min="100" style="width:80px" /></td>
+          <td style="white-space:nowrap">
+            <button class="btn-save-inline ws-save-read" data-read-id="${escapeHtml(r.id)}">Save</button>
+            <button class="btn-cancel-inline ws-cancel-read">Cancel</button>
+          </td>
+        </tr>`;
+      }
+      return `<tr>
+        <td>${escapeHtml(r.id)}</td>
+        <td>${r.name ? escapeHtml(r.name) : '<span style="color:#cbd5e1">—</span>'}</td>
+        <td><code style="font-size:.78rem">${escapeHtml(r.source_area || '—')}</code></td>
+        <td>${escapeHtml(String(r.source_address ?? '—'))}</td>
+        <td>${escapeHtml(String(r.source_count ?? '—'))}</td>
+        <td>${escapeHtml(String(r.poll_interval ?? '—'))} ms</td>
+        <td style="white-space:nowrap">
+          <button class="btn-edit ws-edit-read" data-read-id="${escapeHtml(r.id)}">✎</button>
+          <button class="btn-danger ws-del-read" data-read-id="${escapeHtml(r.id)}">✕</button>
+        </td>
+      </tr>`;
+    }).join('');
   }
 
   html += `<div class="card">
@@ -902,6 +860,7 @@ function renderDeviceWorkspace() {
       <h2>📋 Reads <span style="color:#94a3b8;font-size:.8rem;font-weight:400">(register reads)</span></h2>
       <button class="btn-primary" id="ws-btn-show-add-read" style="font-size:.8rem;padding:7px 14px">+ Add Read</button>
     </div>
+    <div id="ws-read-inline-error" class="banner" style="margin-bottom:8px"></div>
     <div class="reads-table-wrap">
       <table>
         <thead><tr>
@@ -942,9 +901,54 @@ function renderDeviceWorkspace() {
   el.innerHTML = html;
 
   // ── Event Listeners ────────────────────────────────────────────────
-  document.getElementById('ws-btn-edit-device').addEventListener('click', () => openEditDevice(device.id));
+
+  // Save device info (inline)
+  document.getElementById('ws-device-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const banner = document.getElementById('ws-device-banner');
+    banner.className = 'banner';
+    const payload = {
+      device: {
+        name:           document.getElementById('ws-ed-name').value.trim(),
+        ipAddress:      document.getElementById('ws-ed-ip').value.trim(),
+        port:           Number(document.getElementById('ws-ed-port').value),
+        groupId:        device.groupId || null,
+        source_unit_id: device.source_unit_id,
+        unitId:         device.unitId,
+        status_slot:    device.status_slot ?? 0,
+        target_name:    device.target_name,
+      }
+    };
+    const { ok, data } = await api('PUT', `/device/${encodeURIComponent(device.id)}`, payload);
+    if (ok) {
+      await loadModel();
+    } else {
+      banner.textContent = `✗ ${data.error || 'Unknown error'}`;
+      banner.className = 'banner show err';
+    }
+  });
+
   document.getElementById('ws-btn-del-device').addEventListener('click', () => deleteDevice(device.id));
 
+  // Save target port (inline)
+  document.getElementById('ws-target-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const banner = document.getElementById('ws-target-banner');
+    banner.className = 'banner';
+    const newPort = Number(document.getElementById('ws-t-port').value);
+    if (!device.target_name) return;
+    const { ok, data } = await api('PUT', `/target/${encodeURIComponent(device.target_name)}`, { target: { port: newPort } });
+    if (ok) {
+      banner.textContent = `✓ Target "${device.target_name}" port updated to ${newPort}.`;
+      banner.className = 'banner show ok';
+      await loadModel();
+    } else {
+      banner.textContent = `✗ ${data.error || 'Unknown error'}`;
+      banner.className = 'banner show err';
+    }
+  });
+
+  // Show/hide add-read panel
   document.getElementById('ws-btn-show-add-read').addEventListener('click', () => {
     document.getElementById('ws-add-read-panel').style.display = '';
     document.getElementById('ws-btn-show-add-read').style.display = 'none';
@@ -980,26 +984,48 @@ function renderDeviceWorkspace() {
     }
   });
 
-  document.getElementById('ws-target-form').addEventListener('submit', async e => {
-    e.preventDefault();
-    const banner = document.getElementById('ws-target-banner');
-    banner.className = 'banner';
-    const newPort = Number(document.getElementById('ws-t-port').value);
-    if (!device.target_name) return;
-    const { ok, data } = await api('PUT', `/target/${encodeURIComponent(device.target_name)}`, { target: { port: newPort } });
-    if (ok) {
-      banner.textContent = `✓ Target "${device.target_name}" port updated to ${newPort}.`;
-      banner.className = 'banner show ok';
-      await loadModel();
-    } else {
-      banner.textContent = `✗ ${data.error || 'Unknown error'}`;
-      banner.className = 'banner show err';
-    }
+  // Inline read edit: enter edit mode
+  el.querySelectorAll('.ws-edit-read').forEach(btn => {
+    btn.addEventListener('click', () => {
+      _editingReadId = btn.dataset.readId;
+      renderDeviceWorkspace();
+    });
   });
 
-  el.querySelectorAll('.ws-edit-read').forEach(btn => {
-    btn.addEventListener('click', () => openEditRead(device.id, btn.dataset.readId));
+  // Inline read edit: cancel
+  el.querySelectorAll('.ws-cancel-read').forEach(btn => {
+    btn.addEventListener('click', () => {
+      _editingReadId = null;
+      renderDeviceWorkspace();
+    });
   });
+
+  // Inline read edit: save
+  el.querySelectorAll('.ws-save-read').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const readId = btn.dataset.readId;
+      const banner = document.getElementById('ws-read-inline-error');
+      banner.className = 'banner';
+      const payload = {
+        read: {
+          name:           document.getElementById('ire-name').value.trim(),
+          source_area:    document.getElementById('ire-area').value,
+          source_address: Number(document.getElementById('ire-addr').value),
+          source_count:   Number(document.getElementById('ire-count').value),
+          poll_interval:  Number(document.getElementById('ire-poll').value),
+        }
+      };
+      const { ok, data } = await api('PUT', `/read/${encodeURIComponent(device.id)}/${encodeURIComponent(readId)}`, payload);
+      if (ok) {
+        _editingReadId = null;
+        await loadModel();
+      } else {
+        banner.textContent = `✗ ${data.error || 'Unknown error'}`;
+        banner.className = 'banner show err';
+      }
+    });
+  });
+
   el.querySelectorAll('.ws-del-read').forEach(btn => {
     btn.addEventListener('click', () => deleteRead(device.id, btn.dataset.readId));
   });
@@ -1007,18 +1033,6 @@ function renderDeviceWorkspace() {
 
 function refreshGroupDropdowns(data) {
   const groups = (data && data.groups) || [];
-
-  // Edit Device dialog group select
-  const edSel = document.getElementById('ed-group');
-  const edPrev = edSel.value;
-  edSel.innerHTML = '<option value="">— Ungrouped —</option>';
-  for (const g of groups) {
-    const opt = document.createElement('option');
-    opt.value = g.id;
-    opt.textContent = g.name;
-    edSel.appendChild(opt);
-  }
-  if (edPrev) edSel.value = edPrev;
 
   // Add Device dialog group select
   const adSel = document.getElementById('ad-group');
@@ -1046,20 +1060,18 @@ async function loadModel() {
   renderTree(data);
   refreshGroupDropdowns(data);
 
-  // Refresh target dropdowns in Add Device and Edit Device dialogs
+  // Refresh target dropdown in Add Device dialog
   const targets = (data.system && data.system.targets) || [];
-  for (const selId of ['ad-target', 'ed-target']) {
-    const tsel = document.getElementById(selId);
-    const tprev = tsel.value;
-    tsel.innerHTML = '<option value="">— select target —</option>';
-    for (const t of targets) {
-      const opt = document.createElement('option');
-      opt.value = t.name;
-      opt.textContent = `${t.name} (port ${targetPort(t)})`;
-      tsel.appendChild(opt);
-    }
-    if (tprev) tsel.value = tprev;
+  const tsel = document.getElementById('ad-target');
+  const tprev = tsel.value;
+  tsel.innerHTML = '<option value="">— select target —</option>';
+  for (const t of targets) {
+    const opt = document.createElement('option');
+    opt.value = t.name;
+    opt.textContent = `${t.name} (port ${targetPort(t)})`;
+    tsel.appendChild(opt);
   }
+  if (tprev) tsel.value = tprev;
 
   renderDeviceWorkspace();
 
@@ -1315,6 +1327,7 @@ document.getElementById('tree-panel').addEventListener('click', async e => {
   const deviceRow = e.target.closest('.tree-device[data-device-id]');
   if (deviceRow) {
     _selectedDeviceId = deviceRow.dataset.deviceId;
+    _editingReadId = null;
     renderTree(_currentModel);
     renderDeviceWorkspace();
   }
@@ -1382,54 +1395,6 @@ document.getElementById('grp-cancel').addEventListener('click', () => {
 
 // ── Read CRUD ────────────────────────────────────────────────────────────────
 
-function openEditRead(deviceId, readId) {
-  const model = _currentModel || {};
-  const device = (model.devices || []).find(d => d.id === deviceId);
-  if (!device) return;
-  const read = (device.reads || []).find(r => r.id === readId);
-  if (!read) return;
-
-  document.getElementById('er-device-id').value = deviceId;
-  document.getElementById('er-read-id').value = readId;
-  document.getElementById('er-id-display').value = readId;
-  document.getElementById('er-name').value = read.name || '';
-  document.getElementById('er-src-area').value = read.source_area || 'holding_registers';
-  document.getElementById('er-src-addr').value = read.source_address ?? 0;
-  document.getElementById('er-count').value = read.source_count ?? 1;
-  document.getElementById('er-poll').value = read.poll_interval ?? 2000;
-  document.getElementById('edit-read-banner').className = 'banner';
-  document.getElementById('edit-read-dialog').showModal();
-}
-
-document.getElementById('edit-read-form').addEventListener('submit', async e => {
-  e.preventDefault();
-  const banner = document.getElementById('edit-read-banner');
-  banner.className = 'banner';
-  const deviceId = document.getElementById('er-device-id').value;
-  const readId = document.getElementById('er-read-id').value;
-  const payload = {
-    read: {
-      name:           document.getElementById('er-name').value.trim(),
-      source_area:    document.getElementById('er-src-area').value,
-      source_address: Number(document.getElementById('er-src-addr').value),
-      source_count:   Number(document.getElementById('er-count').value),
-      poll_interval:  Number(document.getElementById('er-poll').value),
-    }
-  };
-  const { ok, data } = await api('PUT', `/read/${encodeURIComponent(deviceId)}/${encodeURIComponent(readId)}`, payload);
-  if (ok) {
-    document.getElementById('edit-read-dialog').close();
-    await loadModel();
-  } else {
-    banner.textContent = `✗ ${data.error || 'Unknown error'}`;
-    banner.className = 'banner show err';
-  }
-});
-
-document.getElementById('er-cancel').addEventListener('click', () => {
-  document.getElementById('edit-read-dialog').close();
-});
-
 async function deleteRead(deviceId, readId) {
   if (!confirm(`Delete read "${readId}" from device "${deviceId}"?`)) return;
   const { ok, data } = await api('DELETE', `/read/${encodeURIComponent(deviceId)}/${encodeURIComponent(readId)}`);
@@ -1439,73 +1404,6 @@ async function deleteRead(deviceId, readId) {
     alert(`Error: ${data.error || 'Unknown error'}`);
   }
 }
-
-// ── Edit Device ──────────────────────────────────────────────────────────────
-
-function openEditDevice(deviceId) {
-  const model = _currentModel || {};
-  const device = (model.devices || []).find(d => d.id === deviceId);
-  if (!device) return;
-
-  document.getElementById('ed-id').value = device.id;
-  document.getElementById('ed-name').value = device.name || '';
-  document.getElementById('ed-ip').value = device.ipAddress || '';
-  document.getElementById('ed-port').value = device.port || '';
-  document.getElementById('ed-unit').value = device.source_unit_id || '';
-  document.getElementById('ed-mma-unit').value = device.unitId || '';
-  document.getElementById('ed-status-slot').value = device.status_slot != null ? device.status_slot : 0;
-
-  // Populate group dropdown and select current
-  refreshGroupDropdowns(model);
-  document.getElementById('ed-group').value = device.groupId || '';
-
-  const targets = (model.system && model.system.targets) || [];
-  const tsel = document.getElementById('ed-target');
-  tsel.innerHTML = '';
-  for (const t of targets) {
-    const opt = document.createElement('option');
-    opt.value = t.name;
-    opt.textContent = `${t.name} (port ${targetPort(t)})`;
-    tsel.appendChild(opt);
-  }
-  tsel.value = device.target_name || '';
-
-  document.getElementById('edit-device-banner').className = 'banner';
-  document.getElementById('edit-device-dialog').showModal();
-}
-
-document.getElementById('edit-device-form').addEventListener('submit', async e => {
-  e.preventDefault();
-  const banner = document.getElementById('edit-device-banner');
-  banner.className = 'banner';
-
-  const deviceId = document.getElementById('ed-id').value;
-  const payload = {
-    device: {
-      name:           document.getElementById('ed-name').value.trim(),
-      groupId:        document.getElementById('ed-group').value || null,
-      ipAddress:      document.getElementById('ed-ip').value.trim(),
-      port:           Number(document.getElementById('ed-port').value),
-      source_unit_id: Number(document.getElementById('ed-unit').value),
-      unitId:         Number(document.getElementById('ed-mma-unit').value),
-      status_slot:    Number(document.getElementById('ed-status-slot').value) || 0,
-      target_name:    document.getElementById('ed-target').value,
-    }
-  };
-
-  const { ok, data } = await api('PUT', `/device/${encodeURIComponent(deviceId)}`, payload);
-  if (ok) {
-    document.getElementById('edit-device-dialog').close();
-    await loadModel();
-  } else {
-    banner.textContent = `✗ ${data.error || 'Unknown error'}`;
-    banner.className = 'banner show err';
-  }
-});
-
-document.getElementById('ed-cancel').addEventListener('click', () => {
-  document.getElementById('edit-device-dialog').close();
-});
 
 // ── Config Viewer ────────────────────────────────────────────────────────────
 
