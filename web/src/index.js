@@ -528,6 +528,35 @@ function findMemoryPort(model, portId) {
     return ((model.memory && model.memory.ports) || []).find(p => p.id === portId) || null;
 }
 
+/**
+ * Derive an initial memory block for a newly-created MMA port.
+ *
+ * If any device targets portNum and has at least one read configured, the
+ * block is derived from the first such read (using the device's unitId and
+ * the read's area/address/count).  Otherwise a safe default block is returned:
+ *   unit_id: 1, area: holding_registers, address: 0, count: 1
+ *
+ * @param {object} model
+ * @param {number} portNum
+ * @returns {{ unit_id: number, area: string, address: number, count: number }}
+ */
+function deriveInitialBlock(model, portNum) {
+    for (const device of (model.devices || [])) {
+        if (endpointPort(device.target_endpoint) !== portNum) continue;
+        const reads = device.reads || [];
+        if (reads.length === 0) continue;
+        const read = reads[0];
+        return {
+            unit_id: Number(device.unitId) || 1,
+            area: read.source_area || 'holding_registers',
+            address: Number(read.source_address) >= 0 ? Number(read.source_address) : 0,
+            count: Number(read.source_count) >= 1 ? Number(read.source_count) : 1,
+        };
+    }
+    // No device reads found — use safe defaults
+    return { unit_id: 1, area: 'holding_registers', address: 0, count: 1 };
+}
+
 // POST /memory/port — add a memory port (MMA listener)
 app.post('/memory/port', (req, res) => {
     try {
@@ -541,7 +570,13 @@ app.post('/memory/port', (req, res) => {
         if (exists) {
             return res.status(409).json({ error: `Memory port ${portNum} already exists` });
         }
-        const newPort = { id: randomUUID(), port: portNum, blocks: [] };
+        // Seed an initial memory block so the port is immediately usable.
+        const initialBlock = deriveInitialBlock(model, portNum);
+        const newPort = {
+            id: randomUUID(),
+            port: portNum,
+            blocks: [{ id: randomUUID(), ...initialBlock }],
+        };
         model.memory.ports.push(newPort);
         writeModel(model);
         autoCompile(model);
@@ -1064,6 +1099,19 @@ function compileAndWrite(model, excludedPortNums = new Set()) {
     const coverage = ensureMemoryCoverage(model);
     if (coverage.modified) {
         writeModel(model);
+    }
+
+    // Validate that no included port has an empty memory block list.
+    // A port with no blocks is invalid — it cannot serve any Replicator target.
+    const emptyPorts = (model.memory.ports || [])
+        .filter(p => !excludedPortNums.has(Number(p.port)) && (p.blocks || []).length === 0)
+        .map(p => Number(p.port));
+    if (emptyPorts.length > 0) {
+        return {
+            ok: false,
+            mmaErrors: [`MMA port(s) ${emptyPorts.join(', ')} have no memory blocks — add at least one block before compiling`],
+            replicatorErrors: [],
+        };
     }
 
     const replicatorYaml = toReplicatorYaml(model, excludedPortNums);
