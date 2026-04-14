@@ -147,6 +147,16 @@
       font-size: 0.875rem;
     }
 
+    .resolution-log summary {
+      cursor: pointer;
+      font-size: 0.85rem;
+      color: #D97706;
+    }
+    .resolution-log ul {
+      margin: 4px 0 0 16px;
+      font-size: 0.8rem;
+    }
+
     table { width: 100%; border-collapse: collapse; font-size: .85rem; }
     th { text-align: left; color: #6B7280; border-bottom: 1px solid #E5E7EB; padding: 6px 8px; font-weight: 600; }
     td { padding: 6px 8px; vertical-align: top; }
@@ -1572,7 +1582,7 @@ async function compile() {
       : '';
     const resolutionLog = data.resolution_log || [];
     const resolutionHtml = resolutionLog.length > 0
-      ? `<details style="margin-top:8px;text-align:left"><summary style="cursor:pointer;font-size:0.85rem;color:#D97706">⚠ ${resolutionLog.length} identity conflict(s) auto-resolved</summary><ul style="margin:4px 0 0 16px;font-size:0.8rem">${resolutionLog.map(r => `<li>${escapeHtml(r.reason)}</li>`).join('')}</ul></details>`
+      ? `<details class="resolution-log" style="margin-top:8px;text-align:left"><summary>⚠ ${resolutionLog.length} identity conflict(s) auto-resolved</summary><ul>${resolutionLog.map(r => `<li>${escapeHtml(r.reason)}</li>`).join('')}</ul></details>`
       : '';
     el.innerHTML = `<div class="banner show ok">✓ Compiled successfully — ${escapeHtml(String(data.routes))} route(s) written to Replicator and MMA configs${blocksMsg}${excludedMsg}.${resolutionHtml}</div>`;
     await refreshConfigViewerIfActive();

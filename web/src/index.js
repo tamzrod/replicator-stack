@@ -1379,6 +1379,9 @@ function compileAndWrite(model, excludedPortNums = new Set()) {
     }
 
     if (rehydrated.modified || resolutionLog.length > 0) {
+        // Write model when either rehydration produced new block state OR when conflict
+        // resolution remapped one or more status_unit_id values — both mutations must
+        // be persisted so subsequent compiles start from the resolved state.
         writeModel(model);
     }
 
