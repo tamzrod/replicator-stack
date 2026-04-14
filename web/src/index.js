@@ -831,6 +831,9 @@ app.get('/config', (req, res) => {
 /**
  * Merge an array of {start, end} ranges into a minimal non-overlapping,
  * non-adjacent sorted list of ranges.
+ *
+ * @param {Array<{start: number, end: number}>} ranges
+ * @returns {Array<{start: number, end: number}>}
  */
 function mergeRanges(ranges) {
     if (ranges.length === 0) return [];
@@ -848,8 +851,12 @@ function mergeRanges(ranges) {
 }
 
 /**
- * Check whether mergedA (sorted, non-overlapping) covers all ranges in mergedB.
- * Returns true if every range in mergedB is fully covered by some range in mergedA.
+ * Check whether every range in `required` is fully covered by some range in `existing`.
+ * Both arrays should be pre-merged (sorted, non-overlapping).
+ *
+ * @param {Array<{start: number, end: number}>} existing - merged existing ranges
+ * @param {Array<{start: number, end: number}>} required - merged required ranges
+ * @returns {boolean} true if all required ranges are fully covered
  */
 function rangesAreCovered(existing, required) {
     for (const req of required) {
@@ -879,7 +886,9 @@ function ensureMemoryCoverage(model) {
     let modified = false;
     let blocksCreated = 0;
 
-    // Build lookup: unit_id (number) → port id
+    // Build lookup: unit_id (number) → port id.
+    // Consistent with toReplicatorYaml: first port that contains a block for a given
+    // unit_id wins; unit_ids are expected to be unique across ports.
     const unitToPortId = {};
     for (const port of memoryPorts) {
         for (const block of (port.blocks || [])) {
