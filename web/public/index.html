@@ -221,8 +221,9 @@
     .pipeline-section { margin-bottom: 0; border-radius: 0; }
     .pipeline-section:first-child { border-radius: 8px 8px 0 0; }
     .pipeline-section:last-child  { border-radius: 0 0 8px 8px; }
-    .pipeline-section-source { border-left: 4px solid #3b82f6; }
-    .pipeline-section-read   { border-left: 4px solid #f59e0b; }
+    .pipeline-section-source  { border-left: 4px solid #3b82f6; }
+    .pipeline-section-read    { border-left: 4px solid #f59e0b; }
+    .pipeline-section-target  { border-left: 4px solid #10b981; }
     .pipeline-arrow {
       text-align: center;
       padding: 6px 0;
@@ -245,6 +246,7 @@
     }
     .pipeline-label-source { background: #dbeafe; color: #1d4ed8; }
     .pipeline-label-read   { background: #fef3c7; color: #b45309; }
+    .pipeline-label-target { background: #d1fae5; color: #065f46; }
     .info-field label {
       display: block; font-size: .75rem; font-weight: 600; color: #64748b;
       margin-bottom: 4px; text-transform: uppercase; letter-spacing: .04em;
@@ -880,14 +882,9 @@ function renderDeviceWorkspace() {
           <label>Source Unit ID <span style="color:#94a3b8;font-weight:400">(optional)</span></label>
           <input class="info-edit-input" type="number" id="ws-ed-src-unit" value="${escapeHtml(String(device.source_unit_id ?? ''))}" placeholder="e.g. 1" />
         </div>
-        <div class="info-field"><label>MMA Unit ID</label><div class="info-val">${escapeHtml(String(device.unitId ?? '—'))}</div></div>
         <div class="info-field">
           <label>Status Slot</label>
           <input class="info-edit-input" type="number" id="ws-ed-status-slot" value="${escapeHtml(String(device.status_slot ?? 0))}" min="0" />
-        </div>
-        <div class="info-field">
-          <label>Status Unit ID <span style="color:#94a3b8;font-weight:400">(optional, MMA unit for status)</span></label>
-          <input class="info-edit-input" type="number" id="ws-ed-status-unit" value="${escapeHtml(String(device.status_unit_id ?? ''))}" placeholder="e.g. 100" min="1" />
         </div>
         <div class="info-field"><label>Group</label><div class="info-val">${escapeHtml(grpName)}</div></div>
       </div>
@@ -981,6 +978,40 @@ function renderDeviceWorkspace() {
     </div>
   </div>`;
 
+  // ── Pipeline Arrow → TARGET ────────────────────────────────────────
+  html += `<div class="pipeline-arrow">↓</div>`;
+
+  // ── C. TARGET Section ──────────────────────────────────────────────
+  // Compute displayed MMA endpoint from model memory ports + system settings
+  const mmaHost = (model.system && model.system.mma_endpoint) || 'mma';
+  const memPorts = (model.memory && model.memory.ports) || [];
+  const matchedPort = memPorts.find(p => (p.blocks || []).some(b => Number(b.unit_id) === Number(device.unitId)));
+  const targetPortNum = (matchedPort || memPorts[0] || {}).port || 502;
+  const targetEndpointDisplay = `${mmaHost}:${targetPortNum}`;
+
+  html += `<div class="card pipeline-section pipeline-section-target">
+    <div class="ws-card-header">
+      <h2><span class="pipeline-label pipeline-label-target">TARGET</span>🎯 Target <span style="color:#94a3b8;font-size:.8rem;font-weight:400">(MMA destination)</span></h2>
+    </div>
+    <form id="ws-target-form">
+      <div class="info-grid">
+        <div class="info-field"><label>Endpoint</label><div class="info-val">${escapeHtml(targetEndpointDisplay)}</div></div>
+        <div class="info-field">
+          <label>Unit ID <span style="color:#94a3b8;font-weight:400">(MMA unit)</span></label>
+          <input class="info-edit-input" type="number" id="ws-tgt-unit" value="${escapeHtml(String(device.unitId ?? ''))}" min="1" required />
+        </div>
+        <div class="info-field">
+          <label>Status Unit ID <span style="color:#94a3b8;font-weight:400">(optional, MMA unit for status)</span></label>
+          <input class="info-edit-input" type="number" id="ws-tgt-status-unit" value="${escapeHtml(String(device.status_unit_id ?? ''))}" placeholder="e.g. 100" min="1" />
+        </div>
+      </div>
+      <div id="ws-target-banner" class="banner" style="margin-top:10px"></div>
+      <div style="margin-top:10px">
+        <button type="submit" class="btn-primary" style="font-size:.8rem;padding:7px 14px">Save Target</button>
+      </div>
+    </form>
+  </div>`;
+
   el.innerHTML = html;
 
   // ── Event Listeners ────────────────────────────────────────────────
@@ -999,11 +1030,7 @@ function renderDeviceWorkspace() {
                           ? Number(document.getElementById('ws-ed-src-unit').value)
                           : device.source_unit_id,
         groupId:        device.groupId || null,
-        unitId:         device.unitId,
         status_slot:    Number(document.getElementById('ws-ed-status-slot').value) || 0,
-        status_unit_id: document.getElementById('ws-ed-status-unit').value !== ''
-                          ? Number(document.getElementById('ws-ed-status-unit').value)
-                          : null,
       }
     };
     const { ok, data } = await api('PUT', `/device/${encodeURIComponent(device.id)}`, payload);
@@ -1016,6 +1043,28 @@ function renderDeviceWorkspace() {
   });
 
   document.getElementById('ws-btn-del-device').addEventListener('click', () => deleteDevice(device.id));
+
+  // Save target info
+  document.getElementById('ws-target-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const banner = document.getElementById('ws-target-banner');
+    banner.className = 'banner';
+    const payload = {
+      device: {
+        unitId: Number(document.getElementById('ws-tgt-unit').value),
+        status_unit_id: document.getElementById('ws-tgt-status-unit').value !== ''
+                          ? Number(document.getElementById('ws-tgt-status-unit').value)
+                          : null,
+      }
+    };
+    const { ok, data } = await api('PUT', `/device/${encodeURIComponent(device.id)}`, payload);
+    if (ok) {
+      await loadModel();
+    } else {
+      banner.textContent = `✗ ${data.error || 'Unknown error'}`;
+      banner.className = 'banner show err';
+    }
+  });
 
   // Show/hide add-read panel
   document.getElementById('ws-btn-show-add-read').addEventListener('click', () => {
