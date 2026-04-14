@@ -1262,11 +1262,42 @@ document.getElementById('ad-cancel').addEventListener('click', () => {
 async function compile() {
   const el = document.getElementById('compile-result');
   el.textContent = '';
-  const { ok, data } = await api('POST', '/compile');
+
+  // Step 1: Pre-check for MMA ports referenced by devices that don't exist yet.
+  const { ok: precheckOk, data: precheckData } = await api('GET', '/compile/precheck');
+  if (!precheckOk) {
+    el.innerHTML = `<div class="banner show err">✗ Pre-check failed: ${escapeHtml(precheckData.error || 'Unknown error')}</div>`;
+    return;
+  }
+
+  const missingPorts = precheckData.missingPorts || [];
+  const excludedPorts = [];
+
+  // Step 2: For each missing port, ask the user whether to create it.
+  for (const port of missingPorts) {
+    const confirmed = confirm(`MMA port ${port} does not exist. Do you want to create it?`);
+    if (confirmed) {
+      // YES → create the memory listener for that port now.
+      const { ok, data } = await api('POST', '/memory/port', { port: { port } });
+      if (!ok) {
+        el.innerHTML = `<div class="banner show err">✗ Failed to create MMA port ${port}: ${escapeHtml(data.error || 'Unknown error')}</div>`;
+        return;
+      }
+    } else {
+      // NO → exclude devices targeting this port from the compiled output.
+      excludedPorts.push(port);
+    }
+  }
+
+  // Step 3: Compile, passing any ports the user declined.
+  const compileBody = excludedPorts.length > 0 ? { excluded_ports: excludedPorts } : undefined;
+  const { ok, data } = await api('POST', '/compile', compileBody);
   if (ok) {
     const blocksMsg = data.blocksCreated > 0 ? ` (${data.blocksCreated} memory block(s) auto-created)` : '';
-    el.innerHTML = `<div class="banner show ok">✓ Compiled successfully — ${escapeHtml(String(data.routes))} route(s) written to Replicator and MMA configs${blocksMsg}.</div>`;
-    // Refresh config viewer immediately so it reflects the latest compiled output.
+    const excludedMsg = excludedPorts.length > 0
+      ? ` — ${excludedPorts.length} port(s) skipped (port${excludedPorts.length > 1 ? 's' : ''} ${excludedPorts.join(', ')})`
+      : '';
+    el.innerHTML = `<div class="banner show ok">✓ Compiled successfully — ${escapeHtml(String(data.routes))} route(s) written to Replicator and MMA configs${blocksMsg}${excludedMsg}.</div>`;
     await refreshConfigViewerIfActive();
   } else if (data.mma_errors || data.replicator_errors) {
     const mmaItems = (data.mma_errors || []).map(e => `<li>${escapeHtml(e)}</li>`).join('');
@@ -1276,7 +1307,7 @@ async function compile() {
     if (repItems) detail += `<strong>Replicator:</strong><ul style="margin:4px 0 0 16px">${repItems}</ul>`;
     el.innerHTML = `<div class="banner show err">✗ Compile blocked — config separation violation:<br/>${detail}</div>`;
   } else {
-    el.innerHTML = `<div class="banner show err">✗ ${data.error || 'Compile failed'}</div>`;
+    el.innerHTML = `<div class="banner show err">✗ ${escapeHtml(data.error || 'Compile failed')}</div>`;
   }
   await loadModel();
 }

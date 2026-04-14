@@ -142,6 +142,20 @@ function endpointPort(endpoint) {
     return Number.isFinite(port) && port >= 1 && port <= 65535 ? port : null;
 }
 
+// Return sorted array of port numbers referenced by device target_endpoints
+// that do not yet exist in model.memory.ports.
+function getMissingTargetPorts(model) {
+    const existingPortNums = new Set((model.memory.ports || []).map(p => Number(p.port)));
+    const missing = new Set();
+    for (const device of (model.devices || [])) {
+        const port = endpointPort(device.target_endpoint);
+        if (port != null && !existingPortNums.has(port)) {
+            missing.add(port);
+        }
+    }
+    return [...missing].sort((a, b) => a - b);
+}
+
 function findGroup(model, groupId) {
     return (model.groups || []).find(g => g.id === groupId) || null;
 }
@@ -194,7 +208,7 @@ const AREA_TO_FC = {
     input_status: 2,
 };
 
-function toReplicatorYaml(model) {
+function toReplicatorYaml(model, excludedPortNums = new Set()) {
     // Replicator orchestration config.
     // Format per docs/sample yaml/replicator.yaml:
     //   - top-level replicator: block
@@ -208,6 +222,9 @@ function toReplicatorYaml(model) {
     const lines = ['replicator:', '  units:'];
 
     for (const device of devices) {
+        // Skip devices whose target port has been explicitly excluded (user declined creation)
+        const targetPort = endpointPort(device.target_endpoint);
+        if (targetPort !== null && excludedPortNums.has(targetPort)) continue;
         const deviceReads = device.reads || [];
         if (deviceReads.length === 0) continue;
 
@@ -963,17 +980,13 @@ function ensureMemoryCoverage(model) {
         const unitId = Number(device.unitId);
         if (!Number.isFinite(unitId) || unitId < 1) continue;
 
-        // Resolve which port this unit belongs to; auto-create from target_endpoint port if none exists
+        // Resolve which port this unit belongs to; skip if port not found (no silent auto-creation)
         let portId = unitToPortId[unitId];
         if (!portId) {
             // Prefer the port from the device's target_endpoint, fall back to 502
             const targetPort = endpointPort(device.target_endpoint) || 502;
-            let matchingPort = memoryPorts.find(p => Number(p.port) === targetPort);
-            if (!matchingPort) {
-                matchingPort = { id: randomUUID(), port: targetPort, blocks: [] };
-                memoryPorts.push(matchingPort);
-                modified = true;
-            }
+            const matchingPort = memoryPorts.find(p => Number(p.port) === targetPort);
+            if (!matchingPort) continue; // port does not exist — skip this device
             portId = matchingPort.id;
             unitToPortId[unitId] = portId;
         }
@@ -1042,15 +1055,18 @@ function ensureMemoryCoverage(model) {
  * Compile model → YAML and write to disk.
  * Returns { ok, mmaErrors, replicatorErrors, blocksCreated }.
  * Does NOT throw — callers that want to surface errors should check the return value.
+ *
+ * @param {object} model
+ * @param {Set<number>} [excludedPortNums] - port numbers whose devices should be omitted from replicator YAML
  */
-function compileAndWrite(model) {
-    // Step 1: ensure every read has a backing memory block (auto-create if missing)
+function compileAndWrite(model, excludedPortNums = new Set()) {
+    // Step 1: ensure every read has a backing memory block (auto-create blocks if missing, but never auto-create ports)
     const coverage = ensureMemoryCoverage(model);
     if (coverage.modified) {
         writeModel(model);
     }
 
-    const replicatorYaml = toReplicatorYaml(model);
+    const replicatorYaml = toReplicatorYaml(model, excludedPortNums);
     const mmaYaml = toMmaYaml(model);
     const mmaErrors = validateMmaConfig(mmaYaml);
     const replicatorErrors = validateReplicatorConfig(replicatorYaml);
@@ -1064,23 +1080,58 @@ function compileAndWrite(model) {
 
 /**
  * Silently auto-compile after a model mutation.
+ * Devices whose target port does not exist in memory are excluded from YAML output —
+ * no ports are auto-created; the user must confirm via the explicit Compile flow.
  * Any errors are swallowed — the model is always saved regardless.
  */
 function autoCompile(model) {
-    try { compileAndWrite(model); } catch (_) { /* best-effort */ }
+    try {
+        const missingPorts = getMissingTargetPorts(model);
+        const excludedPortNums = new Set(missingPorts);
+        compileAndWrite(model, excludedPortNums);
+    } catch (_) { /* best-effort */ }
 }
+
+// GET /compile/precheck — return port numbers referenced by devices that don't exist in memory yet.
+// The frontend uses this to present confirmation dialogs before triggering the full compile.
+app.get('/compile/precheck', (req, res) => {
+    try {
+        const model = readModel();
+        const missingPorts = getMissingTargetPorts(model);
+        res.json({ missingPorts });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 
 app.post('/compile', (req, res) => {
     try {
         const model = readModel();
-        const devices = model.devices || [];
 
+        // Parse optional list of port numbers the user chose NOT to create (excluded from this compile).
+        const excludedPortsList = Array.isArray(req.body && req.body.excluded_ports)
+            ? req.body.excluded_ports
+            : [];
+        const excludedPortNums = new Set(excludedPortsList.map(Number).filter(Number.isFinite));
+
+        // Block if any target ports are still unresolved (missing and not explicitly excluded).
+        const missingPorts = getMissingTargetPorts(model).filter(p => !excludedPortNums.has(p));
+        if (missingPorts.length > 0) {
+            return res.status(422).json({
+                error: `Compilation blocked — MMA port(s) ${missingPorts.join(', ')} do not exist and require confirmation`,
+                missing_ports: missingPorts,
+            });
+        }
+
+        // Count routes for non-excluded devices only.
         let routeCount = 0;
-        for (const device of devices) {
+        for (const device of (model.devices || [])) {
+            const targetPort = endpointPort(device.target_endpoint);
+            if (targetPort !== null && excludedPortNums.has(targetPort)) continue;
             routeCount += (device.reads || []).length;
         }
 
-        const result = compileAndWrite(model);
+        const result = compileAndWrite(model, excludedPortNums);
         if (!result.ok) {
             return res.status(400).json({
                 error: 'Config validation failed — generated configs violate separation rules',
@@ -1089,7 +1140,7 @@ app.post('/compile', (req, res) => {
             });
         }
 
-        res.json({ ok: true, routes: routeCount, blocksCreated: result.blocksCreated || 0 });
+        res.json({ ok: true, routes: routeCount, blocksCreated: result.blocksCreated || 0, excluded_ports: [...excludedPortNums] });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
