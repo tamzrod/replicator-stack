@@ -202,6 +202,9 @@ function toReplicatorYaml(model) {
         lines.push(`        - id: ${device.unitId}`);
         lines.push(`          endpoint: "${targetEndpoint}"`);
         lines.push(`          unit_id: ${device.unitId}`);
+        if (device.status_unit_id != null) {
+            lines.push(`          status_unit_id: ${Number(device.status_unit_id)}`);
+        }
         lines.push(`          memories:`);
         lines.push(`            - memory_id: ${device.unitId}`);
         lines.push(`              offsets: {}`);
@@ -225,9 +228,13 @@ function toMmaYaml(model) {
 
     const lines = ['listeners:'];
 
-    for (const port of memoryPorts) {
+    for (let pi = 0; pi < memoryPorts.length; pi++) {
+        const port = memoryPorts[pi];
         const portNum = Number(port.port) || 502;
-        lines.push(`  - id: port-${portNum}`);
+        // First listener is named "main" (matches sample YAML convention); additional
+        // listeners use port-based IDs to stay unique.
+        const listenerId = pi === 0 ? 'main' : `port-${portNum}`;
+        lines.push(`  - id: ${listenerId}`);
         lines.push(`    listen: ":${portNum}"`);
         lines.push(`    memory:`);
         const blocks = port.blocks || [];
@@ -352,6 +359,8 @@ app.post('/device', (req, res) => {
             port,
             source_unit_id: device.source_unit_id,
             unitId,
+            status_slot: device.status_slot != null ? Number(device.status_slot) : 0,
+            status_unit_id: device.status_unit_id != null ? Number(device.status_unit_id) : null,
             reads: []
         });
         writeModel(model);
@@ -404,6 +413,10 @@ app.put('/device/:id', (req, res) => {
             existing.groupId = device.groupId || null;
         }
         if (device.source_unit_id !== undefined) existing.source_unit_id = Number(device.source_unit_id);
+        if (device.status_slot !== undefined) existing.status_slot = Number(device.status_slot);
+        if (device.status_unit_id !== undefined) {
+            existing.status_unit_id = device.status_unit_id != null ? Number(device.status_unit_id) : null;
+        }
         writeModel(model);
         autoCompile(model);
         res.json({ ok: true });
@@ -829,11 +842,170 @@ app.get('/config', (req, res) => {
 // ---------------------------------------------------------------------------
 
 /**
+ * Merge an array of {start, end} ranges into a minimal sorted list with no
+ * overlapping or adjacent ranges. Two ranges are considered adjacent when one
+ * ends exactly one before the other begins (e.g. [1,5] and [6,10]), and are
+ * merged into a single range [1,10].
+ *
+ * @param {Array<{start: number, end: number}>} ranges
+ * @returns {Array<{start: number, end: number}>}
+ */
+function mergeRanges(ranges) {
+    if (ranges.length === 0) return [];
+    const sorted = [...ranges].sort((a, b) => a.start - b.start);
+    const result = [{ ...sorted[0] }];
+    for (let i = 1; i < sorted.length; i++) {
+        const last = result[result.length - 1];
+        if (sorted[i].start <= last.end + 1) {
+            last.end = Math.max(last.end, sorted[i].end);
+        } else {
+            result.push({ ...sorted[i] });
+        }
+    }
+    return result;
+}
+
+/**
+ * Check whether every range in `required` is fully covered by some range in `existing`.
+ * Both arrays should be pre-merged (sorted, non-overlapping).
+ *
+ * @param {Array<{start: number, end: number}>} existing - merged existing ranges
+ * @param {Array<{start: number, end: number}>} required - merged required ranges
+ * @returns {boolean} true if all required ranges are fully covered
+ */
+function rangesAreCovered(existing, required) {
+    for (const req of required) {
+        const covered = existing.some(ex => ex.start <= req.start && ex.end >= req.end);
+        if (!covered) return false;
+    }
+    return true;
+}
+
+/**
+ * Memory validation + auto-creation step.
+ *
+ * For every Device.read, ensures a corresponding Memory block exists in
+ * model.memory.ports that covers the full address range of the read.
+ *
+ * Matching: port (from device unitId → memory port lookup), unit_id, area,
+ *           address range [read.source_address, read.source_address + read.source_count - 1].
+ *
+ * If blocks overlap or are adjacent after merging with required ranges they are
+ * merged into a single expanded block.
+ *
+ * Returns { modified: boolean, blocksCreated: number }.
+ * Mutates model.memory.ports in place.
+ */
+function ensureMemoryCoverage(model) {
+    const memoryPorts = model.memory.ports;
+    let modified = false;
+    let blocksCreated = 0;
+
+    // Build lookup: unit_id (number) → port id.
+    // Consistent with toReplicatorYaml: first port that contains a block for a given
+    // unit_id wins; unit_ids are expected to be unique across ports.
+    const unitToPortId = {};
+    for (const port of memoryPorts) {
+        for (const block of (port.blocks || [])) {
+            const uid = Number(block.unit_id);
+            if (Number.isFinite(uid) && !(uid in unitToPortId)) {
+                unitToPortId[uid] = port.id;
+            }
+        }
+    }
+
+    // Collect required coverage grouped by portId|unitId|area
+    // Each entry: { portId, unitId, area, ranges: [{start, end}] }
+    const required = {};
+
+    for (const device of (model.devices || [])) {
+        const unitId = Number(device.unitId);
+        if (!Number.isFinite(unitId) || unitId < 1) continue;
+
+        // Resolve which port this unit belongs to; auto-create port 502 if none exists
+        let portId = unitToPortId[unitId];
+        if (!portId) {
+            if (memoryPorts.length === 0) {
+                const newPort = { id: randomUUID(), port: 502, blocks: [] };
+                memoryPorts.push(newPort);
+                modified = true;
+            }
+            portId = memoryPorts[0].id;
+            unitToPortId[unitId] = portId;
+        }
+
+        for (const read of (device.reads || [])) {
+            const area = read.source_area || 'holding_registers';
+            const start = Number(read.source_address);
+            const count = Number(read.source_count);
+            if (!Number.isFinite(start) || !Number.isFinite(count) || count < 1) continue;
+            const end = start + count - 1;
+
+            const key = `${portId}|${unitId}|${area}`;
+            if (!required[key]) {
+                required[key] = { portId, unitId, area, ranges: [] };
+            }
+            required[key].ranges.push({ start, end });
+        }
+    }
+
+    // For each required (portId, unitId, area) group, ensure coverage exists
+    for (const req of Object.values(required)) {
+        const port = memoryPorts.find(p => p.id === req.portId);
+        if (!port) continue;
+
+        const existingBlocks = (port.blocks || []).filter(
+            b => Number(b.unit_id) === req.unitId &&
+                 (b.area || 'holding_registers') === req.area
+        );
+
+        const existingRanges = existingBlocks
+            .map(b => ({ start: Number(b.address), end: Number(b.address) + Number(b.count) - 1 }))
+            .filter(r => Number.isFinite(r.start) && Number.isFinite(r.end));
+
+        const mergedExisting = mergeRanges(existingRanges);
+        const mergedRequired = mergeRanges(req.ranges);
+
+        // If existing blocks already cover all required ranges, nothing to do
+        if (rangesAreCovered(mergedExisting, mergedRequired)) continue;
+
+        // Merge required + existing into full coverage set
+        const merged = mergeRanges([...existingRanges, ...req.ranges]);
+
+        // Replace existing blocks for this (unitId, area) with merged result
+        port.blocks = port.blocks.filter(
+            b => !(Number(b.unit_id) === req.unitId &&
+                   (b.area || 'holding_registers') === req.area)
+        );
+        for (const m of merged) {
+            port.blocks.push({
+                id: randomUUID(),
+                unit_id: req.unitId,
+                area: req.area,
+                address: m.start,
+                count: m.end - m.start + 1,
+            });
+        }
+        // Count only net-new blocks (existing blocks that are replaced/merged are not counted).
+        blocksCreated += Math.max(0, merged.length - existingBlocks.length);
+        modified = true;
+    }
+
+    return { modified, blocksCreated };
+}
+
+/**
  * Compile model → YAML and write to disk.
- * Returns { ok, mmaErrors, replicatorErrors }.
+ * Returns { ok, mmaErrors, replicatorErrors, blocksCreated }.
  * Does NOT throw — callers that want to surface errors should check the return value.
  */
 function compileAndWrite(model) {
+    // Step 1: ensure every read has a backing memory block (auto-create if missing)
+    const coverage = ensureMemoryCoverage(model);
+    if (coverage.modified) {
+        writeModel(model);
+    }
+
     const replicatorYaml = toReplicatorYaml(model);
     const mmaYaml = toMmaYaml(model);
     const mmaErrors = validateMmaConfig(mmaYaml);
@@ -843,7 +1015,7 @@ function compileAndWrite(model) {
     }
     atomicWrite(REPLICATOR_CONFIG_PATH, replicatorYaml);
     atomicWrite(MMA_CONFIG_PATH, mmaYaml);
-    return { ok: true };
+    return { ok: true, blocksCreated: coverage.blocksCreated };
 }
 
 /**
@@ -873,7 +1045,7 @@ app.post('/compile', (req, res) => {
             });
         }
 
-        res.json({ ok: true, routes: routeCount });
+        res.json({ ok: true, routes: routeCount, blocksCreated: result.blocksCreated || 0 });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
