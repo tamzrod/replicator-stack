@@ -1570,7 +1570,11 @@ async function compile() {
     const excludedMsg = excludedPorts.length > 0
       ? ` — ${excludedPorts.length} port(s) skipped (port${excludedPorts.length > 1 ? 's' : ''} ${excludedPorts.join(', ')})`
       : '';
-    el.innerHTML = `<div class="banner show ok">✓ Compiled successfully — ${escapeHtml(String(data.routes))} route(s) written to Replicator and MMA configs${blocksMsg}${excludedMsg}.</div>`;
+    const resolutionLog = data.resolution_log || [];
+    const resolutionHtml = resolutionLog.length > 0
+      ? `<details style="margin-top:8px;text-align:left"><summary style="cursor:pointer;font-size:0.85rem;color:#D97706">⚠ ${resolutionLog.length} identity conflict(s) auto-resolved</summary><ul style="margin:4px 0 0 16px;font-size:0.8rem">${resolutionLog.map(r => `<li>${escapeHtml(r.reason)}</li>`).join('')}</ul></details>`
+      : '';
+    el.innerHTML = `<div class="banner show ok">✓ Compiled successfully — ${escapeHtml(String(data.routes))} route(s) written to Replicator and MMA configs${blocksMsg}${excludedMsg}.${resolutionHtml}</div>`;
     await refreshConfigViewerIfActive();
   } else if (data.mma_errors || data.replicator_errors) {
     const mmaItems = (data.mma_errors || []).map(e => `<li>${escapeHtml(e)}</li>`).join('');

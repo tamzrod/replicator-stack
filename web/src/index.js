@@ -1256,8 +1256,109 @@ function rehydrateFromYaml(model) {
 }
 
 /**
+ * Resolve duplicate (port, unit_id) identity conflicts that would arise in the
+ * generated MMA listener config.
+ *
+ * The MMA runtime requires each (listener-port, unit_id) pair to be unique within
+ * a listener.  A conflict occurs when a device's status_unit_id equals the unit_id
+ * of a regular memory block on the same port.
+ *
+ * Resolution strategy (deterministic):
+ *   - Regular memory blocks (derived from device.unitId) are treated as primary and
+ *     are never moved — changing unitId would break Replicator routing.
+ *   - status_unit_id values are the remappable dimension.  When a conflict is found,
+ *     the status_unit_id is incremented until a free slot is found on that port.
+ *   - All devices that share the same (port, old_status_unit_id) are remapped together
+ *     so that intentional status-memory sharing is preserved.
+ *
+ * Fails only if no available unit slot can be found within the valid Modbus range
+ * (0–65535).
+ *
+ * @param {object} model  — mutated in-place when conflicts are resolved
+ * @returns {{ resolutionLog: Array<{originalIdentity, newIdentity, reason}>, error?: string }}
+ */
+function resolveIdentityConflicts(model) {
+    const resolutionLog = [];
+    const memoryPorts = (model.memory && model.memory.ports) || [];
+
+    // Build per-port set of unit_ids occupied by regular memory blocks.
+    const occupiedByPort = new Map(); // portNum → Set<unit_id>
+    for (const port of memoryPorts) {
+        const portNum = Number(port.port);
+        const occupied = new Set();
+        for (const block of (port.blocks || [])) {
+            occupied.add(Number(block.unit_id));
+        }
+        occupiedByPort.set(portNum, occupied);
+    }
+
+    // Track which status_unit_ids have already been processed per port so that
+    // multiple devices intentionally sharing the same status_unit_id on the same
+    // port are remapped as a group (not individually).
+    const statusProcessedByPort = new Map(); // portNum → Map<old_suid, new_suid | null>
+
+    for (const device of (model.devices || [])) {
+        if (device.status_unit_id == null) continue;
+        const targetPort = endpointPort(device.target_endpoint);
+        if (targetPort == null) continue;
+
+        const occupied = occupiedByPort.get(targetPort);
+        if (!occupied) continue; // port not in memory model — skip
+
+        const suid = Number(device.status_unit_id);
+
+        if (!statusProcessedByPort.has(targetPort)) {
+            statusProcessedByPort.set(targetPort, new Map());
+        }
+        const processed = statusProcessedByPort.get(targetPort);
+
+        if (processed.has(suid)) {
+            // Already handled as part of a group — apply the cached remapping.
+            const newUid = processed.get(suid);
+            if (newUid !== null) {
+                device.status_unit_id = newUid;
+            }
+            continue;
+        }
+
+        if (!occupied.has(suid)) {
+            // No conflict — mark as occupied so later status_unit_ids avoid it.
+            occupied.add(suid);
+            processed.set(suid, null); // null = no remapping needed
+            continue;
+        }
+
+        // Conflict detected.  Find the next available slot (incremental expansion).
+        const MAX_UNIT_ID = 65535;
+        let newUid = suid + 1;
+        while (newUid <= MAX_UNIT_ID && occupied.has(newUid)) newUid++;
+        if (newUid > MAX_UNIT_ID) {
+            return {
+                resolutionLog,
+                error: `Cannot resolve identity conflict for status_unit_id ${suid} on port ${targetPort}: no available unit slot in range 0–${MAX_UNIT_ID}`,
+            };
+        }
+
+        resolutionLog.push({
+            originalIdentity: { port: targetPort, unit: suid },
+            newIdentity: { port: targetPort, unit: newUid },
+            reason: `status_unit_id ${suid} on port ${targetPort} conflicts with a regular memory block unit_id; remapped to ${newUid}`,
+        });
+
+        // Cache the remapping so sibling devices sharing this status_unit_id are
+        // updated consistently in subsequent loop iterations.
+        processed.set(suid, newUid);
+        occupied.add(newUid);
+
+        device.status_unit_id = newUid;
+    }
+
+    return { resolutionLog };
+}
+
+/**
  * Compile model → YAML and write to disk.
- * Returns { ok, mmaErrors, replicatorErrors, blocksCreated }.
+ * Returns { ok, mmaErrors, replicatorErrors, blocksCreated, resolutionLog }.
  * Does NOT throw — callers that want to surface errors should check the return value.
  *
  * @param {object} model
@@ -1267,7 +1368,17 @@ function compileAndWrite(model, excludedPortNums = new Set()) {
     // Full rehydration: rebuild all memory state (blocks + status slots) from scratch.
     // This is the single deterministic step that replaces any prior incremental logic.
     const rehydrated = rehydrateFromYaml(model);
-    if (rehydrated.modified) {
+
+    // Resolve identity conflicts BEFORE generating YAML — auto-remap any
+    // status_unit_id values that clash with regular memory block unit_ids on the
+    // same port.  This is a compile-time resolver, not a validator: conflicts are
+    // fixed automatically rather than causing a hard failure.
+    const { resolutionLog, error: conflictError } = resolveIdentityConflicts(model);
+    if (conflictError) {
+        return { ok: false, mmaErrors: [conflictError], replicatorErrors: [], resolutionLog: [] };
+    }
+
+    if (rehydrated.modified || resolutionLog.length > 0) {
         writeModel(model);
     }
 
@@ -1293,6 +1404,7 @@ function compileAndWrite(model, excludedPortNums = new Set()) {
             ok: false,
             mmaErrors: [`MMA port(s) ${emptyPorts.join(', ')} have no memory blocks — add a read on a device targeting this port before compiling`],
             replicatorErrors: [],
+            resolutionLog,
         };
     }
 
@@ -1301,11 +1413,11 @@ function compileAndWrite(model, excludedPortNums = new Set()) {
     const mmaErrors = validateMmaConfig(mmaYaml);
     const replicatorErrors = validateReplicatorConfig(replicatorYaml);
     if (mmaErrors.length > 0 || replicatorErrors.length > 0) {
-        return { ok: false, mmaErrors, replicatorErrors };
+        return { ok: false, mmaErrors, replicatorErrors, resolutionLog };
     }
     atomicWrite(REPLICATOR_CONFIG_PATH, replicatorYaml);
     atomicWrite(MMA_CONFIG_PATH, mmaYaml);
-    return { ok: true, blocksCreated: rehydrated.blocksCreated };
+    return { ok: true, blocksCreated: rehydrated.blocksCreated, resolutionLog };
 }
 
 /**
@@ -1367,10 +1479,17 @@ app.post('/compile', (req, res) => {
                 error: 'Config validation failed — generated configs violate separation rules',
                 mma_errors: result.mmaErrors,
                 replicator_errors: result.replicatorErrors,
+                resolution_log: result.resolutionLog || [],
             });
         }
 
-        res.json({ ok: true, routes: routeCount, blocksCreated: result.blocksCreated || 0, excluded_ports: [...excludedPortNums] });
+        res.json({
+            ok: true,
+            routes: routeCount,
+            blocksCreated: result.blocksCreated || 0,
+            excluded_ports: [...excludedPortNums],
+            resolution_log: result.resolutionLog || [],
+        });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
