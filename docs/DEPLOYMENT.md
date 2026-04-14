@@ -27,7 +27,7 @@ docker ps
 Expected:
 - mma
 - replicator
-- replicator-web
+- mcs-web
 
 ---
 
@@ -48,7 +48,7 @@ POST /deploy
 ## Important
 
 - Never edit config inside containers
-- Always edit via web app
+- Always edit via MCS Web
 
 ---
 
@@ -78,9 +78,9 @@ A deployment is **required** after every configuration change. Configuration doe
 
 ## Startup Behaviour
 
-When the web app starts:
+When MCS Web starts:
 
 - If config files exist under `/data/`: parse and display current state
-- If config files are missing: the web app shows an uninitialized state and offers to create a starter config
+- If config files are missing: MCS Web shows an uninitialized state and offers to create a starter config
 
-The web app does not assume any fixed MMA or Replicator port. All connection details are read from config.
+MCS Web does not assume any fixed MMA or Replicator port. All connection details are read from config.
