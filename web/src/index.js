@@ -135,7 +135,9 @@ function toReplicatorYaml(system, devices) {
     for (const device of devices) {
         // Resolve this device's MMA port from its assigned target.
         const target = targetByName[device.target_name] || {};
-        const mmaPort = target.port || Number((target.endpoint || ':502').split(':')[1]) || 502;
+        const rawPort = target.port != null ? Number(target.port)
+            : Number((target.endpoint || '').split(':')[1] || '');
+        const mmaPort = Number.isFinite(rawPort) && rawPort > 0 ? rawPort : 502;
         for (const read of (device.reads || [])) {
             const routeId = `${device.id}__${read.id}`;
             lines.push(`${indent}- id: ${routeId}`);
@@ -221,10 +223,10 @@ function validateReplicatorConfig(yaml) {
         if (/^mma\s*:/.test(line)) { inMmaBlock = true; continue; }
         if (inMmaBlock) {
             // Non-indented non-empty line ends the mma block.
-            if (/^\S/.test(line) && line.trim() !== '') { inMmaBlock = false; break; }
+            if (/^\S/.test(line) && line.trim() !== '') { inMmaBlock = false; continue; }
             if (/^\s+host\s*:/.test(line)) {
                 errors.push('Replicator config must not reference MMA by hostname — use mma_port in route targets instead');
-                break;
+                inMmaBlock = false;
             }
         }
     }
@@ -666,8 +668,28 @@ app.post('/compile', (req, res) => {
     }
 });
 
+// Simple in-memory rate limiter for read-heavy endpoints (max 30 req/min per IP).
+const _rateLimitStore = new Map();
+function rateLimit(req, res, next) {
+    const key = req.ip || 'unknown';
+    const now = Date.now();
+    const window = 60_000;
+    const maxReqs = 30;
+    const entry = _rateLimitStore.get(key) || { count: 0, start: now };
+    if (now - entry.start > window) {
+        entry.count = 0;
+        entry.start = now;
+    }
+    entry.count += 1;
+    _rateLimitStore.set(key, entry);
+    if (entry.count > maxReqs) {
+        return res.status(429).json({ error: 'Too many requests — please wait before retrying' });
+    }
+    next();
+}
+
 // GET /validate — validate the current on-disk config files against separation rules
-app.get('/validate', (req, res) => {
+app.get('/validate', rateLimit, (req, res) => {
     try {
         const result = {
             mma: { valid: true, errors: [] },
