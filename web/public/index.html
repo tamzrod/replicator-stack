@@ -699,14 +699,13 @@
   <!-- ── MMA Endpoint Settings ──────────────────────────────────────── -->
   <div class="card" id="mma-endpoint-card">
     <h2>MMA Endpoint</h2>
-    <p>Hostname or IP address of the MMA service used as the Replicator write target. Supports local, Docker, or remote deployments.</p>
+    <p>Hostname or IP address of the MMA service used as the Replicator write target. Supports local, Docker, or remote deployments. This setting is saved together with device configuration via the <strong>Save Configuration</strong> button.</p>
     <div class="field" style="max-width:320px;margin-bottom:12px">
       <label for="mma-endpoint-input">MMA Endpoint</label>
       <input id="mma-endpoint-input" type="text" placeholder="mma" style="width:100%" />
       <small id="mma-endpoint-hint" style="color:#64748b;font-size:.75rem"></small>
     </div>
-    <button class="btn-primary" id="btn-save-mma-endpoint">Save</button>
-    <span id="mma-endpoint-status" style="margin-left:10px;font-size:.85rem"></span>
+    <span id="mma-endpoint-status" style="font-size:.85rem"></span>
   </div>
 
   <!-- ── Compile ────────────────────────────────────────────────────── -->
@@ -896,8 +895,8 @@
           <input id="ad-src-endpoint" type="text" placeholder="192.168.1.100:502" required />
         </div>
         <div class="field">
-          <label>Source Unit ID</label>
-          <input id="ad-unit" type="number" value="1" required />
+          <label>Source Unit ID <span style="color:#ef4444;font-weight:600">*</span></label>
+          <input id="ad-unit" type="number" value="1" min="1" required />
         </div>
       </div>
       <div class="row">
@@ -1016,7 +1015,7 @@ function renderDeviceWorkspace() {
         <button class="btn-danger" id="ws-btn-del-device">✕ Delete</button>
       </div>
     </div>
-    <form id="ws-device-form">
+    <form id="ws-config-form">
       <div class="info-grid">
         <div class="info-field"><label>Device ID</label><div class="info-val">${escapeHtml(device.id)}</div></div>
         <div class="info-field">
@@ -1029,18 +1028,14 @@ function renderDeviceWorkspace() {
             placeholder="e.g. 10.5.1.29:502 or mydevice:502" required />
         </div>
         <div class="info-field">
-          <label>Source Unit ID <span style="color:#94a3b8;font-weight:400">(optional)</span></label>
-          <input class="info-edit-input" type="number" id="ws-ed-src-unit" value="${escapeHtml(String(device.source_unit_id ?? ''))}" placeholder="e.g. 1" />
+          <label>Source Unit ID <span style="color:#ef4444;font-weight:600">*</span></label>
+          <input class="info-edit-input" type="number" id="ws-ed-src-unit" value="${escapeHtml(String(device.source_unit_id ?? ''))}" placeholder="e.g. 1" min="1" required />
         </div>
         <div class="info-field">
           <label>Status Slot</label>
           <input class="info-edit-input" type="number" id="ws-ed-status-slot" value="${escapeHtml(String(device.status_slot ?? 0))}" min="0" />
         </div>
         <div class="info-field"><label>Group</label><div class="info-val">${escapeHtml(grpName)}</div></div>
-      </div>
-      <div id="ws-device-banner" class="banner" style="margin-top:10px"></div>
-      <div style="margin-top:10px">
-        <button type="submit" class="btn-primary" style="font-size:.8rem;padding:7px 14px">Save Source</button>
       </div>
     </form>
   </div>`;
@@ -1137,75 +1132,69 @@ function renderDeviceWorkspace() {
     <div class="ws-card-header">
       <h2><span class="pipeline-label pipeline-label-target">TARGET</span>🎯 Target <span style="color:#94a3b8;font-size:.8rem;font-weight:400">(MMA destination)</span></h2>
     </div>
-    <form id="ws-target-form">
-      <div class="info-grid">
-        <div class="info-field">
-          <label>Target Endpoint <span style="color:#94a3b8;font-weight:400">(host:port)</span></label>
-          <input class="info-edit-input" type="text" id="ws-tgt-endpoint" value="${escapeHtml(device.target_endpoint || '')}"
-            placeholder="e.g. mma2:501" required />
-        </div>
-        <div class="info-field">
-          <label>Unit ID <span style="color:#94a3b8;font-weight:400">(MMA unit)</span></label>
-          <input class="info-edit-input" type="number" id="ws-tgt-unit" value="${escapeHtml(String(device.unitId ?? ''))}" min="1" required />
-        </div>
-        <div class="info-field">
-          <label>Status Unit ID <span style="color:#94a3b8;font-weight:400">(optional, MMA unit for status)</span></label>
-          <input class="info-edit-input" type="number" id="ws-tgt-status-unit" value="${escapeHtml(String(device.status_unit_id ?? ''))}" placeholder="e.g. 100" min="1" />
-        </div>
+    <div class="info-grid">
+      <div class="info-field">
+        <label>Target Endpoint <span style="color:#94a3b8;font-weight:400">(host:port)</span></label>
+        <input class="info-edit-input" type="text" id="ws-tgt-endpoint" value="${escapeHtml(device.target_endpoint || '')}"
+          form="ws-config-form" placeholder="e.g. mma2:501" required />
       </div>
-      <div id="ws-target-banner" class="banner" style="margin-top:10px"></div>
-      <div style="margin-top:10px">
-        <button type="submit" class="btn-primary" style="font-size:.8rem;padding:7px 14px">Save Target</button>
+      <div class="info-field">
+        <label>Unit ID <span style="color:#94a3b8;font-weight:400">(MMA unit)</span></label>
+        <input class="info-edit-input" type="number" id="ws-tgt-unit" value="${escapeHtml(String(device.unitId ?? ''))}" form="ws-config-form" min="1" required />
       </div>
-    </form>
+      <div class="info-field">
+        <label>Status Unit ID <span style="color:#94a3b8;font-weight:400">(optional, MMA unit for status)</span></label>
+        <input class="info-edit-input" type="number" id="ws-tgt-status-unit" value="${escapeHtml(String(device.status_unit_id ?? ''))}" form="ws-config-form" placeholder="e.g. 100" min="1" />
+      </div>
+    </div>
+  </div>`;
+
+  // ── Save Configuration (unified) ───────────────────────────────────
+  html += `<div class="card" style="padding:16px 20px">
+    <div id="ws-config-banner" class="banner" style="margin-bottom:10px"></div>
+    <button type="submit" form="ws-config-form" class="btn-primary" style="font-size:.9rem;padding:9px 20px">💾 Save Configuration</button>
   </div>`;
 
   el.innerHTML = html;
 
   // ── Event Listeners ────────────────────────────────────────────────
 
-  // Save device info (inline)
-  document.getElementById('ws-device-form').addEventListener('submit', async e => {
-    e.preventDefault();
-    const banner = document.getElementById('ws-device-banner');
-    banner.className = 'banner';
-    const payload = {
-      device: {
-        name:           document.getElementById('ws-ed-name').value.trim(),
-        source_endpoint: document.getElementById('ws-ed-src-endpoint').value.trim(),
-        source_unit_id: document.getElementById('ws-ed-src-unit').value !== ''
-                          ? Number(document.getElementById('ws-ed-src-unit').value)
-                          : device.source_unit_id,
-        groupId:        device.groupId || null,
-        status_slot:    Number(document.getElementById('ws-ed-status-slot').value) || 0,
-      }
-    };
-    const { ok, data } = await api('PUT', `/device/${encodeURIComponent(device.id)}`, payload);
-    if (ok) {
-      await loadModel();
-    } else {
-      banner.textContent = `✗ ${data.error || 'Unknown error'}`;
-      banner.className = 'banner show err';
-    }
-  });
-
   document.getElementById('ws-btn-del-device').addEventListener('click', () => deleteDevice(device.id));
 
-  // Save target info
-  document.getElementById('ws-target-form').addEventListener('submit', async e => {
+  // Unified save: source config + target config + MMA endpoint
+  document.getElementById('ws-config-form').addEventListener('submit', async e => {
     e.preventDefault();
-    const banner = document.getElementById('ws-target-banner');
+    const banner = document.getElementById('ws-config-banner');
     banner.className = 'banner';
+
+    const sourceUnitIdVal = document.getElementById('ws-ed-src-unit').value.trim();
+    if (!sourceUnitIdVal) {
+      banner.textContent = '✗ Source Unit ID is required';
+      banner.className = 'banner show err';
+      document.getElementById('ws-ed-src-unit').focus();
+      return;
+    }
+
     const payload = {
-      device: {
+      deviceId: device.id,
+      sourceConfig: {
+        name:            document.getElementById('ws-ed-name').value.trim(),
+        source_endpoint: document.getElementById('ws-ed-src-endpoint').value.trim(),
+        source_unit_id:  Number(sourceUnitIdVal),
+        groupId:         device.groupId || null,
+        status_slot:     Number(document.getElementById('ws-ed-status-slot').value) || 0,
+      },
+      targetConfig: {
         target_endpoint: document.getElementById('ws-tgt-endpoint').value.trim(),
-        unitId: Number(document.getElementById('ws-tgt-unit').value),
-        status_unit_id: document.getElementById('ws-tgt-status-unit').value !== ''
-                          ? Number(document.getElementById('ws-tgt-status-unit').value)
-                          : null,
-      }
+        unitId:          Number(document.getElementById('ws-tgt-unit').value),
+        status_unit_id:  document.getElementById('ws-tgt-status-unit').value !== ''
+                           ? Number(document.getElementById('ws-tgt-status-unit').value)
+                           : null,
+      },
+      mmaEndpointConfig: document.getElementById('mma-endpoint-input').value.trim() || null,
     };
-    const { ok, data } = await api('PUT', `/device/${encodeURIComponent(device.id)}`, payload);
+
+    const { ok, data } = await api('POST', '/config/save', payload);
     if (ok) {
       await loadModel();
     } else {
@@ -1323,22 +1312,6 @@ async function loadMmaEndpoint() {
   input.value = (data.system && data.system.mma_endpoint) || '';
   hint.textContent = `Default (env): ${data.defaultMmaEndpoint || 'mma'}`;
 }
-
-document.getElementById('btn-save-mma-endpoint').addEventListener('click', async () => {
-  const status = document.getElementById('mma-endpoint-status');
-  const value = document.getElementById('mma-endpoint-input').value.trim();
-  const payload = { system: { mma_endpoint: value || null } };
-  const { ok, data } = await api('PUT', '/system', payload);
-  if (ok) {
-    status.textContent = '✓ Saved';
-    status.style.color = '#16a34a';
-    await loadMmaEndpoint();
-    setTimeout(() => { status.textContent = ''; }, 3000);
-  } else {
-    status.textContent = `✗ ${data.error || 'Failed to save'}`;
-    status.style.color = '#ef4444';
-  }
-});
 
 async function loadModel() {
   const { ok, data } = await api('GET', '/model');
