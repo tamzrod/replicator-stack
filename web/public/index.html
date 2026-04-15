@@ -312,6 +312,20 @@
     .tree-btn-grp-del:hover { background: #FEF3C7; }
     .tree-empty { padding: 16px 14px; font-size: .78rem; color: #9CA3AF; font-style: italic; }
 
+    /* ── Device Context Menu ────────────────────────────────────────── */
+    #device-context-menu {
+      position: fixed; display: none; z-index: 9999;
+      background: #fff; border: 1px solid #E5E7EB; border-radius: 6px;
+      box-shadow: 0 4px 16px rgba(0,0,0,.12); min-width: 160px; padding: 4px 0;
+    }
+    #device-context-menu.visible { display: block; }
+    .ctx-menu-item {
+      padding: 7px 14px; font-size: .8rem; color: #1F2933; cursor: pointer;
+      display: flex; align-items: center; gap: 7px; user-select: none;
+    }
+    .ctx-menu-item:hover { background: #EFF6FF; color: #145DA0; }
+    .ctx-menu-item .ctx-icon { font-size: .9rem; }
+
     /* ── Device Workspace ───────────────────────────────────────────── */
     #device-workspace { display: grid; gap: 0; }
     .ws-placeholder {
@@ -1608,6 +1622,13 @@
   </div>
 </dialog>
 
+<!-- ── Device Context Menu ────────────────────────────────────────── -->
+<div id="device-context-menu" role="menu" aria-label="Device actions">
+  <div class="ctx-menu-item" id="ctx-duplicate-device" role="menuitem">
+    <span class="ctx-icon">⎘</span> Duplicate Device
+  </div>
+</div>
+
 <script>
 // ── API helpers ──────────────────────────────────────────────────────────────
 
@@ -2540,7 +2561,60 @@ async function deleteDevice(id) {
   }
 }
 
-// ── Tree ─────────────────────────────────────────────────────────────────────
+// ── Device Duplicate ─────────────────────────────────────────────────────────
+
+async function duplicateDevice(id) {
+  const { ok, data } = await api('POST', `/device/${encodeURIComponent(id)}/duplicate`);
+  if (ok) {
+    _selectedDeviceId = data.id;
+    setDirty(true);
+    await loadModel();
+  } else {
+    alert(`Error duplicating device: ${data.error || 'Unknown error'}`);
+  }
+}
+
+// ── Device Context Menu ───────────────────────────────────────────────────────
+
+let _ctxMenuDeviceId = null;
+
+function _showDeviceContextMenu(deviceId, x, y) {
+  _ctxMenuDeviceId = deviceId;
+  const menu = document.getElementById('device-context-menu');
+  menu.style.left = `${x}px`;
+  menu.style.top  = `${y}px`;
+  menu.classList.add('visible');
+}
+
+function _hideDeviceContextMenu() {
+  document.getElementById('device-context-menu').classList.remove('visible');
+  _ctxMenuDeviceId = null;
+}
+
+document.getElementById('tree-panel').addEventListener('contextmenu', e => {
+  const deviceRow = e.target.closest('.tree-device[data-device-id]');
+  if (!deviceRow) return;
+  e.preventDefault();
+  _showDeviceContextMenu(deviceRow.dataset.deviceId, e.clientX, e.clientY);
+});
+
+document.getElementById('ctx-duplicate-device').addEventListener('click', async () => {
+  const id = _ctxMenuDeviceId;
+  _hideDeviceContextMenu();
+  if (id) await duplicateDevice(id);
+});
+
+// Close context menu on any outside click or Escape key.
+document.addEventListener('click', e => {
+  if (!document.getElementById('device-context-menu').contains(e.target)) {
+    _hideDeviceContextMenu();
+  }
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') _hideDeviceContextMenu();
+});
+
+
 
 let _selectedDeviceId = null;
 const _collapsedGroups = new Set();

@@ -826,6 +826,70 @@ app.delete('/device/:id', (req, res) => {
     }
 });
 
+// POST /device/:id/duplicate — duplicate a device with a unique name, source_unit_id, and status_slot
+app.post('/device/:id/duplicate', (req, res) => {
+    try {
+        const { id } = req.params;
+        const model = readModel();
+        const orig = findDevice(model, id);
+        if (!orig) {
+            return res.status(404).json({ error: `Device ${id} not found` });
+        }
+
+        // Generate a unique name with an incremental _N suffix.
+        // Strip any existing _N suffix from the base name, then probe _1, _2, … until free.
+        const existingNames = new Set((model.devices || []).map(d => d.name || ''));
+        const baseName = orig.name || '';
+        const baseWithoutSuffix = baseName.replace(/_(\d+)$/, '');
+        let newName = baseName;
+        let n = 1;
+        while (existingNames.has(newName)) {
+            newName = `${baseWithoutSuffix}_${n}`;
+            n++;
+        }
+
+        // Find the next free source_unit_id (increment from original until no collision).
+        const usedSourceUnitIds = new Set((model.devices || []).map(d => d.source_unit_id));
+        let newSourceUnitId = (Number(orig.source_unit_id) || 0) + 1;
+        while (usedSourceUnitIds.has(newSourceUnitId)) newSourceUnitId++;
+
+        // Find the next free status_slot within the same status_unit_id group.
+        const statusUnitId = orig.status_unit_id ?? null;
+        const usedSlots = new Set(
+            (model.devices || [])
+                .filter(d => d.status_unit_id === statusUnitId)
+                .map(d => d.status_slot)
+        );
+        let newStatusSlot = Number(orig.status_slot ?? -1) + 1;
+        while (usedSlots.has(newStatusSlot)) newStatusSlot++;
+
+        // Deep-copy reads so the new device shares no references with the original.
+        const newReads = JSON.parse(JSON.stringify(orig.reads || []));
+
+        const generatedId = `device_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
+        const newDevice = {
+            id: generatedId,
+            name: newName,
+            groupId: orig.groupId || null,
+            source_endpoint: orig.source_endpoint,
+            source_unit_id: newSourceUnitId,
+            target_endpoint: orig.target_endpoint,
+            unitId: orig.unitId,
+            status_slot: newStatusSlot,
+            status_unit_id: statusUnitId,
+            reads: newReads,
+        };
+
+        model.devices.push(newDevice);
+        writeModel(model);
+        autoCompile(model);
+
+        res.status(201).json({ ok: true, id: generatedId });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // GET /system — return current system settings
 app.get('/system', (req, res) => {
     try {
