@@ -2980,8 +2980,8 @@ function _attachMemoryTabHandlers(container) {
       const body = container.querySelector(`[data-adv-body="${id}"]`);
       const chevron = container.querySelector(`[data-adv-chevron="${id}"]`);
       if (!body) return;
-      const isOpen = body.style.display !== 'none';
-      body.style.display = isOpen ? 'none' : '';
+      const isOpen = getComputedStyle(body).display !== 'none';
+      body.style.display = isOpen ? 'none' : 'block';
       header.setAttribute('aria-expanded', String(!isOpen));
       if (chevron) chevron.classList.toggle('open', !isOpen);
     });
@@ -3064,7 +3064,7 @@ function _attachMemoryTabHandlers(container) {
     chk.addEventListener('change', () => {
       const unitId = chk.dataset.unitId;
       const fields = container.querySelector(`[data-policy-fields="${unitId}"]`);
-      if (fields) fields.style.display = chk.checked ? '' : 'none';
+      if (fields) fields.style.display = chk.checked ? 'block' : 'none';
     });
   });
 
