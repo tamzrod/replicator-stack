@@ -844,7 +844,9 @@
   </div>
   <div class="header-save-area">
     <span id="global-save-status" class="global-save-status"></span>
-    <button id="btn-global-save" class="btn-global-save" disabled title="Save, compile, and apply all staged changes to runtime">💾 Save</button>
+    <button id="btn-global-save" class="btn-global-save" disabled
+      aria-label="Save, compile, and apply all staged changes to runtime"
+      title="Save, compile, and apply all staged changes to runtime">💾 Save</button>
   </div>
 </header>
 
@@ -1169,6 +1171,7 @@ const _appState = {
 };
 
 let _saveStatusTimer = null;
+const SAVE_STATUS_DISPLAY_MS = 6000;
 
 function setDirty(isDirty) {
   _appState.dirty = isDirty;
@@ -1181,9 +1184,11 @@ function updateGlobalSaveBtn() {
   if (_appState.dirty) {
     btn.disabled = false;
     btn.className = 'btn-global-save save-dirty';
+    btn.setAttribute('aria-label', 'Save, compile, and apply staged changes to runtime (unsaved changes pending)');
   } else {
     btn.disabled = true;
     btn.className = 'btn-global-save';
+    btn.setAttribute('aria-label', 'Save, compile, and apply staged changes to runtime (no pending changes)');
   }
 }
 
@@ -1196,7 +1201,7 @@ function _showGlobalSaveStatus(msg, isError) {
   _saveStatusTimer = setTimeout(() => {
     el.textContent = '';
     el.className = 'global-save-status';
-  }, 6000);
+  }, SAVE_STATUS_DISPLAY_MS);
 }
 
 function findGroupById(model, groupId) {
@@ -1803,6 +1808,7 @@ async function globalSave() {
   btn.disabled = true;
   btn.className = 'btn-global-save save-busy';
   btn.textContent = '⏳ Saving…';
+  btn.setAttribute('aria-busy', 'true');
 
   try {
     // Step 1: Capture any in-progress device form edits
@@ -1814,9 +1820,6 @@ async function globalSave() {
       const { ok, data } = await api('POST', '/config/save', payload);
       if (!ok) {
         _showGlobalSaveStatus(`✗ Failed to save device ${deviceId}: ${data.error || 'Unknown error'}`, true);
-        btn.textContent = '💾 Save';
-        btn.className = origClass;
-        btn.disabled = false;
         return;
       }
     }
@@ -1869,11 +1872,9 @@ async function globalSave() {
       await refreshConfigViewerIfActive();
       setTimeout(loadRuntimeStatus, 1500);
     } else if (data.mma_errors || data.replicator_errors) {
-      const mmaItems = (data.mma_errors || []).map(e => `<li>${escapeHtml(e)}</li>`).join('');
-      const repItems = (data.replicator_errors || []).map(e => `<li>${escapeHtml(e)}</li>`).join('');
-      let detail = '';
-      if (mmaItems) detail += `MMA: ${(data.mma_errors || []).join('; ')}`;
-      if (repItems) detail += ` | Replicator: ${(data.replicator_errors || []).join('; ')}`;
+      const mmaDetail = (data.mma_errors || []).join('; ');
+      const repDetail = (data.replicator_errors || []).join('; ');
+      const detail = [mmaDetail && `MMA: ${mmaDetail}`, repDetail && `Replicator: ${repDetail}`].filter(Boolean).join(' | ');
       _showGlobalSaveStatus(`✗ Config violation: ${detail}`, true);
     } else if (data.restart_errors) {
       const errMsg = (data.restart_errors || []).join('; ');
@@ -1889,6 +1890,7 @@ async function globalSave() {
     _showGlobalSaveStatus(`✗ Unexpected error: ${err.message}`, true);
   } finally {
     btn.textContent = '💾 Save';
+    btn.removeAttribute('aria-busy');
     updateGlobalSaveBtn();
   }
 }
