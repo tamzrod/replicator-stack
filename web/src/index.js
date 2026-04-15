@@ -21,6 +21,16 @@ const DEFAULT_SYSTEM = {};
 const STATUS_SLOT_SIZE = 30;
 
 // ---------------------------------------------------------------------------
+// In-memory model cache — eliminates repeated fs.readFileSync / JSON.parse
+// on every request.  Invalidated (and re-populated) on every writeModel().
+//
+// CONTRACT: callers that mutate the returned object MUST call writeModel()
+// afterwards to keep the cache and disk in sync.  All existing route handlers
+// already follow this pattern.
+// ---------------------------------------------------------------------------
+let _modelCache = null;
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -39,6 +49,9 @@ function initialModel() {
 }
 
 function readModel() {
+    if (_modelCache !== null) {
+        return _modelCache;
+    }
     if (!fs.existsSync(MODEL_PATH)) {
         const initial = initialModel();
         writeModel(initial);
@@ -148,6 +161,7 @@ function readModel() {
         }
     }
     if (migrated) writeModel(model);
+    _modelCache = model; // always cache after the first cold read, regardless of migration
     return model;
 }
 
@@ -225,6 +239,7 @@ function ensureTargetMemory(model, device) {
 }
 
 function writeModel(model) {
+    _modelCache = model;
     atomicWrite(MODEL_PATH, JSON.stringify(model, null, 2));
 }
 
