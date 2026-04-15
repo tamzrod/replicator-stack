@@ -483,6 +483,34 @@ function validateMmaConfig(yaml) {
     if (/\bblock_id\s*:/m.test(yaml)) {
         errors.push('MMA config must not contain block_id — block references belong in Replicator config');
     }
+
+    // Detect duplicate unit_id values within each listener.
+    // Incomplete memory entries (e.g. "- unit_id: 1" without registers/policy) are
+    // still counted — they must not bypass duplicate detection.
+    // currentListener is null until the first listener id line is encountered; unit_id
+    // lines appearing before any listener declaration are ignored (malformed YAML).
+    let currentListener = null;
+    const listenerUnitIds = new Map(); // listenerId → Set<unit_id>
+    for (const line of yaml.split('\n')) {
+        const listenerMatch = line.match(/^  - id:\s+(\S+)/);
+        if (listenerMatch) {
+            currentListener = listenerMatch[1];
+            listenerUnitIds.set(currentListener, new Set());
+            continue;
+        }
+        // Match any indented "- unit_id: N" list entry (memory block inside a listener).
+        const unitIdMatch = line.match(/^\s+-\s+unit_id:\s+(\d+)/);
+        if (unitIdMatch && currentListener) {
+            const uid = Number(unitIdMatch[1]);
+            const seen = listenerUnitIds.get(currentListener);
+            if (seen.has(uid)) {
+                errors.push(`MMA listener "${currentListener}": duplicate unit_id ${uid} — each unit_id must be unique within a listener`);
+            } else {
+                seen.add(uid);
+            }
+        }
+    }
+
     return errors;
 }
 
@@ -1383,6 +1411,33 @@ function compileAndWrite(model, excludedPortNums = new Set()) {
         // resolution remapped one or more status_unit_id values — both mutations must
         // be persisted so subsequent compiles start from the resolved state.
         writeModel(model);
+    }
+
+    // Validate no duplicate unit_id within the same port (listener).
+    // rehydrateFromYaml keys blocks by portId|unitId|area, so a device that has reads
+    // in more than one area type (e.g. holding_registers AND coils) for the same unit_id
+    // on the same port produces multiple blocks with the same unit_id — which MMA rejects.
+    // Incomplete entries (blocks whose area type is not holding_registers) also emit
+    // "- unit_id: X" without register/policy sections; they must not bypass this check.
+    const duplicateUnitIdErrors = [];
+    for (const port of (model.memory.ports || [])) {
+        const portNum = Number(port.port);
+        const seenUnitIds = new Map(); // unit_id → first area seen
+        for (const block of (port.blocks || [])) {
+            const uid = Number(block.unit_id);
+            const area = block.area || 'holding_registers';
+            if (seenUnitIds.has(uid)) {
+                duplicateUnitIdErrors.push(
+                    `Port ${portNum}: duplicate unit_id ${uid} — unit IDs must be unique per listener` +
+                    ` (first area: "${seenUnitIds.get(uid)}", duplicate area: "${area}")`
+                );
+            } else {
+                seenUnitIds.set(uid, area);
+            }
+        }
+    }
+    if (duplicateUnitIdErrors.length > 0) {
+        return { ok: false, mmaErrors: duplicateUnitIdErrors, replicatorErrors: [], resolutionLog };
     }
 
     // Validate that no included port has an empty memory block list AND no status devices.
