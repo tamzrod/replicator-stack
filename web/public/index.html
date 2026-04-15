@@ -575,6 +575,159 @@
       color: #166534;
     }
     .mem-port-body { padding: 16px 20px; }
+
+    /* ── Unit container (nested under port) ─────────────────────────── */
+    .mem-unit-card {
+      border: 1px solid #D1FAE5;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      overflow: hidden;
+      background: #F9FAFB;
+    }
+    .mem-unit-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      background: #ECFDF5;
+      border-bottom: 1px solid #D1FAE5;
+      cursor: pointer;
+      user-select: none;
+    }
+    .mem-unit-header:hover { background: #D1FAE5; }
+    .mem-unit-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: .9rem;
+      font-weight: 600;
+      color: #065F46;
+    }
+    .mem-unit-chevron {
+      font-size: .6rem;
+      color: #6B7280;
+      transition: transform .15s;
+    }
+    .mem-unit-chevron.open { transform: rotate(90deg); }
+    .mem-unit-id-badge {
+      font-size: .72rem;
+      background: #BBF7D0;
+      color: #065F46;
+      border-radius: 4px;
+      padding: 2px 7px;
+      font-weight: 700;
+    }
+    .mem-unit-actions {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .mem-unit-body {
+      padding: 12px 16px;
+    }
+    .mem-unit-edit-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #E5E7EB;
+    }
+    .mem-unit-id-input {
+      width: 90px;
+      font-size: .85rem;
+      padding: 4px 8px;
+      border: 1px solid #D1D5DB;
+      border-radius: 4px;
+      background: #fff;
+    }
+
+    /* ── Area rows (nested under unit) ──────────────────────────────── */
+    .mem-area-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 0;
+      border-bottom: 1px solid #F3F4F6;
+      font-size: .82rem;
+    }
+    .mem-area-row:last-child { border-bottom: none; }
+    .mem-area-field {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      flex: 1;
+      min-width: 70px;
+    }
+    .mem-area-field label {
+      font-size: .62rem;
+      font-weight: 700;
+      color: #6B7280;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .mem-area-field select,
+    .mem-area-field input[type="number"] {
+      font-size: .8rem;
+      padding: 3px 6px;
+      border: 1px solid #D1D5DB;
+      border-radius: 4px;
+      background: #fff;
+      width: 100%;
+    }
+    .mem-area-field code {
+      font-size: .78rem;
+      color: #0369A1;
+      background: #E0F2FE;
+      border-radius: 4px;
+      padding: 1px 5px;
+    }
+
+    /* ── Add-area inline form ────────────────────────────────────────── */
+    .mem-add-area-form {
+      display: flex;
+      align-items: flex-end;
+      gap: 8px;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px dashed #E5E7EB;
+      flex-wrap: wrap;
+    }
+    .mem-add-area-form .field {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .mem-add-area-form label {
+      font-size: .65rem;
+      font-weight: 700;
+      color: #6B7280;
+      text-transform: uppercase;
+    }
+    .mem-add-area-form select,
+    .mem-add-area-form input[type="number"] {
+      font-size: .8rem;
+      padding: 4px 8px;
+      border: 1px solid #D1D5DB;
+      border-radius: 4px;
+      background: #fff;
+    }
+
+    /* ── Populate banner ─────────────────────────────────────────────── */
+    .mem-populate-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+      padding: 8px 12px;
+      background: #EFF6FF;
+      border: 1px solid #BFDBFE;
+      border-radius: 6px;
+      font-size: .8rem;
+      color: #1E40AF;
+    }
+
+    /* Legacy block display (fallback when no units[]) */
     .mem-block-row {
       display: flex;
       align-items: center;
@@ -611,6 +764,10 @@
     }
     .btn-mem { background: #DCFCE7; color: #166534; font-size: .75rem; padding: 4px 10px; font-weight: 600; border-radius: 5px; border: none; cursor: pointer; }
     .btn-mem:hover { background: #BBF7D0; }
+    .btn-mem-sm { background: #E0F2FE; color: #0369A1; font-size: .72rem; padding: 3px 8px; font-weight: 600; border-radius: 4px; border: none; cursor: pointer; }
+    .btn-mem-sm:hover { background: #BAE6FD; }
+    .btn-mem-danger { background: #FEE2E2; color: #B91C1C; font-size: .72rem; padding: 3px 8px; font-weight: 600; border-radius: 4px; border: none; cursor: pointer; }
+    .btn-mem-danger:hover { background: #FECACA; }
 
     /* ── Runtime Tab ──────────────────────────────────────────────────── */
     #runtime-tab-container {
@@ -963,8 +1120,9 @@
   <div class="card" style="margin-bottom:20px">
     <h2>Memory <span style="color:#9CA3AF;font-size:.8rem;font-weight:400">(MMA runtime memory layout)</span></h2>
     <p style="color:#6B7280;font-size:.85rem;margin-bottom:16px">
-      Define MMA listener ports. Memory blocks are automatically computed from device reads on every compile —
-      they always reflect the current YAML model exactly and cannot be edited manually.
+      Define MMA listener ports and their memory units. Each unit contains one or more memory areas
+      (holding registers, input registers, coils, etc.). Use <strong>Auto-populate</strong> to seed
+      units from device reads, then customize as needed.
     </p>
     <div id="memory-ports-list" style="margin-bottom:16px"></div>
     <form id="memory-port-form">
@@ -1971,7 +2129,12 @@ async function globalSave() {
       if (resLog.length > 0) {
         _appendMmaLog(`[Save] ${resLog.length} identity conflict(s) auto-resolved`);
       }
+      const mergeLog = data.merge_log || [];
+      if (mergeLog.some(e => e.action === 'units_merged')) {
+        _appendMmaLog(`[memory] unit merged — duplicate unit_id entries merged during compile`);
+      }
       _appendMmaLog(`[Save] Compile executed — ${data.routes} route(s)${blocksMsg}`);
+      _appendMmaLog('[memory] config recompiled');
       _appendMmaLog(`[Save] Runtime updated — services restarted${excludedMsg}`);
       _showGlobalSaveStatus(`✓ Saved — ${data.routes} route(s)${blocksMsg}${excludedMsg}`, false);
       setDirty(false);
@@ -1994,7 +2157,12 @@ async function globalSave() {
         if (resLog2.length > 0) {
           _appendMmaLog(`[Save] ${resLog2.length} change(s) applied during ${action}`);
         }
+        const mergeLog2 = resolveData.merge_log || [];
+        if (mergeLog2.some(e => e.action === 'units_merged')) {
+          _appendMmaLog(`[memory] unit merged — duplicate unit_id entries merged during compile`);
+        }
         _appendMmaLog(`[Save] Compile executed — ${resolveData.routes} route(s)${blocksMsg2}`);
+        _appendMmaLog('[memory] config recompiled');
         if (resolveData.restart_errors) {
           _appendMmaLog(`[Save] Configs applied but restart failed: ${(resolveData.restart_errors || []).join('; ')}`);
           _showGlobalSaveStatus('⚠ Configs applied but restart failed — see runtime log', false);
@@ -2279,6 +2447,13 @@ async function importReadsCsv(deviceId, file, banner) {
 
 let _editingBlockId = null; // kept for legacy compat but no longer used
 
+const AREA_TYPE_LABELS = {
+  holding_registers: 'Holding Registers',
+  input_registers:   'Input Registers',
+  coils:             'Coils',
+  discrete_inputs:   'Discrete Inputs',
+};
+
 function renderMemoryTab(data) {
   const container = document.getElementById('memory-ports-list');
   const ports = (data && data.memory && data.memory.ports) || [];
@@ -2289,43 +2464,156 @@ function renderMemoryTab(data) {
   }
 
   container.innerHTML = ports.map(port => {
+    const units = port.units || [];
     const blocks = port.blocks || [];
-    const blocksHtml = blocks.length === 0
-      ? `<div class="empty-state" style="padding:10px 0;font-size:.8rem">No memory blocks — add a read to a device targeting this port and compile to generate blocks.</div>`
-      : blocks.map(b => {
-          return `<div class="mem-block-row">
-            <div class="mem-block-field"><label>Unit ID</label><div class="mem-val">${escapeHtml(String(b.unit_id))}</div></div>
-            <div class="mem-block-field"><label>Area</label><div class="mem-val"><code>${escapeHtml(b.area || 'holding_registers')}</code></div></div>
-            <div class="mem-block-field"><label>Address</label><div class="mem-val">${escapeHtml(String(b.address))}</div></div>
-            <div class="mem-block-field"><label>Count</label><div class="mem-val">${escapeHtml(String(b.count))}</div></div>
-          </div>`;
-        }).join('');
+    const hasManualUnits = units.length > 0;
+
+    // Show populate bar when auto-derived blocks exist but no manual units yet
+    const populateBar = (!hasManualUnits && blocks.length > 0)
+      ? `<div class="mem-populate-bar">
+          ℹ ${blocks.length} memory block(s) auto-detected from device reads.
+          <button class="btn-mem-sm mem-populate-btn" data-port-id="${escapeHtml(port.id)}">⚡ Auto-populate Units</button>
+        </div>`
+      : '';
+
+    const unitsHtml = hasManualUnits
+      ? units.map(unit => renderUnit(port.id, unit)).join('')
+      : `<div class="empty-state" style="padding:10px 0;font-size:.82rem;color:#6B7280">
+          No units defined yet. Add a unit below or use <strong>Auto-populate</strong> to seed from device reads.
+        </div>`;
+
+    // Add-unit inline form
+    const addUnitForm = `
+      <form class="mem-add-unit-form" data-port-id="${escapeHtml(port.id)}" style="display:flex;align-items:flex-end;gap:8px;margin-top:12px;padding-top:12px;border-top:1px dashed #E5E7EB;flex-wrap:wrap">
+        <div class="field" style="display:flex;flex-direction:column;gap:3px">
+          <label style="font-size:.65rem;font-weight:700;color:#6B7280;text-transform:uppercase">Unit ID</label>
+          <input class="mem-add-unit-id" type="number" min="0" max="65535" placeholder="e.g. 1" style="width:90px;font-size:.85rem;padding:4px 8px;border:1px solid #D1D5DB;border-radius:4px" required />
+        </div>
+        <button type="submit" class="btn-mem" style="margin-bottom:1px">+ Add Unit</button>
+        <span class="mem-unit-banner banner" style="font-size:.78rem"></span>
+      </form>`;
 
     return `<div class="mem-port-card" data-port-id="${escapeHtml(port.id)}">
       <div class="mem-port-header">
         <span class="mem-port-title">🔌 Port ${escapeHtml(String(port.port))}</span>
         <div style="display:flex;gap:8px;align-items:center">
+          ${!hasManualUnits && blocks.length > 0 ? `<button class="btn-mem mem-populate-btn" data-port-id="${escapeHtml(port.id)}" style="font-size:.72rem;padding:3px 8px">⚡ Auto-populate</button>` : ''}
           <button class="btn-mem mem-edit-port" data-port-id="${escapeHtml(port.id)}" data-port-num="${escapeHtml(String(port.port))}">✎ Edit Port</button>
           <button class="btn-danger mem-del-port" data-port-id="${escapeHtml(port.id)}" style="font-size:.75rem;padding:4px 10px">✕ Remove</button>
         </div>
       </div>
       <div class="mem-port-body">
-        <p style="font-size:.78rem;color:#6B7280;margin-bottom:8px">
-          Memory blocks are auto-computed from device reads on compile. They cannot be edited manually.
-        </p>
-        <div class="mem-blocks-list">${blocksHtml}</div>
+        ${populateBar}
+        <div class="mem-units-list">${unitsHtml}</div>
+        ${addUnitForm}
       </div>
     </div>`;
   }).join('');
 
-  // ── Memory port event handlers ─────────────────────────────────────
+  // Attach event handlers
+  _attachMemoryTabHandlers(container);
+}
 
-  // Edit port (change port number)
+function renderUnit(portId, unit) {
+  const areas = unit.areas || [];
+  const unitIdEsc = escapeHtml(String(unit.unit_id));
+  const unitDbIdEsc = escapeHtml(unit.id);
+
+  const areasHtml = areas.length === 0
+    ? `<div class="empty-state" style="padding:6px 0;font-size:.78rem">No areas — add one below.</div>`
+    : areas.map(area => `
+      <div class="mem-area-row" data-area-id="${escapeHtml(area.id)}">
+        <div class="mem-area-field" style="flex:2;min-width:140px">
+          <label>Area Type</label>
+          <select class="mem-area-type-sel" data-port-id="${escapeHtml(portId)}" data-unit-id="${unitDbIdEsc}" data-area-id="${escapeHtml(area.id)}">
+            ${Object.entries(AREA_TYPE_LABELS).map(([v, l]) =>
+              `<option value="${v}"${area.type === v ? ' selected' : ''}>${l}</option>`
+            ).join('')}
+          </select>
+        </div>
+        <div class="mem-area-field" style="max-width:100px">
+          <label>Start Addr</label>
+          <input class="mem-area-start-inp" type="number" min="0" value="${escapeHtml(String(area.start))}"
+            data-port-id="${escapeHtml(portId)}" data-unit-id="${unitDbIdEsc}" data-area-id="${escapeHtml(area.id)}" />
+        </div>
+        <div class="mem-area-field" style="max-width:90px">
+          <label>Count</label>
+          <input class="mem-area-count-inp" type="number" min="1" value="${escapeHtml(String(area.count))}"
+            data-port-id="${escapeHtml(portId)}" data-unit-id="${unitDbIdEsc}" data-area-id="${escapeHtml(area.id)}" />
+        </div>
+        <button class="btn-mem-danger mem-del-area"
+          data-port-id="${escapeHtml(portId)}" data-unit-id="${unitDbIdEsc}" data-area-id="${escapeHtml(area.id)}"
+          title="Remove this area">✕</button>
+      </div>`).join('');
+
+  // Add-area inline form
+  const addAreaForm = `
+    <form class="mem-add-area-form" data-port-id="${escapeHtml(portId)}" data-unit-id="${unitDbIdEsc}">
+      <div class="field">
+        <label>Area Type</label>
+        <select class="mem-new-area-type">
+          ${Object.entries(AREA_TYPE_LABELS).map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field">
+        <label>Start</label>
+        <input class="mem-new-area-start" type="number" min="0" value="0" style="width:80px" />
+      </div>
+      <div class="field">
+        <label>Count</label>
+        <input class="mem-new-area-count" type="number" min="1" value="10" style="width:75px" />
+      </div>
+      <button type="submit" class="btn-mem-sm" style="align-self:flex-end;margin-bottom:1px">+ Add Area</button>
+      <span class="mem-area-banner banner" style="font-size:.75rem;align-self:flex-end"></span>
+    </form>`;
+
+  return `<div class="mem-unit-card" data-unit-id="${unitDbIdEsc}">
+    <div class="mem-unit-header" data-unit-toggle="${unitDbIdEsc}">
+      <div class="mem-unit-title">
+        <span class="mem-unit-chevron open" data-chevron="${unitDbIdEsc}">▶</span>
+        <span>Unit</span>
+        <span class="mem-unit-id-badge">ID: ${unitIdEsc}</span>
+        <span style="color:#9CA3AF;font-size:.75rem">(${areas.length} area${areas.length !== 1 ? 's' : ''})</span>
+      </div>
+      <div class="mem-unit-actions" onclick="event.stopPropagation()">
+        <label style="font-size:.72rem;color:#6B7280;white-space:nowrap">unit_id:</label>
+        <input class="mem-unit-id-input mem-unit-id-edit"
+          type="number" min="0" max="65535" value="${unitIdEsc}"
+          data-port-id="${escapeHtml(portId)}" data-unit-id="${unitDbIdEsc}"
+          title="Edit unit_id" style="width:70px" />
+        <button class="btn-mem-sm mem-save-unit-id"
+          data-port-id="${escapeHtml(portId)}" data-unit-id="${unitDbIdEsc}" title="Save unit_id">✓</button>
+        <button class="btn-mem-danger mem-del-unit"
+          data-port-id="${escapeHtml(portId)}" data-unit-id="${unitDbIdEsc}" title="Remove unit">✕</button>
+      </div>
+    </div>
+    <div class="mem-unit-body" data-unit-body="${unitDbIdEsc}">
+      <div class="mem-areas-list">${areasHtml}</div>
+      ${addAreaForm}
+    </div>
+  </div>`;
+}
+
+function _attachMemoryTabHandlers(container) {
+  // ── Unit collapsible toggle ──────────────────────────────────────────
+  container.querySelectorAll('[data-unit-toggle]').forEach(header => {
+    header.addEventListener('click', () => {
+      const id = header.dataset.unitToggle;
+      const body = container.querySelector(`[data-unit-body="${id}"]`);
+      const chevron = container.querySelector(`[data-chevron="${id}"]`);
+      if (!body) return;
+      const isOpen = body.style.display !== 'none';
+      body.style.display = isOpen ? 'none' : '';
+      if (chevron) chevron.classList.toggle('open', !isOpen);
+    });
+  });
+
+  // ── Edit port (change port number) ───────────────────────────────────
   container.querySelectorAll('.mem-edit-port').forEach(btn => {
     btn.addEventListener('click', async () => {
       const portId = btn.dataset.portId;
       const current = btn.dataset.portNum;
-      const newPort = prompt(`Edit port number for this memory port:`, current);
+      const newPort = prompt('Edit port number for this memory port:', current);
       if (newPort === null) return;
       const portNum = Number(newPort);
       if (!Number.isFinite(portNum) || portNum < 1 || portNum > 65535) {
@@ -2339,16 +2627,187 @@ function renderMemoryTab(data) {
     });
   });
 
-  // Delete port
+  // ── Delete port ──────────────────────────────────────────────────────
   container.querySelectorAll('.mem-del-port').forEach(btn => {
     btn.addEventListener('click', async () => {
       const portId = btn.dataset.portId;
       const card = btn.closest('.mem-port-card');
       const portNum = card.querySelector('.mem-port-title').textContent.replace('🔌 Port ', '').trim();
-      if (!confirm(`Remove memory port ${portNum} and all its blocks?`)) return;
+      if (!confirm(`Remove memory port ${portNum} and all its units?`)) return;
       const { ok, data } = await api('DELETE', `/memory/port/${encodeURIComponent(portId)}`);
       if (!ok) { alert(`Error: ${data.error || 'Unknown error'}`); return; }
       _editingBlockId = null;
+      setDirty(true);
+      await loadModel();
+    });
+  });
+
+  // ── Auto-populate units from device reads ────────────────────────────
+  container.querySelectorAll('.mem-populate-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const portId = btn.dataset.portId;
+      const { ok, data } = await api('POST', `/memory/port/${encodeURIComponent(portId)}/units/populate`);
+      if (!ok) { alert(`Error: ${data.error || 'Unknown error'}`); return; }
+      _appendMmaLog(`[memory] Auto-populated ${data.unitsCount} unit(s) from device reads`);
+      setDirty(true);
+      await loadModel();
+    });
+  });
+
+  // ── Add unit form submission ─────────────────────────────────────────
+  container.querySelectorAll('.mem-add-unit-form').forEach(form => {
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      const portId = form.dataset.portId;
+      const banner = form.querySelector('.mem-unit-banner');
+      banner.className = 'mem-unit-banner banner';
+      const unitIdInput = form.querySelector('.mem-add-unit-id');
+      const unitIdNum = Number(unitIdInput.value);
+      if (!Number.isFinite(unitIdNum) || unitIdNum < 0 || unitIdNum > 65535) {
+        banner.textContent = '✗ Unit ID must be 0–65535';
+        banner.className = 'mem-unit-banner banner show err';
+        return;
+      }
+      const { ok, data } = await api('POST', `/memory/port/${encodeURIComponent(portId)}/unit`, { unit: { unit_id: unitIdNum } });
+      if (ok) {
+        _appendMmaLog(`[memory] Unit created — unit_id: ${unitIdNum} on port ${portId}`);
+        setDirty(true);
+        await loadModel();
+      } else {
+        banner.textContent = `✗ ${data.error || 'Unknown error'}`;
+        banner.className = 'mem-unit-banner banner show err';
+      }
+    });
+  });
+
+  // ── Save unit_id ─────────────────────────────────────────────────────
+  container.querySelectorAll('.mem-save-unit-id').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const portId = btn.dataset.portId;
+      const unitId = btn.dataset.unitId;
+      const input = container.querySelector(`.mem-unit-id-edit[data-unit-id="${unitId}"]`);
+      const newUnitId = Number(input.value);
+      if (!Number.isFinite(newUnitId) || newUnitId < 0 || newUnitId > 65535) {
+        alert('unit_id must be 0–65535');
+        return;
+      }
+      const { ok, data } = await api('PUT', `/memory/port/${encodeURIComponent(portId)}/unit/${encodeURIComponent(unitId)}`, { unit: { unit_id: newUnitId } });
+      if (!ok) { alert(`Error: ${data.error || 'Unknown error'}`); return; }
+      _appendMmaLog(`[memory] Unit updated — new unit_id: ${newUnitId}`);
+      setDirty(true);
+      await loadModel();
+    });
+  });
+
+  // ── Delete unit ──────────────────────────────────────────────────────
+  container.querySelectorAll('.mem-del-unit').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const portId = btn.dataset.portId;
+      const unitId = btn.dataset.unitId;
+      if (!confirm('Remove this unit and all its memory areas?')) return;
+      const { ok, data } = await api('DELETE', `/memory/port/${encodeURIComponent(portId)}/unit/${encodeURIComponent(unitId)}`);
+      if (!ok) { alert(`Error: ${data.error || 'Unknown error'}`); return; }
+      _appendMmaLog(`[memory] Unit removed`);
+      setDirty(true);
+      await loadModel();
+    });
+  });
+
+  // ── Add area form submission ─────────────────────────────────────────
+  container.querySelectorAll('.mem-add-area-form').forEach(form => {
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      const portId = form.dataset.portId;
+      const unitId = form.dataset.unitId;
+      const banner = form.querySelector('.mem-area-banner');
+      banner.className = 'mem-area-banner banner';
+      const type  = form.querySelector('.mem-new-area-type').value;
+      const start = Number(form.querySelector('.mem-new-area-start').value);
+      const count = Number(form.querySelector('.mem-new-area-count').value);
+      if (!Number.isFinite(start) || start < 0) {
+        banner.textContent = '✗ Start must be ≥ 0';
+        banner.className = 'mem-area-banner banner show err';
+        return;
+      }
+      if (!Number.isFinite(count) || count < 1) {
+        banner.textContent = '✗ Count must be ≥ 1';
+        banner.className = 'mem-area-banner banner show err';
+        return;
+      }
+      const { ok, data } = await api(
+        'POST',
+        `/memory/port/${encodeURIComponent(portId)}/unit/${encodeURIComponent(unitId)}/area`,
+        { area: { type, start, count } }
+      );
+      if (ok) {
+        _appendMmaLog(`[memory] Memory area added — ${type} start:${start} count:${count}`);
+        setDirty(true);
+        await loadModel();
+      } else {
+        banner.textContent = `✗ ${data.error || 'Unknown error'}`;
+        banner.className = 'mem-area-banner banner show err';
+      }
+    });
+  });
+
+  // ── Area field change (type/start/count) — auto-save on blur ─────────
+  function makeAreaSaveHandler(field) {
+    return async function() {
+      const portId = this.dataset.portId;
+      const unitId = this.dataset.unitId;
+      const areaId = this.dataset.areaId;
+      const row = this.closest('.mem-area-row');
+
+      const typeEl  = row.querySelector('.mem-area-type-sel');
+      const startEl = row.querySelector('.mem-area-start-inp');
+      const countEl = row.querySelector('.mem-area-count-inp');
+
+      const patch = {};
+      if (field === 'type')  patch.type  = typeEl.value;
+      if (field === 'start') patch.start = Number(startEl.value);
+      if (field === 'count') patch.count = Number(countEl.value);
+
+      const { ok, data } = await api(
+        'PUT',
+        `/memory/port/${encodeURIComponent(portId)}/unit/${encodeURIComponent(unitId)}/area/${encodeURIComponent(areaId)}`,
+        { area: patch }
+      );
+      if (!ok) {
+        alert(`Error saving area: ${data.error || 'Unknown error'}`);
+        return;
+      }
+      if (field === 'type')  _appendMmaLog(`[memory] Memory area moved — type changed to ${patch.type}`);
+      if (field === 'start') _appendMmaLog(`[memory] Memory area updated — start address set to ${patch.start}`);
+      if (field === 'count') _appendMmaLog(`[memory] Memory area updated — count set to ${patch.count}`);
+      setDirty(true);
+      // Reload to refresh area count in unit header
+      await loadModel();
+    };
+  }
+
+  container.querySelectorAll('.mem-area-type-sel').forEach(sel => {
+    sel.addEventListener('change', makeAreaSaveHandler('type').bind(sel));
+  });
+  container.querySelectorAll('.mem-area-start-inp').forEach(inp => {
+    inp.addEventListener('change', makeAreaSaveHandler('start').bind(inp));
+  });
+  container.querySelectorAll('.mem-area-count-inp').forEach(inp => {
+    inp.addEventListener('change', makeAreaSaveHandler('count').bind(inp));
+  });
+
+  // ── Delete area ──────────────────────────────────────────────────────
+  container.querySelectorAll('.mem-del-area').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const portId = btn.dataset.portId;
+      const unitId = btn.dataset.unitId;
+      const areaId = btn.dataset.areaId;
+      if (!confirm('Remove this memory area?')) return;
+      const { ok, data } = await api(
+        'DELETE',
+        `/memory/port/${encodeURIComponent(portId)}/unit/${encodeURIComponent(unitId)}/area/${encodeURIComponent(areaId)}`
+      );
+      if (!ok) { alert(`Error: ${data.error || 'Unknown error'}`); return; }
+      _appendMmaLog(`[memory] Memory area removed`);
       setDirty(true);
       await loadModel();
     });

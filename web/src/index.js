@@ -57,6 +57,14 @@ function readModel() {
     if (!model.system) model.system = {};
     if (!model.memory) model.memory = { ports: [] };
     if (!Array.isArray(model.memory.ports)) model.memory.ports = [];
+    // Ensure each port has units[] (new field for manual unit-based config)
+    for (const port of model.memory.ports) {
+        if (!Array.isArray(port.units)) {
+            port.units = [];
+            // Note: units[] starts empty; users can auto-populate from device reads
+            // via POST /memory/port/:portId/units/populate or add units manually.
+        }
+    }
     let migrated = false;
     for (const device of model.devices) {
         // Migrate old free-text device.group → device.groupId using group entities
@@ -487,7 +495,7 @@ function compileMma2Config(blocks, statusMap = new Map()) {
 }
 
 function toMmaYaml(model) {
-    // MMA runtime config generated from Memory tab ports and blocks.
+    // MMA runtime config generated from Memory tab ports.
     // Format per docs/sample yaml/mma.yaml:
     //   - top-level listeners: array
     //   - each listener has id, listen (":PORT"), and memory
@@ -495,7 +503,11 @@ function toMmaYaml(model) {
     //     sections (holding_registers / input_registers / coils / discrete_inputs),
     //     and a policy block.
     //
-    // unit_id is a CONTAINER ID.  Multiple blocks sharing the same unit_id on
+    // Source priority:
+    //   1. port.units[] — manually configured unit/area tree (Memory Tab editor)
+    //   2. port.blocks[] — auto-derived from device reads (legacy/fallback)
+    //
+    // unit_id is a CONTAINER ID.  Multiple entries sharing the same unit_id on
     // the same port are merged by compileMma2Config before YAML emission.
     const memoryPorts = (model.memory && model.memory.ports) || [];
 
@@ -529,11 +541,28 @@ function toMmaYaml(model) {
         lines.push(`    listen: ":${portNum}"`);
         lines.push(`    memory:`);
 
-        const blocks = port.blocks || [];
         const statusMap = statusByPort[portNum] || new Map();
 
+        // Determine source: use units[] when manually configured, fall back to blocks[]
+        const hasManualUnits = (port.units || []).length > 0;
+        let blocksForCompile;
+        if (hasManualUnits) {
+            // Flatten units[] → blocks format for compileMma2Config
+            blocksForCompile = (port.units || []).flatMap(u =>
+                (u.areas || []).map(a => ({
+                    unit_id: u.unit_id,
+                    area: a.type || 'holding_registers',
+                    address: a.start,
+                    count: a.count,
+                }))
+            );
+        } else {
+            // Fall back to auto-derived blocks from device reads
+            blocksForCompile = port.blocks || [];
+        }
+
         // Run the MMA2 compiler: group + merge all blocks for this port.
-        const { mergedUnits, mergeLog } = compileMma2Config(blocks, statusMap);
+        const { mergedUnits, mergeLog } = compileMma2Config(blocksForCompile, statusMap);
         for (const entry of mergeLog) {
             allMergeLog.push({ listener: listenerId, port: portNum, ...entry });
         }
@@ -883,10 +912,12 @@ app.post('/memory/port', (req, res) => {
         }
         // Blocks are always derived from device reads via rehydrateFromYaml —
         // the port starts empty and autoCompile will populate blocks from reads.
+        // units[] is the new manual configuration layer for the Memory Tab editor.
         const newPort = {
             id: randomUUID(),
             port: portNum,
             blocks: [],
+            units: [],
         };
         model.memory.ports.push(newPort);
         writeModel(model);
@@ -937,6 +968,263 @@ app.delete('/memory/port/:id', (req, res) => {
         writeModel(model);
         autoCompile(model);
         res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ---------------------------------------------------------------------------
+// Memory unit + area CRUD (nested under port, units[] layer)
+// ---------------------------------------------------------------------------
+
+const VALID_AREA_TYPES = new Set(['holding_registers', 'input_registers', 'coils', 'discrete_inputs']);
+
+function findUnit(port, unitId) {
+    return ((port && port.units) || []).find(u => u.id === unitId) || null;
+}
+
+// POST /memory/port/:portId/unit — add a unit to a memory port
+app.post('/memory/port/:portId/unit', (req, res) => {
+    try {
+        const { portId } = req.params;
+        const { unit } = req.body;
+        const unitIdNum = Number(unit && unit.unit_id);
+        if (!Number.isFinite(unitIdNum) || unitIdNum < 0 || unitIdNum > 65535) {
+            return res.status(400).json({ error: 'unit.unit_id must be a non-negative integer (0–65535)' });
+        }
+        const model = readModel();
+        const port = findMemoryPort(model, portId);
+        if (!port) {
+            return res.status(404).json({ error: `Memory port ${portId} not found` });
+        }
+        const newUnit = { id: randomUUID(), unit_id: unitIdNum, areas: [] };
+        port.units.push(newUnit);
+        writeModel(model);
+        autoCompile(model);
+        res.status(201).json({ ok: true, id: newUnit.id });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// PUT /memory/port/:portId/unit/:unitId — update a unit's unit_id
+app.put('/memory/port/:portId/unit/:unitId', (req, res) => {
+    try {
+        const { portId, unitId } = req.params;
+        const { unit } = req.body;
+        const unitIdNum = Number(unit && unit.unit_id);
+        if (!Number.isFinite(unitIdNum) || unitIdNum < 0 || unitIdNum > 65535) {
+            return res.status(400).json({ error: 'unit.unit_id must be a non-negative integer (0–65535)' });
+        }
+        const model = readModel();
+        const port = findMemoryPort(model, portId);
+        if (!port) {
+            return res.status(404).json({ error: `Memory port ${portId} not found` });
+        }
+        const existing = findUnit(port, unitId);
+        if (!existing) {
+            return res.status(404).json({ error: `Unit ${unitId} not found on port ${portId}` });
+        }
+        existing.unit_id = unitIdNum;
+        writeModel(model);
+        autoCompile(model);
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// DELETE /memory/port/:portId/unit/:unitId — remove a unit and all its areas
+app.delete('/memory/port/:portId/unit/:unitId', (req, res) => {
+    try {
+        const { portId, unitId } = req.params;
+        const model = readModel();
+        const port = findMemoryPort(model, portId);
+        if (!port) {
+            return res.status(404).json({ error: `Memory port ${portId} not found` });
+        }
+        const idx = (port.units || []).findIndex(u => u.id === unitId);
+        if (idx === -1) {
+            return res.status(404).json({ error: `Unit ${unitId} not found on port ${portId}` });
+        }
+        port.units.splice(idx, 1);
+        writeModel(model);
+        autoCompile(model);
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /memory/port/:portId/unit/:unitId/area — add an area to a unit
+app.post('/memory/port/:portId/unit/:unitId/area', (req, res) => {
+    try {
+        const { portId, unitId } = req.params;
+        const { area } = req.body;
+        const areaType = area && area.type;
+        if (!VALID_AREA_TYPES.has(areaType)) {
+            return res.status(400).json({ error: `area.type must be one of: ${[...VALID_AREA_TYPES].join(', ')}` });
+        }
+        const start = Number(area.start);
+        const count = Number(area.count);
+        if (!Number.isFinite(start) || start < 0) {
+            return res.status(400).json({ error: 'area.start must be a non-negative integer' });
+        }
+        if (!Number.isFinite(count) || count < 1) {
+            return res.status(400).json({ error: 'area.count must be a positive integer' });
+        }
+        const model = readModel();
+        const port = findMemoryPort(model, portId);
+        if (!port) {
+            return res.status(404).json({ error: `Memory port ${portId} not found` });
+        }
+        const unit = findUnit(port, unitId);
+        if (!unit) {
+            return res.status(404).json({ error: `Unit ${unitId} not found on port ${portId}` });
+        }
+        const newArea = { id: randomUUID(), type: areaType, start, count };
+        unit.areas.push(newArea);
+        writeModel(model);
+        autoCompile(model);
+        res.status(201).json({ ok: true, id: newArea.id });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// PUT /memory/port/:portId/unit/:unitId/area/:areaId — update an area
+app.put('/memory/port/:portId/unit/:unitId/area/:areaId', (req, res) => {
+    try {
+        const { portId, unitId, areaId } = req.params;
+        const { area } = req.body;
+        if (!area) {
+            return res.status(400).json({ error: 'area is required' });
+        }
+        const model = readModel();
+        const port = findMemoryPort(model, portId);
+        if (!port) {
+            return res.status(404).json({ error: `Memory port ${portId} not found` });
+        }
+        const unit = findUnit(port, unitId);
+        if (!unit) {
+            return res.status(404).json({ error: `Unit ${unitId} not found on port ${portId}` });
+        }
+        const existing = (unit.areas || []).find(a => a.id === areaId);
+        if (!existing) {
+            return res.status(404).json({ error: `Area ${areaId} not found on unit ${unitId}` });
+        }
+        if (area.type !== undefined) {
+            if (!VALID_AREA_TYPES.has(area.type)) {
+                return res.status(400).json({ error: `area.type must be one of: ${[...VALID_AREA_TYPES].join(', ')}` });
+            }
+            existing.type = area.type;
+        }
+        if (area.start !== undefined) {
+            const start = Number(area.start);
+            if (!Number.isFinite(start) || start < 0) {
+                return res.status(400).json({ error: 'area.start must be a non-negative integer' });
+            }
+            existing.start = start;
+        }
+        if (area.count !== undefined) {
+            const count = Number(area.count);
+            if (!Number.isFinite(count) || count < 1) {
+                return res.status(400).json({ error: 'area.count must be a positive integer' });
+            }
+            existing.count = count;
+        }
+        writeModel(model);
+        autoCompile(model);
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// DELETE /memory/port/:portId/unit/:unitId/area/:areaId — remove an area from a unit
+app.delete('/memory/port/:portId/unit/:unitId/area/:areaId', (req, res) => {
+    try {
+        const { portId, unitId, areaId } = req.params;
+        const model = readModel();
+        const port = findMemoryPort(model, portId);
+        if (!port) {
+            return res.status(404).json({ error: `Memory port ${portId} not found` });
+        }
+        const unit = findUnit(port, unitId);
+        if (!unit) {
+            return res.status(404).json({ error: `Unit ${unitId} not found on port ${portId}` });
+        }
+        const idx = (unit.areas || []).findIndex(a => a.id === areaId);
+        if (idx === -1) {
+            return res.status(404).json({ error: `Area ${areaId} not found on unit ${unitId}` });
+        }
+        unit.areas.splice(idx, 1);
+        writeModel(model);
+        autoCompile(model);
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /memory/port/:portId/units/populate — auto-populate units[] from current device reads
+// Derives unit structure from auto-computed blocks[], grouping areas by unit_id.
+// Existing manually-defined units are merged/preserved — duplicate unit_ids are merged.
+app.post('/memory/port/:portId/units/populate', (req, res) => {
+    try {
+        const { portId } = req.params;
+        const model = readModel();
+        const port = findMemoryPort(model, portId);
+        if (!port) {
+            return res.status(404).json({ error: `Memory port ${portId} not found` });
+        }
+
+        // Build a map of existing units by unit_id to preserve manual edits
+        const existingByUnitId = new Map();
+        for (const u of (port.units || [])) {
+            existingByUnitId.set(u.unit_id, u);
+        }
+
+        // Derive new units from blocks[] (auto-computed from device reads)
+        const derivedByUnitId = new Map();
+        for (const block of (port.blocks || [])) {
+            const uid = Number(block.unit_id);
+            if (!derivedByUnitId.has(uid)) {
+                derivedByUnitId.set(uid, []);
+            }
+            derivedByUnitId.get(uid).push({
+                id: randomUUID(),
+                type: block.area || 'holding_registers',
+                start: block.address,
+                count: block.count,
+            });
+        }
+
+        let added = 0;
+        for (const [uid, areas] of derivedByUnitId) {
+            if (existingByUnitId.has(uid)) {
+                // Merge areas into existing unit (add derived areas not already present)
+                const existing = existingByUnitId.get(uid);
+                for (const area of areas) {
+                    const alreadyHas = (existing.areas || []).some(
+                        a => a.type === area.type && a.start === area.start && a.count === area.count
+                    );
+                    if (!alreadyHas) {
+                        existing.areas.push(area);
+                        added++;
+                    }
+                }
+            } else {
+                // Create new unit from derived blocks
+                const newUnit = { id: randomUUID(), unit_id: uid, areas };
+                port.units.push(newUnit);
+                added += areas.length;
+            }
+        }
+
+        writeModel(model);
+        autoCompile(model);
+        res.json({ ok: true, unitsCount: port.units.length, areasAdded: added });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -1414,6 +1702,10 @@ function resolveIdentityConflicts(model) {
         for (const block of (port.blocks || [])) {
             occupied.add(Number(block.unit_id));
         }
+        // Also include unit_ids from manually-configured units[]
+        for (const unit of (port.units || [])) {
+            occupied.add(Number(unit.unit_id));
+        }
         occupiedByPort.set(portNum, occupied);
     }
 
@@ -1612,11 +1904,13 @@ function compileAndWrite(model, excludedPortNums = new Set(), opts = {}) {
     // Validate that no included port has an empty memory block list AND no status devices.
     // A port with no regular blocks is still valid if devices with status_unit_id target it
     // (status blocks are generated dynamically in toMmaYaml).
+    // A port with manually-configured units[] is also valid even without auto-derived blocks.
     // This check is never skipped — an empty port is always a structural problem.
     const emptyPorts = (model.memory.ports || [])
         .filter(p => {
             const portNum = Number(p.port);
             if (excludedPortNums.has(portNum)) return false;
+            if ((p.units || []).length > 0) return false; // has manually configured units
             if ((p.blocks || []).length > 0) return false;
             // Port is non-empty if any non-excluded device uses it for status memory
             const hasStatusContent = (model.devices || []).some(d =>
