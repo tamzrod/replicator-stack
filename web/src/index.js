@@ -56,6 +56,71 @@ function scheduleCompile() {
 }
 
 // ---------------------------------------------------------------------------
+// Index maps — O(1) lookup caches derived from _modelCache.
+//
+// Rebuilt by rebuildIndexes() which is called from writeModel() (after every
+// successful mutation) and from readModel() (on the first cold read).
+//
+// CONTRACT: indexes are read-only derived caches — they NEVER modify model
+// data and NEVER affect logic outcomes.  Model remains the sole source of
+// truth; these Maps exist purely to eliminate repeated O(n) array scans.
+//
+// Map keys and their meanings:
+//   devicesById           — device.id (string UUID) → device object
+//   devicesByUnitId       — device.unitId (number)  → device object
+//   devicesByStatusUnitId — device.status_unit_id (number | null) → device[]
+//   devicesByStatusSlot   — device.status_slot (number) → device[]
+//   portsById             — port.id (string UUID)  → port object
+//   portsByNumber         — port.port (number)     → port object
+// ---------------------------------------------------------------------------
+const _idx = {
+    devicesById:           new Map(),
+    devicesByUnitId:       new Map(),
+    devicesByStatusUnitId: new Map(),
+    devicesByStatusSlot:   new Map(),
+    portsById:             new Map(),
+    portsByNumber:         new Map(),
+};
+
+function rebuildIndexes(model) {
+    _idx.devicesById.clear();
+    _idx.devicesByUnitId.clear();
+    _idx.devicesByStatusUnitId.clear();
+    _idx.devicesByStatusSlot.clear();
+    _idx.portsById.clear();
+    _idx.portsByNumber.clear();
+
+    for (const device of (model.devices || [])) {
+        _idx.devicesById.set(device.id, device);
+
+        const parsedUnitId = Number(device.unitId);
+        if (Number.isFinite(parsedUnitId)) {
+            _idx.devicesByUnitId.set(parsedUnitId, device);
+        }
+
+        // null is a valid Map key — devices with no status_unit_id are stored under null
+        const statusUnitIdKey = device.status_unit_id != null ? Number(device.status_unit_id) : null;
+        if (!_idx.devicesByStatusUnitId.has(statusUnitIdKey)) {
+            _idx.devicesByStatusUnitId.set(statusUnitIdKey, []);
+        }
+        _idx.devicesByStatusUnitId.get(statusUnitIdKey).push(device);
+
+        const slot = Number(device.status_slot ?? 0);
+        if (Number.isFinite(slot)) {
+            if (!_idx.devicesByStatusSlot.has(slot)) {
+                _idx.devicesByStatusSlot.set(slot, []);
+            }
+            _idx.devicesByStatusSlot.get(slot).push(device);
+        }
+    }
+
+    for (const port of ((model.memory && model.memory.ports) || [])) {
+        _idx.portsById.set(port.id, port);
+        _idx.portsByNumber.set(Number(port.port), port);
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -187,6 +252,7 @@ function readModel() {
     }
     if (migrated) writeModel(model);
     _modelCache = model; // always cache after the first cold read, regardless of migration
+    rebuildIndexes(model);
     return model;
 }
 
@@ -245,7 +311,7 @@ function ensureTargetMemory(model, device) {
     if (!Number.isFinite(unitId) || unitId < 0) return; // invalid unit id
 
     // Find or create the memory port.
-    let port = model.memory.ports.find(p => Number(p.port) === portNum);
+    let port = _idx.portsByNumber.get(portNum) || null;
     if (!port) {
         port = { id: randomUUID(), port: portNum, blocks: [], units: [] };
         model.memory.ports.push(port);
@@ -265,6 +331,7 @@ function ensureTargetMemory(model, device) {
 
 function writeModel(model) {
     _modelCache = model;
+    rebuildIndexes(model);
     atomicWrite(MODEL_PATH, JSON.stringify(model, null, 2));
 }
 
@@ -298,7 +365,7 @@ function readsOverlap(a, b) {
 }
 
 function findDevice(model, deviceId) {
-    return (model.devices || []).find(d => d.id === deviceId) || null;
+    return _idx.devicesById.get(deviceId) || null;
 }
 
 // ---------------------------------------------------------------------------
@@ -925,17 +992,13 @@ app.post('/device/:id/duplicate', (req, res) => {
         while (usedSourceUnitIds.has(newSourceUnitId)) newSourceUnitId++;
 
         // Find the next free target_unit_id / unitId (increment from original until no collision).
-        const usedUnitIds = new Set((model.devices || []).map(d => d.unitId));
         let newUnitId = (Number(orig.unitId) || 0) + 1;
-        while (usedUnitIds.has(newUnitId)) newUnitId++;
+        while (_idx.devicesByUnitId.has(newUnitId)) newUnitId++;
 
         // Find the next free status_slot within the same status_unit_id group.
         const statusUnitId = orig.status_unit_id ?? null;
-        const usedSlots = new Set(
-            (model.devices || [])
-                .filter(d => d.status_unit_id === statusUnitId)
-                .map(d => d.status_slot)
-        );
+        const statusGroup = _idx.devicesByStatusUnitId.get(statusUnitId) || [];
+        const usedSlots = new Set(statusGroup.map(d => d.status_slot));
         let newStatusSlot = Number(orig.status_slot ?? -1) + 1;
         while (usedSlots.has(newStatusSlot)) newStatusSlot++;
 
@@ -1068,7 +1131,7 @@ app.post('/config/save', (req, res) => {
 // ---------------------------------------------------------------------------
 
 function findMemoryPort(model, portId) {
-    return ((model.memory && model.memory.ports) || []).find(p => p.id === portId) || null;
+    return _idx.portsById.get(portId) || null;
 }
 
 // POST /memory/port — add a memory port (MMA listener)
@@ -1080,7 +1143,7 @@ app.post('/memory/port', (req, res) => {
             return res.status(400).json({ error: 'port.port must be a valid port number (1–65535)' });
         }
         const model = readModel();
-        const exists = model.memory.ports.some(p => Number(p.port) === portNum);
+        const exists = _idx.portsByNumber.has(portNum);
         if (exists) {
             return res.status(409).json({ error: `Memory port ${portNum} already exists` });
         }
@@ -1116,7 +1179,7 @@ app.put('/memory/port/:id', (req, res) => {
         if (!existing) {
             return res.status(404).json({ error: `Memory port ${id} not found` });
         }
-        const conflict = model.memory.ports.some(p => Number(p.port) === portNum && p.id !== id);
+        const conflict = _idx.portsByNumber.has(portNum) && _idx.portsByNumber.get(portNum).id !== id;
         if (conflict) {
             return res.status(409).json({ error: `Memory port ${portNum} already exists` });
         }
@@ -1976,7 +2039,7 @@ function rehydrateFromYaml(model) {
         if (!Number.isFinite(unitId) || unitId < 0) continue;
 
         const targetPort = endpointPort(device.target_endpoint) || 502;
-        const matchingPort = memoryPorts.find(p => Number(p.port) === targetPort);
+        const matchingPort = _idx.portsByNumber.get(targetPort) || null;
         if (!matchingPort) continue; // port does not exist — skip device
 
         for (const read of (device.reads || [])) {
@@ -2007,7 +2070,7 @@ function rehydrateFromYaml(model) {
     // Step 3: assign freshly-computed blocks derived from reads
     let blocksCreated = 0;
     for (const req of Object.values(required)) {
-        const port = memoryPorts.find(p => p.id === req.portId);
+        const port = _idx.portsById.get(req.portId) || null;
         if (!port) continue;
 
         const merged = mergeRanges(req.ranges);
