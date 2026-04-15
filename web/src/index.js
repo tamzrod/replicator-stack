@@ -546,13 +546,17 @@ function toMmaYaml(model) {
         // Determine source: use units[] when manually configured, fall back to blocks[]
         const hasManualUnits = (port.units || []).length > 0;
         let blocksForCompile;
-        // Build a map from unit_id → state_sealing for manual units (first match wins).
+        // Build maps from unit_id → state_sealing / policy for manual units (first match wins).
         const stateSealingByUnitId = {};
+        const policyByUnitId = {};
         if (hasManualUnits) {
             // Flatten units[] → blocks format for compileMma2Config
             blocksForCompile = (port.units || []).flatMap(u => {
                 if (u.state_sealing && !(u.unit_id in stateSealingByUnitId)) {
                     stateSealingByUnitId[u.unit_id] = u.state_sealing;
+                }
+                if (u.policy && !(u.unit_id in policyByUnitId)) {
+                    policyByUnitId[u.unit_id] = u.policy;
                 }
                 return (u.areas || []).map(a => ({
                     unit_id: u.unit_id,
@@ -593,25 +597,40 @@ function toMmaYaml(model) {
                     lines.push(`          address: ${ss.address}`);
                 }
 
-                // Emit policy.  Status units are read-write (FC 3 + 16); regular
+                // Emit policy.  When user has configured a custom policy, use it.
+                // Otherwise auto-generate: status units are read-write, regular
                 // units are read-only with the union of read FCs for all domains.
-                lines.push(`        policy:`);
-                lines.push(`          rules:`);
-                if (unit.isStatus) {
-                    lines.push(`            - id: read-write`);
-                    lines.push(`              source_ip:`);
-                    lines.push(`                - 0.0.0.0/0`);
-                    lines.push(`                - ::/0`);
-                    lines.push(`              allow_fc: [3, 16]`);
+                const customPolicy = policyByUnitId[unit.unitId];
+                if (customPolicy) {
+                    lines.push(`        policy:`);
+                    lines.push(`          rules:`);
+                    for (const rule of (customPolicy.rules || [])) {
+                        lines.push(`            - id: ${rule.id}`);
+                        lines.push(`              source_ip:`);
+                        for (const ip of rule.source_ip) {
+                            lines.push(`                - ${ip}`);
+                        }
+                        lines.push(`              allow_fc: [${rule.allow_fc.join(', ')}]`);
+                    }
                 } else {
-                    const fcs = [...new Set(
-                        [...unit.domains.keys()].map(domainReadFc)
-                    )].sort((a, b) => a - b);
-                    lines.push(`            - id: read-only`);
-                    lines.push(`              source_ip:`);
-                    lines.push(`                - 0.0.0.0/0`);
-                    lines.push(`                - ::/0`);
-                    lines.push(`              allow_fc: [${fcs.join(', ')}]`);
+                    lines.push(`        policy:`);
+                    lines.push(`          rules:`);
+                    if (unit.isStatus) {
+                        lines.push(`            - id: read-write`);
+                        lines.push(`              source_ip:`);
+                        lines.push(`                - 0.0.0.0/0`);
+                        lines.push(`                - ::/0`);
+                        lines.push(`              allow_fc: [3, 16]`);
+                    } else {
+                        const fcs = [...new Set(
+                            [...unit.domains.keys()].map(domainReadFc)
+                        )].sort((a, b) => a - b);
+                        lines.push(`            - id: read-only`);
+                        lines.push(`              source_ip:`);
+                        lines.push(`                - 0.0.0.0/0`);
+                        lines.push(`                - ::/0`);
+                        lines.push(`              allow_fc: [${fcs.join(', ')}]`);
+                    }
                 }
             }
         }
@@ -991,6 +1010,7 @@ app.delete('/memory/port/:id', (req, res) => {
 // ---------------------------------------------------------------------------
 
 const VALID_AREA_TYPES = new Set(['holding_registers', 'input_registers', 'coils', 'discrete_inputs']);
+const VALID_FC_SET = new Set([1, 2, 3, 4, 5, 6, 15, 16]);
 
 function findUnit(port, unitId) {
     return ((port && port.units) || []).find(u => u.id === unitId) || null;
@@ -1059,8 +1079,49 @@ app.put('/memory/port/:portId/unit/:unitId', (req, res) => {
             }
         }
 
-        if (!hasUnitId && !hasStateSealing) {
-            return res.status(400).json({ error: 'unit must include unit_id or state_sealing' });
+        // Validate policy when provided
+        const hasPolicy = 'policy' in unit;
+        let policyValue;
+        if (hasPolicy) {
+            if (unit.policy === null) {
+                policyValue = null;
+            } else if (unit.policy && typeof unit.policy === 'object') {
+                if (!Array.isArray(unit.policy.rules)) {
+                    return res.status(400).json({ error: 'policy.rules must be an array' });
+                }
+                const validatedRules = [];
+                for (let i = 0; i < unit.policy.rules.length; i++) {
+                    const rule = unit.policy.rules[i];
+                    if (!rule.id || typeof rule.id !== 'string' || !rule.id.trim()) {
+                        return res.status(400).json({ error: `policy rule ${i + 1}: id must be a non-empty string` });
+                    }
+                    if (!Array.isArray(rule.source_ip) || rule.source_ip.length === 0) {
+                        return res.status(400).json({ error: `policy rule ${i + 1}: source_ip must be a non-empty array of strings` });
+                    }
+                    if (!rule.source_ip.every(ip => typeof ip === 'string' && ip.trim())) {
+                        return res.status(400).json({ error: `policy rule ${i + 1}: source_ip entries must be non-empty strings` });
+                    }
+                    if (!Array.isArray(rule.allow_fc)) {
+                        return res.status(400).json({ error: `policy rule ${i + 1}: allow_fc must be an array` });
+                    }
+                    const invalidFcs = rule.allow_fc.filter(fc => !VALID_FC_SET.has(Number(fc)));
+                    if (invalidFcs.length > 0) {
+                        return res.status(400).json({ error: `policy rule ${i + 1}: invalid function codes: ${invalidFcs.join(', ')}. Valid codes: 1,2,3,4,5,6,15,16` });
+                    }
+                    validatedRules.push({
+                        id: rule.id.trim(),
+                        source_ip: rule.source_ip.map(ip => String(ip).trim()),
+                        allow_fc: rule.allow_fc.map(fc => Number(fc)),
+                    });
+                }
+                policyValue = { rules: validatedRules };
+            } else {
+                return res.status(400).json({ error: 'policy must be null or an object with a rules array' });
+            }
+        }
+
+        if (!hasUnitId && !hasStateSealing && !hasPolicy) {
+            return res.status(400).json({ error: 'unit must include at least one of: unit_id, state_sealing, policy' });
         }
 
         const model = readModel();
@@ -1078,6 +1139,13 @@ app.put('/memory/port/:portId/unit/:unitId', (req, res) => {
                 delete existing.state_sealing;
             } else {
                 existing.state_sealing = stateSealingValue;
+            }
+        }
+        if (hasPolicy) {
+            if (policyValue === null) {
+                delete existing.policy;
+            } else {
+                existing.policy = policyValue;
             }
         }
         writeModel(model);
