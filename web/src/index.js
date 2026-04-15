@@ -476,7 +476,7 @@ function compileMma2Config(blocks, statusMap = new Map()) {
                 action:              'units_merged',
                 sourceEntriesMerged: entry.sourceCount,
                 fieldsCombined:      [...entry.domains.keys()],
-                rulesDeduped:        0, // one synthesised rule per unit; no raw duplicates
+                rulesDeduped:        0, // rules are synthesised from domain types at emit time, not taken from raw source blocks
             });
         }
     }
@@ -562,9 +562,9 @@ function toMmaYaml(model) {
                     lines.push(`                - ::/0`);
                     lines.push(`              allow_fc: [3, 16]`);
                 } else {
-                    const fcs = [...unit.domains.keys()]
-                        .map(domainReadFc)
-                        .sort((a, b) => a - b);
+                    const fcs = [...new Set(
+                        [...unit.domains.keys()].map(domainReadFc)
+                    )].sort((a, b) => a - b);
                     lines.push(`            - id: read-only`);
                     lines.push(`              source_ip:`);
                     lines.push(`                - 0.0.0.0/0`);
