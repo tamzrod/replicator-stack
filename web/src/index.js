@@ -1385,14 +1385,107 @@ function resolveIdentityConflicts(model) {
 }
 
 /**
+ * Auto-fix duplicate unit_id conflicts across devices on the same listener port.
+ *
+ * When two or more devices share the same unitId on the same target port, the MMA
+ * listener receives duplicate unit_id entries which it rejects.  This function
+ * detects those inter-device conflicts and reassigns the later device's unitId to
+ * the next available slot (0–255) on that port.
+ *
+ * Same-device, multi-area duplicates (a single device with reads on both
+ * holding_registers and coils) cannot be resolved by unitId reassignment alone and
+ * are left for the user to handle manually.
+ *
+ * Mutates model.devices in-place.  Returns { fixed, resolutionLog, error }.
+ *
+ * @param {object} model
+ * @returns {{ fixed: boolean, resolutionLog: Array<object>, error: string|null }}
+ */
+function autoFixDuplicateUnitIds(model) {
+    const MAX_UNIT_ID = 255;
+    const resolutionLog = [];
+
+    // Build: portNum → Map<unitId, devices[]>
+    const portDevices = new Map();
+    for (const device of (model.devices || [])) {
+        const uid = Number(device.unitId);
+        if (!Number.isFinite(uid) || uid < 0) continue;
+        const port = endpointPort(device.target_endpoint);
+        if (!port) continue;
+        if (!portDevices.has(port)) portDevices.set(port, new Map());
+        const uidMap = portDevices.get(port);
+        if (!uidMap.has(uid)) uidMap.set(uid, []);
+        uidMap.get(uid).push(device);
+    }
+
+    for (const [portNum, uidMap] of portDevices) {
+        // Build the full set of occupied unitIds on this port to avoid collisions.
+        const occupied = new Set([...uidMap.keys()]);
+
+        for (const [uid, devices] of [...uidMap.entries()]) {
+            if (devices.length <= 1) continue;
+
+            // Keep the first device; reassign all duplicates to the next free slot.
+            const [, ...dupes] = devices;
+            for (const dev of dupes) {
+                let newUid = uid + 1;
+                while (newUid <= MAX_UNIT_ID && occupied.has(newUid)) newUid++;
+                if (newUid > MAX_UNIT_ID) {
+                    return {
+                        fixed: false,
+                        resolutionLog,
+                        error: `Cannot auto-fix: no free unit_id slot on port ${portNum} (all slots 0–${MAX_UNIT_ID} occupied)`,
+                    };
+                }
+                resolutionLog.push({
+                    reason: `Device "${dev.name || dev.id}" (port ${portNum}): duplicate unit_id ${uid} reassigned to ${newUid}`,
+                    deviceId: dev.id,
+                    portNum,
+                    oldUnitId: uid,
+                    newUnitId: newUid,
+                });
+                occupied.add(newUid);
+                uidMap.set(newUid, [dev]);
+                dev.unitId = newUid;
+            }
+        }
+    }
+
+    return { fixed: resolutionLog.length > 0, resolutionLog, error: null };
+}
+
+/**
+ * Build a human-readable error summary from MMA and Replicator error arrays.
+ * @param {string[]} mmaErrors
+ * @param {string[]} replicatorErrors
+ * @returns {string}
+ */
+function buildErrorSummary(mmaErrors, replicatorErrors) {
+    const mma = mmaErrors || [];
+    const rep = replicatorErrors || [];
+    const parts = [];
+    if (mma.length > 0) parts.push(`MMA: ${mma[0]}`);
+    if (rep.length > 0) parts.push(`Replicator: ${rep[0]}`);
+    // extra = total errors minus the one from each array already shown in parts
+    const extra = (mma.length + rep.length) - parts.length;
+    if (extra > 0) parts.push(`…and ${extra} more issue(s)`);
+    return parts.join(' | ') || 'Config validation failed';
+}
+
+/**
  * Compile model → YAML and write to disk.
  * Returns { ok, mmaErrors, replicatorErrors, blocksCreated, resolutionLog }.
  * Does NOT throw — callers that want to surface errors should check the return value.
  *
  * @param {object} model
  * @param {Set<number>} [excludedPortNums] - port numbers whose devices should be omitted from replicator YAML
+ * @param {{ skipValidation?: boolean }} [opts]
+ *   skipValidation — when true, bypass duplicate-unit_id and YAML validation checks
+ *                    (used for "ignore & force continue" user override).  Unsafe: the
+ *                    runtime may behave unpredictably with an invalid config.
  */
-function compileAndWrite(model, excludedPortNums = new Set()) {
+function compileAndWrite(model, excludedPortNums = new Set(), opts = {}) {
+    const { skipValidation = false } = opts;
     // Full rehydration: rebuild all memory state (blocks + status slots) from scratch.
     // This is the single deterministic step that replaces any prior incremental logic.
     const rehydrated = rehydrateFromYaml(model);
@@ -1413,36 +1506,39 @@ function compileAndWrite(model, excludedPortNums = new Set()) {
         writeModel(model);
     }
 
-    // Validate no duplicate unit_id within the same port (listener).
-    // rehydrateFromYaml keys blocks by portId|unitId|area, so a device that has reads
-    // in more than one area type (e.g. holding_registers AND coils) for the same unit_id
-    // on the same port produces multiple blocks with the same unit_id — which MMA rejects.
-    // Incomplete entries (blocks whose area type is not holding_registers) also emit
-    // "- unit_id: X" without register/policy sections; they must not bypass this check.
-    const duplicateUnitIdErrors = [];
-    for (const port of (model.memory.ports || [])) {
-        const portNum = Number(port.port);
-        const seenUnitIds = new Map(); // unit_id → first area seen
-        for (const block of (port.blocks || [])) {
-            const uid = Number(block.unit_id);
-            const area = block.area || 'holding_registers';
-            if (seenUnitIds.has(uid)) {
-                duplicateUnitIdErrors.push(
-                    `Port ${portNum}: duplicate unit_id ${uid} — unit IDs must be unique per listener` +
-                    ` (first area: "${seenUnitIds.get(uid)}", duplicate area: "${area}")`
-                );
-            } else {
-                seenUnitIds.set(uid, area);
+    if (!skipValidation) {
+        // Validate no duplicate unit_id within the same port (listener).
+        // rehydrateFromYaml keys blocks by portId|unitId|area, so a device that has reads
+        // in more than one area type (e.g. holding_registers AND coils) for the same unit_id
+        // on the same port produces multiple blocks with the same unit_id — which MMA rejects.
+        // Incomplete entries (blocks whose area type is not holding_registers) also emit
+        // "- unit_id: X" without register/policy sections; they must not bypass this check.
+        const duplicateUnitIdErrors = [];
+        for (const port of (model.memory.ports || [])) {
+            const portNum = Number(port.port);
+            const seenUnitIds = new Map(); // unit_id → first area seen
+            for (const block of (port.blocks || [])) {
+                const uid = Number(block.unit_id);
+                const area = block.area || 'holding_registers';
+                if (seenUnitIds.has(uid)) {
+                    duplicateUnitIdErrors.push(
+                        `Port ${portNum}: duplicate unit_id ${uid} — unit IDs must be unique per listener` +
+                        ` (first area: "${seenUnitIds.get(uid)}", duplicate area: "${area}")`
+                    );
+                } else {
+                    seenUnitIds.set(uid, area);
+                }
             }
         }
-    }
-    if (duplicateUnitIdErrors.length > 0) {
-        return { ok: false, mmaErrors: duplicateUnitIdErrors, replicatorErrors: [], resolutionLog };
+        if (duplicateUnitIdErrors.length > 0) {
+            return { ok: false, mmaErrors: duplicateUnitIdErrors, replicatorErrors: [], resolutionLog };
+        }
     }
 
     // Validate that no included port has an empty memory block list AND no status devices.
     // A port with no regular blocks is still valid if devices with status_unit_id target it
     // (status blocks are generated dynamically in toMmaYaml).
+    // This check is never skipped — an empty port is always a structural problem.
     const emptyPorts = (model.memory.ports || [])
         .filter(p => {
             const portNum = Number(p.port);
@@ -1468,11 +1564,15 @@ function compileAndWrite(model, excludedPortNums = new Set()) {
 
     const replicatorYaml = toReplicatorYaml(model, excludedPortNums);
     const mmaYaml = toMmaYaml(model);
-    const mmaErrors = validateMmaConfig(mmaYaml);
-    const replicatorErrors = validateReplicatorConfig(replicatorYaml);
-    if (mmaErrors.length > 0 || replicatorErrors.length > 0) {
-        return { ok: false, mmaErrors, replicatorErrors, resolutionLog };
+
+    if (!skipValidation) {
+        const mmaErrors = validateMmaConfig(mmaYaml);
+        const replicatorErrors = validateReplicatorConfig(replicatorYaml);
+        if (mmaErrors.length > 0 || replicatorErrors.length > 0) {
+            return { ok: false, mmaErrors, replicatorErrors, resolutionLog };
+        }
     }
+
     atomicWrite(REPLICATOR_CONFIG_PATH, replicatorYaml);
     atomicWrite(MMA_CONFIG_PATH, mmaYaml);
     return { ok: true, blocksCreated: rehydrated.blocksCreated, resolutionLog };
@@ -1533,11 +1633,17 @@ app.post('/compile', (req, res) => {
 
         const result = compileAndWrite(model, excludedPortNums);
         if (!result.ok) {
-            return res.status(400).json({
-                error: 'Config validation failed — generated configs violate separation rules',
-                mma_errors: result.mmaErrors,
-                replicator_errors: result.replicatorErrors,
-                resolution_log: result.resolutionLog || [],
+            return res.status(409).json({
+                status: 'error',
+                errorSummary: buildErrorSummary(result.mmaErrors, result.replicatorErrors),
+                options: ['auto_fix', 'ignore', 'cancel'],
+                suggestedOption: 'auto_fix',
+                details: {
+                    mma_errors: result.mmaErrors,
+                    replicator_errors: result.replicatorErrors,
+                    resolution_log: result.resolutionLog || [],
+                    excluded_ports: [...excludedPortNums],
+                },
             });
         }
 
@@ -1547,6 +1653,112 @@ app.post('/compile', (req, res) => {
             blocksCreated: result.blocksCreated || 0,
             excluded_ports: [...excludedPortNums],
             resolution_log: result.resolutionLog || [],
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /compile/resolve — handle user recovery choice after a compile validation error.
+// action: "auto_fix" | "ignore" | "cancel"
+// restart: boolean — when true, also restart MMA + Replicator services after compile
+// excluded_ports: number[] — ports excluded from this compile pass
+app.post('/compile/resolve', async (req, res) => {
+    try {
+        const body = req.body || {};
+        const action = body.action;
+        if (!['auto_fix', 'ignore', 'cancel'].includes(action)) {
+            return res.status(400).json({ error: 'action must be one of: auto_fix, ignore, cancel' });
+        }
+
+        if (action === 'cancel') {
+            return res.json({ status: 'resolved', mode: 'cancel' });
+        }
+
+        const excludedPortsList = Array.isArray(body.excluded_ports) ? body.excluded_ports : [];
+        const excludedPortNums = new Set(excludedPortsList.map(Number).filter(Number.isFinite));
+        const shouldRestart = body.restart === true;
+
+        const model = readModel();
+        const resolutionLog = [];
+
+        if (action === 'auto_fix') {
+            const fixResult = autoFixDuplicateUnitIds(model);
+            if (fixResult.error) {
+                return res.status(422).json({
+                    status: 'error',
+                    errorSummary: fixResult.error,
+                    options: ['ignore', 'cancel'],
+                    suggestedOption: 'cancel',
+                    details: { mma_errors: [fixResult.error], replicator_errors: [], resolution_log: fixResult.resolutionLog },
+                });
+            }
+            if (fixResult.fixed) {
+                writeModel(model);
+            }
+            resolutionLog.push(...fixResult.resolutionLog);
+        }
+
+        // For "ignore", compile with skipValidation=true (unsafe override).
+        const skipValidation = action === 'ignore';
+        if (skipValidation) {
+            console.warn('[UNSAFE OVERRIDE] User chose to ignore config validation errors and force compile');
+        }
+
+        const result = compileAndWrite(model, excludedPortNums, { skipValidation });
+
+        // After an auto_fix attempt the compile may still fail (e.g. area-type duplicates
+        // that can't be resolved by unitId reassignment).  Surface remaining errors with
+        // updated recovery options.
+        if (!result.ok) {
+            return res.status(409).json({
+                status: 'error',
+                errorSummary: buildErrorSummary(result.mmaErrors, result.replicatorErrors),
+                options: ['ignore', 'cancel'],
+                suggestedOption: 'cancel',
+                details: {
+                    mma_errors: result.mmaErrors,
+                    replicator_errors: result.replicatorErrors,
+                    resolution_log: [...resolutionLog, ...(result.resolutionLog || [])],
+                    excluded_ports: [...excludedPortNums],
+                },
+            });
+        }
+
+        const routes = countRoutes(model, excludedPortNums);
+        const allResolutionLog = [...resolutionLog, ...(result.resolutionLog || [])];
+
+        if (shouldRestart) {
+            const restartErrors = [];
+            for (const service of ['mma', 'replicator']) {
+                try {
+                    const r = await dockerApi('POST', `/containers/${service}/restart`);
+                    if (r.status !== 204 && r.status !== 304) {
+                        const msg = (r.body && r.body.message) ? r.body.message : `HTTP ${r.status}`;
+                        restartErrors.push(`${service}: ${msg}`);
+                    }
+                } catch (dockerErr) {
+                    restartErrors.push(`${service}: ${dockerErr.message}`);
+                }
+            }
+            if (restartErrors.length > 0) {
+                return res.status(207).json({
+                    status: 'resolved',
+                    mode: action,
+                    routes,
+                    blocksCreated: result.blocksCreated || 0,
+                    resolutionLog: allResolutionLog,
+                    restart_errors: restartErrors,
+                });
+            }
+        }
+
+        res.json({
+            status: 'resolved',
+            mode: action,
+            routes,
+            blocksCreated: result.blocksCreated || 0,
+            resolutionLog: allResolutionLog,
         });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -1834,10 +2046,17 @@ app.post('/runtime/apply', async (req, res) => {
 
         const result = compileAndWrite(model, excludedPortNums);
         if (!result.ok) {
-            return res.status(400).json({
-                error: 'Config validation failed — generated configs violate separation rules',
-                mma_errors: result.mmaErrors,
-                replicator_errors: result.replicatorErrors,
+            return res.status(409).json({
+                status: 'error',
+                errorSummary: buildErrorSummary(result.mmaErrors, result.replicatorErrors),
+                options: ['auto_fix', 'ignore', 'cancel'],
+                suggestedOption: 'auto_fix',
+                details: {
+                    mma_errors: result.mmaErrors,
+                    replicator_errors: result.replicatorErrors,
+                    resolution_log: result.resolutionLog || [],
+                    excluded_ports: [...excludedPortNums],
+                },
             });
         }
 
@@ -1866,10 +2085,18 @@ app.post('/runtime/apply-restart', async (req, res) => {
 
         const result = compileAndWrite(model, excludedPortNums);
         if (!result.ok) {
-            return res.status(400).json({
-                error: 'Config validation failed — generated configs violate separation rules',
-                mma_errors: result.mmaErrors,
-                replicator_errors: result.replicatorErrors,
+            return res.status(409).json({
+                status: 'error',
+                errorSummary: buildErrorSummary(result.mmaErrors, result.replicatorErrors),
+                options: ['auto_fix', 'ignore', 'cancel'],
+                suggestedOption: 'auto_fix',
+                details: {
+                    mma_errors: result.mmaErrors,
+                    replicator_errors: result.replicatorErrors,
+                    resolution_log: result.resolutionLog || [],
+                    excluded_ports: [...excludedPortNums],
+                    restart: true,
+                },
             });
         }
 
