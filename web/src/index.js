@@ -195,6 +195,35 @@ function findGroup(model, groupId) {
     return (model.groups || []).find(g => g.id === groupId) || null;
 }
 
+// Ensure a memory port and unit exist for the device's target_endpoint + unitId.
+// Creates the port and/or unit if absent.  Safe to call with an already-mutated
+// model before writeModel() — all changes are applied in-place.
+function ensureTargetMemory(model, device) {
+    const portNum = endpointPort(device.target_endpoint);
+    if (portNum == null) return; // invalid endpoint — validation catches this separately
+
+    const unitId = Number(device.unitId);
+    if (!Number.isFinite(unitId) || unitId < 0) return; // invalid unit id
+
+    // Find or create the memory port.
+    let port = model.memory.ports.find(p => Number(p.port) === portNum);
+    if (!port) {
+        port = { id: randomUUID(), port: portNum, blocks: [], units: [] };
+        model.memory.ports.push(port);
+        console.log(`[ensureTargetMemory] Created target memory port ${portNum} for unit_id: ${unitId}`);
+    }
+
+    // Find or create the unit within the port.
+    const existingUnit = (port.units || []).find(u => Number(u.unit_id) === unitId);
+    if (!existingUnit) {
+        if (!port.units) port.units = [];
+        port.units.push({ id: randomUUID(), unit_id: unitId, areas: [] });
+        console.log(`[ensureTargetMemory] Created target memory unit_id: ${unitId} on port ${portNum}`);
+    } else {
+        console.log(`[ensureTargetMemory] Using existing memory unit_id: ${unitId} on port ${portNum}`);
+    }
+}
+
 function writeModel(model) {
     atomicWrite(MODEL_PATH, JSON.stringify(model, null, 2));
 }
@@ -733,7 +762,7 @@ app.post('/device', (req, res) => {
 
         const generatedId = `device_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
 
-        model.devices.push({
+        const newDevice = {
             id: generatedId,
             name: device.name || '',
             groupId: device.groupId || null,
@@ -744,7 +773,9 @@ app.post('/device', (req, res) => {
             status_slot: device.status_slot != null ? Number(device.status_slot) : 0,
             status_unit_id: device.status_unit_id != null ? Number(device.status_unit_id) : null,
             reads: []
-        });
+        };
+        model.devices.push(newDevice);
+        ensureTargetMemory(model, newDevice);
         writeModel(model);
         autoCompile(model);
 
@@ -853,6 +884,11 @@ app.post('/device/:id/duplicate', (req, res) => {
         let newSourceUnitId = (Number(orig.source_unit_id) || 0) + 1;
         while (usedSourceUnitIds.has(newSourceUnitId)) newSourceUnitId++;
 
+        // Find the next free target_unit_id / unitId (increment from original until no collision).
+        const usedUnitIds = new Set((model.devices || []).map(d => d.unitId));
+        let newUnitId = (Number(orig.unitId) || 0) + 1;
+        while (usedUnitIds.has(newUnitId)) newUnitId++;
+
         // Find the next free status_slot within the same status_unit_id group.
         const statusUnitId = orig.status_unit_id ?? null;
         const usedSlots = new Set(
@@ -874,13 +910,14 @@ app.post('/device/:id/duplicate', (req, res) => {
             source_endpoint: orig.source_endpoint,
             source_unit_id: newSourceUnitId,
             target_endpoint: orig.target_endpoint,
-            unitId: orig.unitId,
+            unitId: newUnitId,
             status_slot: newStatusSlot,
             status_unit_id: statusUnitId,
             reads: newReads,
         };
 
         model.devices.push(newDevice);
+        ensureTargetMemory(model, newDevice);
         writeModel(model);
         autoCompile(model);
 
