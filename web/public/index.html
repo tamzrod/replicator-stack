@@ -817,6 +817,170 @@
     .btn-mem-danger { background: #FEE2E2; color: #B91C1C; font-size: .72rem; padding: 3px 8px; font-weight: 600; border-radius: 4px; border: none; cursor: pointer; }
     .btn-mem-danger:hover { background: #FECACA; }
 
+    /* ── Advanced Settings collapsible panel ─────────────────────────── */
+    .mem-adv-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 12px;
+      padding: 6px 8px;
+      border-radius: 5px;
+      cursor: pointer;
+      user-select: none;
+      font-size: .78rem;
+      font-weight: 600;
+      color: #6B7280;
+      border: 1px dashed #D1D5DB;
+      background: #F9FAFB;
+    }
+    .mem-adv-header:hover { background: #F3F4F6; border-color: #9CA3AF; }
+    .mem-adv-chevron { font-size: .6rem; color: #9CA3AF; transition: transform .15s; }
+    .mem-adv-chevron.open { transform: rotate(90deg); }
+    .mem-adv-body {
+      display: none;
+      margin-top: 8px;
+      padding: 12px 14px;
+      border: 1px solid #E5E7EB;
+      border-radius: 6px;
+      background: #FAFAFA;
+    }
+    .mem-adv-section-title {
+      font-size: .7rem;
+      font-weight: 700;
+      color: #9CA3AF;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      margin-bottom: 8px;
+    }
+    .mem-seal-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .mem-seal-toggle-label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: .82rem;
+      color: #374151;
+      cursor: pointer;
+    }
+    .mem-seal-fields {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+      flex-wrap: wrap;
+    }
+    .mem-seal-field {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .mem-seal-field label {
+      font-size: .62rem;
+      font-weight: 700;
+      color: #6B7280;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .mem-seal-field input[type="number"],
+    .mem-seal-field .mem-seal-area-static {
+      font-size: .8rem;
+      padding: 3px 8px;
+      border: 1px solid #D1D5DB;
+      border-radius: 4px;
+      background: #fff;
+      width: 80px;
+    }
+    .mem-seal-field .mem-seal-area-static {
+      background: #F3F4F6;
+      color: #6B7280;
+      font-style: italic;
+    }
+    .mem-adv-banner { font-size: .75rem; margin-top: 6px; }
+    .mem-adv-divider {
+      border: none;
+      border-top: 1px solid #E5E7EB;
+      margin: 12px 0;
+    }
+
+    /* ── Policy rule cards ───────────────────────────────────────────── */
+    .mem-policy-rule-card {
+      border: 1px solid #E5E7EB;
+      border-radius: 6px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      background: #fff;
+    }
+    .mem-policy-rule-head {
+      display: flex;
+      align-items: flex-end;
+      gap: 8px;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+    }
+    .mem-policy-rule-body {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: flex-start;
+    }
+    .mem-policy-field {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      flex: 1;
+      min-width: 120px;
+    }
+    .mem-policy-field label {
+      font-size: .62rem;
+      font-weight: 700;
+      color: #6B7280;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .mem-policy-rule-id {
+      font-size: .8rem;
+      padding: 3px 7px;
+      border: 1px solid #D1D5DB;
+      border-radius: 4px;
+      background: #fff;
+      width: 140px;
+    }
+    .mem-policy-source-ip {
+      font-size: .78rem;
+      padding: 4px 7px;
+      border: 1px solid #D1D5DB;
+      border-radius: 4px;
+      background: #fff;
+      resize: vertical;
+      min-height: 44px;
+      font-family: monospace;
+      width: 100%;
+    }
+    .mem-policy-fc-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 10px;
+    }
+    .mem-policy-fc-label {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      font-size: .75rem;
+      color: #374151;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .mem-policy-enable-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+
     /* ── Runtime Tab ──────────────────────────────────────────────────── */
     #runtime-tab-container {
       display: none;
@@ -2538,6 +2702,52 @@ const AREA_TYPE_LABELS = {
   discrete_inputs:   'Discrete Inputs',
 };
 
+// Modbus function codes per the MMA 2.0 spec (id, label).
+const FC_LABELS = [
+  [1, 'Read Coils'],
+  [2, 'Read Discrete Inputs'],
+  [3, 'Read Holding Registers'],
+  [4, 'Read Input Registers'],
+  [5, 'Write Single Coil'],
+  [6, 'Write Single Register'],
+  [15, 'Write Multiple Coils'],
+  [16, 'Write Multiple Registers'],
+];
+
+// Returns an HTML string for one policy rule card.
+// Used both in initial render (template literal) and dynamic add (innerHTML).
+function renderPolicyRuleCardHtml(rule) {
+  const safeId  = escapeHtml(rule.id || '');
+  const safeIps = escapeHtml((rule.source_ip || []).join('\n'));
+  const fcSet   = new Set((rule.allow_fc || []).map(Number));
+  return `<div class="mem-policy-rule-card">
+    <div class="mem-policy-rule-head">
+      <div class="mem-policy-field" style="min-width:0;flex:none">
+        <label>Rule ID</label>
+        <input type="text" class="mem-policy-rule-id" value="${safeId}" placeholder="e.g. allow-plc" />
+      </div>
+      <button type="button" class="btn-mem-danger mem-policy-rule-del" title="Remove rule">✕ Remove</button>
+    </div>
+    <div class="mem-policy-rule-body">
+      <div class="mem-policy-field" style="flex:2;min-width:160px">
+        <label>Source IPs <span style="font-weight:400;color:#9CA3AF">(one per line, CIDR ok)</span></label>
+        <textarea class="mem-policy-source-ip" rows="2"
+          placeholder="e.g. 192.168.1.0/24&#10;10.0.0.50">${safeIps}</textarea>
+      </div>
+      <div class="mem-policy-field" style="flex:3;min-width:200px">
+        <label>Function Codes</label>
+        <div class="mem-policy-fc-grid">
+          ${FC_LABELS.map(([fc, name]) =>
+            `<label class="mem-policy-fc-label" title="${escapeHtml(name)}">
+              <input type="checkbox" class="mem-policy-fc-chk" value="${fc}"${fcSet.has(fc) ? ' checked' : ''}> FC${fc}
+            </label>`
+          ).join('')}
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
 function renderMemoryTab(data) {
   const container = document.getElementById('memory-ports-list');
   const ports = (data && data.memory && data.memory.ports) || [];
@@ -2651,6 +2861,76 @@ function renderUnit(portId, unit) {
       <span class="mem-area-banner banner" style="font-size:.75rem;align-self:flex-end"></span>
     </form>`;
 
+  // Advanced Settings — State Sealing + Access Control (Policy)
+  const ss = unit.state_sealing || null;
+  const sealEnabled = !!(ss && ss.area === 'coil');
+  const sealAddress = sealEnabled ? Number(ss.address) : 0;
+
+  const customPolicy   = unit.policy || null;
+  const policyEnabled  = !!(customPolicy && Array.isArray(customPolicy.rules));
+  const policyRules    = policyEnabled ? customPolicy.rules : [];
+
+  const advancedSection = `
+    <div class="mem-adv-header" data-adv-toggle="${unitDbIdEsc}"
+      role="button" aria-expanded="false" aria-label="Advanced Settings">
+      <span class="mem-adv-chevron" data-adv-chevron="${unitDbIdEsc}" aria-hidden="true">▶</span>
+      Advanced Settings
+    </div>
+    <div class="mem-adv-body" data-adv-body="${unitDbIdEsc}">
+
+      <div class="mem-adv-section-title">State Sealing</div>
+      <div class="mem-seal-row">
+        <label class="mem-seal-toggle-label">
+          <input type="checkbox" class="mem-seal-enable"
+            data-port-id="${escapeHtml(portId)}" data-unit-id="${unitDbIdEsc}"
+            ${sealEnabled ? 'checked' : ''} />
+          Enable State Sealing
+        </label>
+      </div>
+      <div class="mem-seal-fields" data-seal-fields="${unitDbIdEsc}" style="${sealEnabled ? '' : 'display:none'}">
+        <div class="mem-seal-field">
+          <label>Area</label>
+          <div class="mem-seal-area-static">coil</div>
+        </div>
+        <div class="mem-seal-field">
+          <label>Address</label>
+          <input type="number" class="mem-seal-address" min="0"
+            data-port-id="${escapeHtml(portId)}" data-unit-id="${unitDbIdEsc}"
+            value="${escapeHtml(String(sealAddress))}" style="width:80px" />
+        </div>
+        <button type="button" class="btn-mem-sm mem-seal-save"
+          data-port-id="${escapeHtml(portId)}" data-unit-id="${unitDbIdEsc}"
+          style="align-self:flex-end;margin-bottom:1px">Save</button>
+      </div>
+      <div class="mem-adv-banner banner" data-adv-banner="${unitDbIdEsc}"></div>
+
+      <hr class="mem-adv-divider" />
+
+      <div class="mem-adv-section-title">Access Control (Policy)</div>
+      <div class="mem-policy-enable-row">
+        <label class="mem-seal-toggle-label">
+          <input type="checkbox" class="mem-policy-enable"
+            data-unit-id="${unitDbIdEsc}" ${policyEnabled ? 'checked' : ''} />
+          Enable Custom Policy
+          <span style="color:#9CA3AF;font-size:.72rem;font-weight:400">(unchecked = auto-generated)</span>
+        </label>
+      </div>
+      <div class="mem-policy-fields" data-policy-fields="${unitDbIdEsc}" style="${policyEnabled ? '' : 'display:none'}">
+        <div class="mem-policy-rules-list" data-policy-rules="${unitDbIdEsc}">
+          ${policyRules.map(rule => renderPolicyRuleCardHtml(rule)).join('')}
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap">
+          <button type="button" class="btn-mem-sm mem-policy-add-rule"
+            data-unit-id="${unitDbIdEsc}">+ Add Rule</button>
+          <button type="button" class="btn-mem-sm mem-policy-save"
+            data-port-id="${escapeHtml(portId)}" data-unit-id="${unitDbIdEsc}"
+            style="background:#DCFCE7;color:#166534">Save Policy</button>
+        </div>
+        <div class="mem-adv-banner banner" data-policy-banner="${unitDbIdEsc}"></div>
+      </div>
+
+    </div>`;
+
   return `<div class="mem-unit-card" data-unit-id="${unitDbIdEsc}">
     <div class="mem-unit-header" data-unit-toggle="${unitDbIdEsc}">
       <div class="mem-unit-title">
@@ -2674,6 +2954,7 @@ function renderUnit(portId, unit) {
     <div class="mem-unit-body" data-unit-body="${unitDbIdEsc}">
       <div class="mem-areas-list">${areasHtml}</div>
       ${addAreaForm}
+      ${advancedSection}
     </div>
   </div>`;
 }
@@ -2689,6 +2970,180 @@ function _attachMemoryTabHandlers(container) {
       const isOpen = body.style.display !== 'none';
       body.style.display = isOpen ? 'none' : '';
       if (chevron) chevron.classList.toggle('open', !isOpen);
+    });
+  });
+
+  // ── Advanced Settings toggle ─────────────────────────────────────────
+  container.querySelectorAll('[data-adv-toggle]').forEach(header => {
+    header.addEventListener('click', () => {
+      const id = header.dataset.advToggle;
+      const body = container.querySelector(`[data-adv-body="${id}"]`);
+      const chevron = container.querySelector(`[data-adv-chevron="${id}"]`);
+      if (!body) return;
+      const isOpen = getComputedStyle(body).display !== 'none';
+      body.style.display = isOpen ? 'none' : 'block';
+      header.setAttribute('aria-expanded', String(!isOpen));
+      if (chevron) chevron.classList.toggle('open', !isOpen);
+    });
+  });
+
+  // ── State sealing enable toggle ──────────────────────────────────────
+  container.querySelectorAll('.mem-seal-enable').forEach(chk => {
+    chk.addEventListener('change', () => {
+      const unitId = chk.dataset.unitId;
+      const fields = container.querySelector(`[data-seal-fields="${unitId}"]`);
+      if (fields) fields.style.display = chk.checked ? '' : 'none';
+    });
+  });
+
+  // ── State sealing save ───────────────────────────────────────────────
+  container.querySelectorAll('.mem-seal-save').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const portId = btn.dataset.portId;
+      const unitId = btn.dataset.unitId;
+      const banner = container.querySelector(`[data-adv-banner="${unitId}"]`);
+      banner.className = 'mem-adv-banner banner';
+
+      const enableChk = container.querySelector(`.mem-seal-enable[data-unit-id="${unitId}"]`);
+      const enabled = enableChk && enableChk.checked;
+
+      let stateSealingPayload;
+      if (!enabled) {
+        stateSealingPayload = null;
+      } else {
+        const addrInp = container.querySelector(`.mem-seal-address[data-unit-id="${unitId}"]`);
+        const addr = Number(addrInp && addrInp.value);
+        if (!Number.isFinite(addr) || addr < 0) {
+          banner.textContent = '✗ Address must be a non-negative integer';
+          banner.className = 'mem-adv-banner banner show err';
+          return;
+        }
+
+        // Validate address is within the coils area for this unit
+        const unitCard = container.querySelector(`.mem-unit-card[data-unit-id="${unitId}"]`);
+        const coilsRow = unitCard && [...unitCard.querySelectorAll('.mem-area-row')].find(row => {
+          const sel = row.querySelector('.mem-area-type-sel');
+          return sel && sel.value === 'coils';
+        });
+        if (!coilsRow) {
+          banner.textContent = '✗ State sealing requires a Coils area to be defined for this unit';
+          banner.className = 'mem-adv-banner banner show err';
+          return;
+        }
+        const coilStart = Number(coilsRow.querySelector('.mem-area-start-inp').value);
+        const coilCount = Number(coilsRow.querySelector('.mem-area-count-inp').value);
+        if (addr < coilStart || addr >= coilStart + coilCount) {
+          banner.textContent = `✗ Address ${addr} is outside the coils area (${coilStart}–${coilStart + coilCount - 1})`;
+          banner.className = 'mem-adv-banner banner show err';
+          return;
+        }
+
+        stateSealingPayload = { area: 'coil', address: addr };
+      }
+
+      const { ok, data } = await api(
+        'PUT',
+        `/memory/port/${encodeURIComponent(portId)}/unit/${encodeURIComponent(unitId)}`,
+        { unit: { state_sealing: stateSealingPayload } }
+      );
+      if (ok) {
+        banner.textContent = enabled ? '✓ State sealing saved' : '✓ State sealing disabled';
+        banner.className = 'mem-adv-banner banner show ok';
+        _appendMmaLog(`[memory] State sealing ${enabled ? `enabled (coil address: ${stateSealingPayload.address})` : 'disabled'}`);
+        setDirty(true);
+        await loadModel();
+      } else {
+        banner.textContent = `✗ ${data.error || 'Unknown error'}`;
+        banner.className = 'mem-adv-banner banner show err';
+      }
+    });
+  });
+
+  // ── Policy enable toggle ─────────────────────────────────────────────
+  container.querySelectorAll('.mem-policy-enable').forEach(chk => {
+    chk.addEventListener('change', () => {
+      const unitId = chk.dataset.unitId;
+      const fields = container.querySelector(`[data-policy-fields="${unitId}"]`);
+      if (fields) fields.style.display = chk.checked ? 'block' : 'none';
+    });
+  });
+
+  // ── Policy add rule ──────────────────────────────────────────────────
+  container.querySelectorAll('.mem-policy-add-rule').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const unitId = btn.dataset.unitId;
+      const list = container.querySelector(`[data-policy-rules="${unitId}"]`);
+      if (!list) return;
+      const wrapper = document.createElement('div');
+      wrapper.innerHTML = renderPolicyRuleCardHtml({ id: '', source_ip: [], allow_fc: [] });
+      const card = wrapper.firstElementChild;
+      card.querySelector('.mem-policy-rule-del').addEventListener('click', () => card.remove());
+      list.appendChild(card);
+    });
+  });
+
+  // ── Policy remove rule (initial-rendered cards) ──────────────────────
+  container.querySelectorAll('.mem-policy-rule-del').forEach(btn => {
+    btn.addEventListener('click', () => btn.closest('.mem-policy-rule-card').remove());
+  });
+
+  // ── Policy save ──────────────────────────────────────────────────────
+  container.querySelectorAll('.mem-policy-save').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const portId = btn.dataset.portId;
+      const unitId = btn.dataset.unitId;
+      const banner = container.querySelector(`[data-policy-banner="${unitId}"]`);
+      banner.className = 'mem-adv-banner banner';
+
+      const enableChk = container.querySelector(`.mem-policy-enable[data-unit-id="${unitId}"]`);
+      const enabled = enableChk && enableChk.checked;
+
+      let policyPayload;
+      if (!enabled) {
+        policyPayload = null;
+      } else {
+        const list = container.querySelector(`[data-policy-rules="${unitId}"]`);
+        const cards = list ? [...list.querySelectorAll('.mem-policy-rule-card')] : [];
+        const rules = [];
+        for (let i = 0; i < cards.length; i++) {
+          const card = cards[i];
+          const id = (card.querySelector('.mem-policy-rule-id').value || '').trim();
+          if (!id) {
+            banner.textContent = `✗ Rule ${i + 1}: Rule ID is required`;
+            banner.className = 'mem-adv-banner banner show err';
+            return;
+          }
+          const ipText = (card.querySelector('.mem-policy-source-ip').value || '').trim();
+          const source_ip = ipText ? ipText.split('\n').map(s => s.trim()).filter(Boolean) : [];
+          if (source_ip.length === 0) {
+            banner.textContent = `✗ Rule ${i + 1} (${id}): At least one Source IP is required`;
+            banner.className = 'mem-adv-banner banner show err';
+            return;
+          }
+          const allow_fc = [...card.querySelectorAll('.mem-policy-fc-chk:checked')].map(c => Number(c.value));
+          rules.push({ id, source_ip, allow_fc });
+        }
+        policyPayload = { rules };
+      }
+
+      const { ok, data } = await api(
+        'PUT',
+        `/memory/port/${encodeURIComponent(portId)}/unit/${encodeURIComponent(unitId)}`,
+        { unit: { policy: policyPayload } }
+      );
+      if (ok) {
+        const msg = enabled
+          ? `✓ Policy saved (${policyPayload.rules.length} rule${policyPayload.rules.length !== 1 ? 's' : ''})`
+          : '✓ Policy reset to auto-generated';
+        banner.textContent = msg;
+        banner.className = 'mem-adv-banner banner show ok';
+        _appendMmaLog(`[memory] Access policy ${enabled ? `updated (${policyPayload.rules.length} rule(s))` : 'reset to auto-generated'}`);
+        setDirty(true);
+        await loadModel();
+      } else {
+        banner.textContent = `✗ ${data.error || 'Unknown error'}`;
+        banner.className = 'mem-adv-banner banner show err';
+      }
     });
   });
 
