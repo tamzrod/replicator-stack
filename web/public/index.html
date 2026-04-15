@@ -292,6 +292,15 @@
       font-size: .78rem; color: #1F2933;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
+    .device-status-dot {
+      display: inline-block; width: 7px; height: 7px;
+      border-radius: 50%; flex-shrink: 0; margin-right: 5px;
+    }
+    .ds-unknown  { background: #9CA3AF; }
+    .ds-ok       { background: #22C55E; }
+    .ds-error    { background: #EF4444; }
+    .ds-stale    { background: #F59E0B; }
+    .ds-disabled { background: #4B5563; }
     .tree-btn {
       background: none; border: none; padding: 2px 5px;
       font-size: .7rem; cursor: pointer; border-radius: 3px;
@@ -1631,6 +1640,9 @@ async function refreshConfigViewerIfActive() {
 
 let _currentModel = null;
 
+// Device status from MMA status blocks: deviceId → { health_code, device_name }
+let _deviceStatus = {};
+
 // ── Global State Manager ──────────────────────────────────────────────────────
 
 const _appState = {
@@ -2592,10 +2604,19 @@ function renderTree(data) {
     if (!collapsed) {
       for (const d of group.devices) {
         const sel = d.id === _selectedDeviceId ? ' selected' : '';
-        const label = d.name
-          ? `${escapeHtml(d.name)} <span style="color:#9CA3AF;font-size:.72rem">— ${escapeHtml(d.id)}</span>`
+        const statusInfo = _deviceStatus[d.id];
+        const healthCode = statusInfo ? (Number(statusInfo.health_code) || 0) : 0;
+        const statusClasses = ['ds-unknown', 'ds-ok', 'ds-error', 'ds-stale', 'ds-disabled'];
+        const statusLabels  = ['UNKNOWN', 'OK', 'ERROR', 'STALE', 'DISABLED'];
+        const dotClass = statusClasses[healthCode] || 'ds-unknown';
+        const dotTitle = statusLabels[healthCode] || 'UNKNOWN';
+        const blockName = statusInfo && statusInfo.device_name ? statusInfo.device_name : '';
+        const displayName = blockName || d.name;
+        const label = displayName
+          ? `${escapeHtml(displayName)} <span style="color:#9CA3AF;font-size:.72rem">— ${escapeHtml(d.id)}</span>`
           : escapeHtml(d.id);
         html += `<div class="tree-device${sel}" data-device-id="${escapeHtml(d.id)}">
+          <span class="device-status-dot ${dotClass}" title="${dotTitle}"></span>
           <span class="tree-device-name">${label}</span>
         </div>`;
       }
@@ -4397,10 +4418,31 @@ ${noConfig}
 }
 
 // ── Init ─────────────────────────────────────────────────────────────────────
+
+// ── Device Status Polling ────────────────────────────────────────────────────
+// Reads health_code (Slot 0) and device_name (Slots 3–10) from MMA status
+// blocks. Only Slot 0 and Slots 3–10 are read — no transport counters, no
+// derived values. Renders are only triggered when data changes.
+const STATUS_POLL_INTERVAL_MS = 5000;
+let _statusPollTimer = null;
+
+async function pollDeviceStatus() {
+  const { ok, data } = await api('GET', '/devices/status');
+  if (!ok || !data || !data.status) return;
+  _deviceStatus = data.status;
+  renderTree(_currentModel);
+}
+
+function startStatusPolling() {
+  if (_statusPollTimer) clearInterval(_statusPollTimer);
+  pollDeviceStatus();
+  _statusPollTimer = setInterval(pollDeviceStatus, STATUS_POLL_INTERVAL_MS);
+}
+
 document.getElementById('btn-refresh').addEventListener('click', loadModel);
 document.getElementById('btn-global-save').addEventListener('click', globalSave);
 document.getElementById('btn-report').addEventListener('click', generateReport);
-loadModel();
+loadModel().then(startStatusPolling);
 </script>
 </body>
 </html>
