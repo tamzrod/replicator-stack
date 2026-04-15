@@ -1775,6 +1775,247 @@ let _currentModel = null;
 // Device status from MMA status blocks: deviceId → { health_code, device_name }
 let _deviceStatus = {};
 
+// ---------------------------------------------------------------------------
+// EVENT BUS (Phase 6)
+//
+// Lightweight internal async event dispatcher.  All UI-observable behaviour is
+// preserved: the handlers registered here produce exactly the same effects as
+// the direct function calls they replace.  The bus is intentionally minimal:
+//
+//   _bus.on(eventName, asyncHandler)  — register a handler (called in order)
+//   _bus.emit(eventName, payload)     — await all registered handlers in order
+//
+// Callers must await _bus.emit() so that the downstream effect (loadModel →
+// smartRender) completes before the caller's surrounding code continues — the
+// same guarantee the old `await loadModel()` pattern provided.
+// ---------------------------------------------------------------------------
+const _bus = (() => {
+  const _handlers = Object.create(null);
+  return {
+    on(event, handler) {
+      if (!_handlers[event]) _handlers[event] = [];
+      // Guard: same function reference must not be registered twice for the same
+      // event.  Prevents accidental duplication if this call-site is ever reached
+      // more than once (e.g. after a hypothetical hot-reload or re-init).
+      if (_handlers[event].includes(handler)) return;
+      _handlers[event].push(handler);
+    },
+    async emit(event, payload) {
+      // Errors thrown by a handler propagate to the caller via `await`, giving
+      // CRUD handlers the same rejection semantics as the old direct call.
+      // Subsequent handlers are intentionally skipped on failure — the same
+      // guarantee that a thrown exception inside a direct function call provides.
+      for (const h of (_handlers[event] || [])) await h(payload);
+    },
+  };
+})();
+
+// Core event name constants — the full set defined here even if not all are
+// wired with handlers yet, so callers have stable references for future use.
+const EV = Object.freeze({
+  MODEL_MUTATED:  'model:mutated',   // Any CRUD mutation completed → reload UI
+  MODEL_LOADED:   'model:loaded',    // loadModel() finished rendering
+  STATUS_UPDATED: 'status:updated',  // pollDeviceStatus returned new data
+  COMPILE_DONE:   'compile:done',    // A compile/apply operation finished
+  DEVICE_CREATED: 'device:created',
+  DEVICE_UPDATED: 'device:updated',
+  DEVICE_DELETED: 'device:deleted',
+  MEMORY_UPDATED: 'memory:updated',
+});
+
+// ---------------------------------------------------------------------------
+// _patchStatusDots — update only the status dot (and name) DOM nodes that
+// changed between two status snapshots.  No tree rebuild occurs.
+//
+// Called by pollDeviceStatus() instead of renderTree() so that the 5-second
+// polling cycle never triggers a full innerHTML replacement of the tree panel.
+// If nothing changed, the function returns immediately with zero DOM work.
+// ---------------------------------------------------------------------------
+function _patchStatusDots(prevStatus, nextStatus) {
+  const STATUS_CLASSES = ['ds-unknown', 'ds-ok', 'ds-error', 'ds-stale', 'ds-disabled'];
+  const STATUS_LABELS  = ['UNKNOWN',   'OK',    'ERROR',   'STALE',   'DISABLED'];
+  const panel = document.getElementById('tree-panel');
+  if (!panel) return;
+
+  // Build a Map from device ID → device object once so that name lookups
+  // inside the loop are O(1) instead of O(n) per iteration.
+  const deviceById = new Map((_currentModel?.devices || []).map(d => [d.id, d]));
+
+  // Build the union of IDs present in either snapshot so we catch
+  // devices that gained or lost status between polls.
+  const allIds = new Set([
+    ...Object.keys(prevStatus || {}),
+    ...Object.keys(nextStatus || {}),
+  ]);
+
+  for (const id of allIds) {
+    const prev = (prevStatus || {})[id];
+    const next = (nextStatus || {})[id];
+    const prevCode = prev ? (Number(prev.health_code) || 0) : 0;
+    const nextCode = next ? (Number(next.health_code) || 0) : 0;
+    const prevName = prev ? (prev.device_name || '') : '';
+    const nextName = next ? (next.device_name || '') : '';
+
+    // Skip this device entirely if neither the health code nor the display
+    // name changed — avoids any DOM query cost for unchanged devices.
+    if (prevCode === nextCode && prevName === nextName) continue;
+
+    // The device row may be absent from the DOM when its group is collapsed.
+    const row = panel.querySelector(`.tree-device[data-device-id="${CSS.escape(id)}"]`);
+    if (!row) continue;
+
+    if (prevCode !== nextCode) {
+      const dot = row.querySelector('.device-status-dot');
+      if (dot) {
+        dot.className = 'device-status-dot ' + (STATUS_CLASSES[nextCode] || 'ds-unknown');
+        dot.title = STATUS_LABELS[nextCode] || 'UNKNOWN';
+      }
+    }
+
+    if (prevName !== nextName) {
+      const nameEl = row.querySelector('.tree-device-name');
+      if (nameEl) {
+        const device = deviceById.get(id);
+        const displayName = nextName || (device?.name) || '';
+        // Use DOM APIs instead of innerHTML to avoid any XSS surface.
+        nameEl.textContent = '';
+        if (displayName) {
+          nameEl.appendChild(document.createTextNode(displayName + ' '));
+          const idSpan = document.createElement('span');
+          idSpan.style.cssText = 'color:#9CA3AF;font-size:.72rem';
+          idSpan.textContent = '\u2014 ' + id;
+          nameEl.appendChild(idSpan);
+        } else {
+          nameEl.textContent = id;
+        }
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// RENDER ROUTING LAYER (Phase 5)
+//
+// Lightweight snapshot-based diffing that decides which render passes are
+// needed after each loadModel() call.  The three render functions below are
+// the ONLY callers of renderTree / renderMemoryTab / renderMemoryTree inside
+// the loadModel path.  Direct mutation handlers that already know what changed
+// may still call individual render functions directly.
+//
+// Key design points:
+//   • _lastRenderedModelSnapshot  — retained between calls; null on first load
+//   • fullRender()    — always calls all four render passes
+//   • partialRender() — calls only the passes flagged in `flags`
+//   • smartRender()   — diffs old vs new snapshot to decide which passes run
+// ---------------------------------------------------------------------------
+
+let _lastRenderedModelSnapshot = null;
+
+// Returns a compact, stable string key representing the tree domain:
+// device identity/name/group and the group list.  Order matches server order.
+function _snapshotTree(model) {
+  const devs = (model.devices || []).map(d => `${d.id}|${d.name || ''}|${d.groupId || ''}`);
+  const grps = (model.groups  || []).map(g => `${g.id}|${g.name || ''}`);
+  return devs.join('~') + '##' + grps.join('~');
+}
+
+// Returns a compact, stable string key representing the memory domain:
+// ports → units → areas (including policy and state_sealing).
+function _snapshotMemory(model) {
+  const ports = (model.memory && model.memory.ports) || [];
+  return ports.map(p => {
+    const units = (p.units || []).map(u => {
+      const areas = (u.areas || []).map(a =>
+        `${a.id}:${a.type}:${a.start}:${a.count}`
+      ).join(',');
+      const seal  = u.state_sealing ? JSON.stringify(u.state_sealing) : '';
+      const pol   = u.policy ? JSON.stringify(u.policy) : '';
+      return `${u.id}:${u.unit_id}:[${areas}]:${seal}:${pol}`;
+    }).join(';');
+    return `${p.id}:${p.port}:{${units}}`;
+  }).join('|');
+}
+
+// Returns a compact, stable string key for the currently selected device,
+// covering every field that renderDeviceWorkspace() displays.
+// deviceMap is a pre-built Map<id, device> passed from _takeModelSnapshot()
+// so we avoid a repeated O(n) scan when the map is already available.
+function _snapshotDevice(deviceMap, deviceId) {
+  if (!deviceId) return '';
+  const d = deviceMap.get(deviceId);
+  if (!d) return '__not_found__';
+  const reads = (d.reads || []).map(r =>
+    `${r.id}:${r.name || ''}:${r.source_area}:${r.source_address}:${r.source_count}:${r.poll_interval}`
+  ).join(',');
+  return [
+    d.id, d.name || '', d.groupId || '',
+    d.source_endpoint || '', d.source_unit_id,
+    d.target_endpoint || '', d.unitId,
+    d.status_slot || 0, d.status_unit_id || '',
+    reads,
+  ].join('|');
+}
+
+// Build a full snapshot object from a model.  Called inside smartRender()
+// after `_selectedDeviceId` is known.  A single Map is built once and shared
+// across all snapshot helpers that need per-device lookups.
+function _takeModelSnapshot(model) {
+  const deviceMap = new Map((model.devices || []).map(d => [d.id, d]));
+  return {
+    tree:   _snapshotTree(model),
+    memory: _snapshotMemory(model),
+    device: _snapshotDevice(deviceMap, _selectedDeviceId),
+  };
+}
+
+// Always runs all four render passes.  Used on first load and as a safe
+// fallback whenever the diff is uncertain.
+function fullRender(data) {
+  renderTree(data);
+  refreshGroupDropdowns(data);
+  renderDeviceWorkspace();
+  renderMemoryTab(data);
+  renderMemoryTree(data);
+}
+
+// Runs only the render passes whose flag is true.
+// flags = { tree: bool, workspace: bool, memory: bool }
+function partialRender(data, flags) {
+  if (flags.tree) {
+    renderTree(data);
+    refreshGroupDropdowns(data);
+  }
+  if (flags.workspace) {
+    renderDeviceWorkspace();
+  }
+  if (flags.memory) {
+    renderMemoryTab(data);
+    renderMemoryTree(data);
+  }
+}
+
+// Core diff-based dispatcher.  Compares `oldSnap` (the snapshot from the
+// previous loadModel call) against `newModel` and calls only the render passes
+// whose domain actually changed.  Also updates _lastRenderedModelSnapshot.
+//
+// Callers must have already set _currentModel = newModel before calling this.
+function smartRender(oldSnap, newModel) {
+  const newSnap = _takeModelSnapshot(newModel);
+  _lastRenderedModelSnapshot = newSnap;
+
+  if (!oldSnap) {
+    // First load — no previous snapshot to compare; run everything.
+    fullRender(newModel);
+    return;
+  }
+
+  partialRender(newModel, {
+    tree:      newSnap.tree   !== oldSnap.tree,
+    workspace: newSnap.device !== oldSnap.device,
+    memory:    newSnap.memory !== oldSnap.memory,
+  });
+}
+
 // ── Global State Manager ──────────────────────────────────────────────────────
 
 const _appState = {
@@ -2090,7 +2331,7 @@ function renderDeviceWorkspace() {
     if (ok) {
       _pendingReadId = null;
       setDirty(true);
-      await loadModel();
+      await _bus.emit(EV.MODEL_MUTATED);
     } else {
       banner.textContent = `✗ ${data.error || 'Unknown error'}`;
       banner.className = 'banner show err';
@@ -2132,7 +2373,7 @@ function renderDeviceWorkspace() {
       if (ok) {
         _editingReadId = null;
         setDirty(true);
-        await loadModel();
+        await _bus.emit(EV.MODEL_MUTATED);
       } else {
         banner.textContent = `✗ ${data.error || 'Unknown error'}`;
         banner.className = 'banner show err';
@@ -2230,17 +2471,28 @@ async function loadModel() {
     return;
   }
 
+  // Capture previous snapshot BEFORE updating _currentModel so that the diff
+  // compares the previously-rendered state against the freshly-fetched data.
+  const oldSnap = _lastRenderedModelSnapshot;
   _currentModel = data;
-  renderTree(data);
-  refreshGroupDropdowns(data);
-  renderDeviceWorkspace();
-  renderMemoryTab(data);
-  renderMemoryTree(data);
+
+  // Route only to the render passes whose domain actually changed.
+  // On first load (oldSnap === null), smartRender() does a full render.
+  smartRender(oldSnap, data);
+
   await loadMmaEndpoint();
 
   // If the config viewer tab is open, keep it in sync with the latest compiled output.
   await refreshConfigViewerIfActive();
 }
+
+// ── Event Bus handler registrations ──────────────────────────────────────────
+
+// model:mutated — any successful CRUD operation emits this event.
+// The handler calls loadModel() which fetches fresh state from the server and
+// runs smartRender() to apply diff-based UI updates.  Awaiting the emit gives
+// callers the same completion guarantee as the old `await loadModel()` call.
+_bus.on(EV.MODEL_MUTATED, async () => { await loadModel(); });
 
 // ── Add Device (dialog) ──────────────────────────────────────────────────────
 
@@ -2347,7 +2599,7 @@ document.getElementById('add-device-form').addEventListener('submit', async e =>
     document.getElementById('add-device-dialog').close();
     _selectedDeviceId = data.id;
     setDirty(true);
-    await loadModel();
+    await _bus.emit(EV.MODEL_MUTATED);
   } else {
     banner.textContent = `✗ ${data.error || 'Unknown error'}`;
     banner.className = 'banner show err';
@@ -2477,7 +2729,7 @@ async function compile() {
     const action = await showCompileErrorDialog(data);
     if (action === 'cancel') {
       el.innerHTML = `<div class="banner show err">✗ Compile cancelled — no changes applied.</div>`;
-      await loadModel();
+      await _bus.emit(EV.MODEL_MUTATED);
       return;
     }
     const resolveExcluded = data.details?.excluded_ports ?? excludedPorts;
@@ -2506,7 +2758,7 @@ async function compile() {
   } else {
     el.innerHTML = `<div class="banner show err">✗ ${escapeHtml(data.error || 'Compile failed')}</div>`;
   }
-  await loadModel();
+  await _bus.emit(EV.MODEL_MUTATED);
 }
 
 // ── Global Save Pipeline ──────────────────────────────────────────────────────
@@ -2587,7 +2839,7 @@ async function globalSave() {
       _showGlobalSaveStatus(`✓ Saved — ${data.routes} route(s)${blocksMsg}${excludedMsg}`, false);
       setCompileState('success');
       setDirty(false);
-      await loadModel();
+      await _bus.emit(EV.MODEL_MUTATED);
       await refreshConfigViewerIfActive();
       setTimeout(loadRuntimeStatus, 1500);
     } else if (data.status === 'error') {
@@ -2623,7 +2875,7 @@ async function globalSave() {
           setCompileState('success');
         }
         setDirty(false);
-        await loadModel();
+        await _bus.emit(EV.MODEL_MUTATED);
         await refreshConfigViewerIfActive();
         setTimeout(loadRuntimeStatus, 1500);
       } else if (resolveData.status === 'error') {
@@ -2639,7 +2891,7 @@ async function globalSave() {
       _showGlobalSaveStatus('⚠ Configs applied but restart failed — see runtime log', false);
       setCompileState('success');
       setDirty(false);
-      await loadModel();
+      await _bus.emit(EV.MODEL_MUTATED);
       await refreshConfigViewerIfActive();
     } else {
       _showGlobalSaveStatus(`✗ ${data.error || 'Save failed'}`, true);
@@ -2665,8 +2917,12 @@ async function deleteDevice(id) {
   const { ok, data } = await api('DELETE', `/device/${encodeURIComponent(id)}`);
   if (ok) {
     if (_selectedDeviceId === id) _selectedDeviceId = null;
+    // Remove any staged (unsaved) form payload for this device — it is now
+    // permanently deleted and the payload is stale.  Leaving it would cause
+    // globalSave() to attempt a /config/save call for a non-existent device.
+    delete _appState.stagedDeviceForms[id];
     setDirty(true);
-    await loadModel();
+    await _bus.emit(EV.MODEL_MUTATED);
   } else {
     alert(`Error: ${data.error || 'Unknown error'}`);
   }
@@ -2679,7 +2935,7 @@ async function duplicateDevice(id) {
   if (ok) {
     _selectedDeviceId = data.id;
     setDirty(true);
-    await loadModel();
+    await _bus.emit(EV.MODEL_MUTATED);
   } else {
     alert(`Error duplicating device: ${data.error || 'Unknown error'}`);
   }
@@ -2838,9 +3094,31 @@ document.getElementById('tree-panel').addEventListener('click', async e => {
   const toggleGrp = e.target.closest('[data-toggle-group]');
   if (toggleGrp) {
     const g = toggleGrp.dataset.toggleGroup;
-    if (_collapsedGroups.has(g)) _collapsedGroups.delete(g);
+    const wasCollapsed = _collapsedGroups.has(g);
+    if (wasCollapsed) _collapsedGroups.delete(g);
     else _collapsedGroups.add(g);
-    renderTree(_currentModel);
+    const nowCollapsed = !wasCollapsed;
+
+    // Patch the toggle arrow in-place.
+    const arrowEl = toggleGrp.querySelector('.tree-toggle');
+    if (arrowEl) arrowEl.textContent = nowCollapsed ? '▶' : '▼';
+
+    // Show or hide device rows inside this group without rebuilding the tree.
+    const groupEl = toggleGrp.closest('.tree-group');
+    if (groupEl) {
+      const deviceRows = groupEl.querySelectorAll('.tree-device');
+      if (nowCollapsed) {
+        // Collapse: hide existing device rows in-place.
+        deviceRows.forEach(row => { row.style.display = 'none'; });
+      } else if (deviceRows.length > 0) {
+        // Expand: rows are already in DOM (hidden) — just reveal them.
+        deviceRows.forEach(row => { row.style.display = ''; });
+      } else {
+        // Expand: device rows not yet in DOM (group was collapsed at initial
+        // render) — fall back to full tree rebuild so nothing is missing.
+        renderTree(_currentModel);
+      }
+    }
     return;
   }
 
@@ -2849,9 +3127,15 @@ document.getElementById('tree-panel').addEventListener('click', async e => {
   if (deviceRow) {
     // Capture any pending device form edits before switching
     _capturePendingDeviceFormSilent();
+    const prevId = _selectedDeviceId;
     _selectedDeviceId = deviceRow.dataset.deviceId;
     _editingReadId = null;
-    renderTree(_currentModel);
+    // Patch the selected highlight in-place — no full tree rebuild needed.
+    if (prevId !== _selectedDeviceId) {
+      const panel = document.getElementById('tree-panel');
+      panel?.querySelector('.tree-device.selected')?.classList.remove('selected');
+      deviceRow.classList.add('selected');
+    }
     renderDeviceWorkspace();
   }
 });
@@ -2908,22 +3192,48 @@ document.getElementById('memory-tree-panel').addEventListener('click', e => {
   const portHeader = e.target.closest('[data-mem-port-id].mem-tree-port-header');
   if (portHeader) {
     const portId = portHeader.dataset.memPortId;
-    if (_collapsedMemPorts.has(portId)) _collapsedMemPorts.delete(portId);
+    const wasCollapsed = _collapsedMemPorts.has(portId);
+    if (wasCollapsed) _collapsedMemPorts.delete(portId);
     else _collapsedMemPorts.add(portId);
+    const nowCollapsed = !wasCollapsed;
     _selectedMemItem = { type: 'port', portId };
-    renderMemoryTree(_currentModel);
+
+    // Patch the toggle arrow in-place.
+    const toggleSpan = portHeader.querySelector('.tree-toggle');
+    if (toggleSpan) toggleSpan.textContent = nowCollapsed ? '▶' : '▼';
+
+    // Show or hide the unit/no-units elements that live inside the same group div.
+    const groupEl = portHeader.closest('.tree-group');
+    if (groupEl) {
+      const unitEls = groupEl.querySelectorAll('.mem-tree-unit, .mem-tree-no-units');
+      if (nowCollapsed) {
+        // Collapse: hide existing unit rows without removing them from the DOM.
+        unitEls.forEach(el => { el.style.display = 'none'; });
+      } else if (unitEls.length > 0) {
+        // Expand: reveal the rows that were just hidden.
+        unitEls.forEach(el => { el.style.display = ''; });
+      } else {
+        // Expand but rows are not yet in DOM (port was collapsed from initial
+        // load) — fall back to full re-render so nothing is missing.
+        renderMemoryTree(_currentModel);
+      }
+    }
+
     document.querySelector(`#memory-ports-list .mem-port-card[data-port-id="${CSS.escape(portId)}"]`)
       ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     return;
   }
 
-  // Unit row: select and scroll to unit card
+  // Unit row: patch selected class in-place and scroll to unit card
   const unitRow = e.target.closest('.mem-tree-unit[data-mem-unit-id]');
   if (unitRow) {
     const unitId = unitRow.dataset.memUnitId;
     const portId = unitRow.dataset.memPortId;
+    // Patch the selected highlight without a full memory tree rebuild.
+    const panel = document.getElementById('memory-tree-panel');
+    panel?.querySelector('.mem-tree-unit.selected')?.classList.remove('selected');
+    unitRow.classList.add('selected');
     _selectedMemItem = { type: 'unit', portId, unitId };
-    renderMemoryTree(_currentModel);
     document.querySelector(`.mem-unit-card[data-unit-id="${CSS.escape(unitId)}"]`)
       ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
@@ -2937,7 +3247,7 @@ async function deleteGroup(groupId) {
   const { ok, data } = await api('DELETE', `/group/${encodeURIComponent(groupId)}`);
   if (!ok) { alert(`Error: ${data.error || 'Unknown error'}`); return; }
   setDirty(true);
-  await loadModel();
+  await _bus.emit(EV.MODEL_MUTATED);
 }
 
 // ── Group CRUD ───────────────────────────────────────────────────────────────
@@ -2980,7 +3290,7 @@ document.getElementById('group-form').addEventListener('submit', async e => {
   if (result.ok) {
     document.getElementById('group-dialog').close();
     setDirty(true);
-    await loadModel();
+    await _bus.emit(EV.MODEL_MUTATED);
   } else {
     banner.textContent = `✗ ${result.data.error || 'Unknown error'}`;
     banner.className = 'banner show err';
@@ -3001,7 +3311,7 @@ async function deleteRead(deviceId, readId) {
   const { ok, data } = await api('DELETE', `/read/${encodeURIComponent(deviceId)}/${encodeURIComponent(readId)}`);
   if (ok) {
     setDirty(true);
-    await loadModel();
+    await _bus.emit(EV.MODEL_MUTATED);
   } else {
     alert(`Error: ${data.error || 'Unknown error'}`);
   }
@@ -3038,7 +3348,7 @@ async function importReadsCsv(deviceId, file, banner) {
     banner.textContent = `✓ Imported ${data.imported} read(s)${warn}`;
     banner.className = 'banner show ok';
     setDirty(true);
-    await loadModel();
+    await _bus.emit(EV.MODEL_MUTATED);
   } else {
     banner.textContent = `✗ ${(data && data.error) || 'Import failed'}`;
     banner.className = 'banner show err';
@@ -3421,7 +3731,7 @@ function _attachMemoryTabHandlers(container) {
         banner.className = 'mem-adv-banner banner show ok';
         _appendMmaLog(`[memory] State sealing ${enabled ? `enabled (coil address: ${stateSealingPayload.address})` : 'disabled'}`);
         setDirty(true);
-        await loadModel();
+        await _bus.emit(EV.MODEL_MUTATED);
       } else {
         banner.textContent = `✗ ${data.error || 'Unknown error'}`;
         banner.className = 'mem-adv-banner banner show err';
@@ -3509,7 +3819,7 @@ function _attachMemoryTabHandlers(container) {
         banner.className = 'mem-adv-banner banner show ok';
         _appendMmaLog(`[memory] Access policy ${enabled ? `updated (${policyPayload.rules.length} rule(s))` : 'reset to auto-generated'}`);
         setDirty(true);
-        await loadModel();
+        await _bus.emit(EV.MODEL_MUTATED);
       } else {
         banner.textContent = `✗ ${data.error || 'Unknown error'}`;
         banner.className = 'mem-adv-banner banner show err';
@@ -3532,7 +3842,7 @@ function _attachMemoryTabHandlers(container) {
       const { ok, data } = await api('PUT', `/memory/port/${encodeURIComponent(portId)}`, { port: { port: portNum } });
       if (!ok) { alert(`Error: ${data.error || 'Unknown error'}`); return; }
       setDirty(true);
-      await loadModel();
+      await _bus.emit(EV.MODEL_MUTATED);
     });
   });
 
@@ -3547,7 +3857,7 @@ function _attachMemoryTabHandlers(container) {
       if (!ok) { alert(`Error: ${data.error || 'Unknown error'}`); return; }
       _editingBlockId = null;
       setDirty(true);
-      await loadModel();
+      await _bus.emit(EV.MODEL_MUTATED);
     });
   });
 
@@ -3559,7 +3869,7 @@ function _attachMemoryTabHandlers(container) {
       if (!ok) { alert(`Error: ${data.error || 'Unknown error'}`); return; }
       _appendMmaLog(`[memory] Auto-populated ${data.unitsCount} unit(s) from device reads`);
       setDirty(true);
-      await loadModel();
+      await _bus.emit(EV.MODEL_MUTATED);
     });
   });
 
@@ -3581,7 +3891,7 @@ function _attachMemoryTabHandlers(container) {
       if (ok) {
         _appendMmaLog(`[memory] Unit created — unit_id: ${unitIdNum} on port ${portId}`);
         setDirty(true);
-        await loadModel();
+        await _bus.emit(EV.MODEL_MUTATED);
       } else {
         banner.textContent = `✗ ${data.error || 'Unknown error'}`;
         banner.className = 'mem-unit-banner banner show err';
@@ -3604,7 +3914,7 @@ function _attachMemoryTabHandlers(container) {
       if (!ok) { alert(`Error: ${data.error || 'Unknown error'}`); return; }
       _appendMmaLog(`[memory] Unit updated — new unit_id: ${newUnitId}`);
       setDirty(true);
-      await loadModel();
+      await _bus.emit(EV.MODEL_MUTATED);
     });
   });
 
@@ -3618,7 +3928,7 @@ function _attachMemoryTabHandlers(container) {
       if (!ok) { alert(`Error: ${data.error || 'Unknown error'}`); return; }
       _appendMmaLog(`[memory] Unit removed`);
       setDirty(true);
-      await loadModel();
+      await _bus.emit(EV.MODEL_MUTATED);
     });
   });
 
@@ -3651,7 +3961,7 @@ function _attachMemoryTabHandlers(container) {
       if (ok) {
         _appendMmaLog(`[memory] Memory area added — ${type} start:${start} count:${count}`);
         setDirty(true);
-        await loadModel();
+        await _bus.emit(EV.MODEL_MUTATED);
       } else {
         banner.textContent = `✗ ${data.error || 'Unknown error'}`;
         banner.className = 'mem-area-banner banner show err';
@@ -3690,7 +4000,7 @@ function _attachMemoryTabHandlers(container) {
       if (field === 'count') _appendMmaLog(`[memory] Memory area updated — count set to ${patch.count}`);
       setDirty(true);
       // Reload to refresh area count in unit header
-      await loadModel();
+      await _bus.emit(EV.MODEL_MUTATED);
     };
   }
 
@@ -3718,7 +4028,7 @@ function _attachMemoryTabHandlers(container) {
       if (!ok) { alert(`Error: ${data.error || 'Unknown error'}`); return; }
       _appendMmaLog(`[memory] Memory area removed`);
       setDirty(true);
-      await loadModel();
+      await _bus.emit(EV.MODEL_MUTATED);
     });
   });
 }
@@ -3735,7 +4045,7 @@ document.getElementById('memory-port-form').addEventListener('submit', async e =
     banner.className = 'banner show ok';
     document.getElementById('memory-port-form').reset();
     setDirty(true);
-    await loadModel();
+    await _bus.emit(EV.MODEL_MUTATED);
   } else {
     banner.textContent = `✗ ${data.error || 'Unknown error'}`;
     banner.className = 'banner show err';
@@ -3905,7 +4215,7 @@ function _attachReconcileHandlers(container) {
       if (ok) {
         _appendMmaLog(`[memory reconcile] Created allocation for device "${deviceName}" (unit_id: ${unitId})`);
         setDirty(true);
-        await loadModel();
+        await _bus.emit(EV.MODEL_MUTATED);
         // Re-run scan to refresh results
         document.getElementById('mem-reconcile-btn').click();
       } else {
@@ -3932,7 +4242,7 @@ function _attachReconcileHandlers(container) {
       if (ok) {
         _appendMmaLog(`[memory reconcile] Deleted orphaned unit (unit_id: ${unitId})`);
         setDirty(true);
-        await loadModel();
+        await _bus.emit(EV.MODEL_MUTATED);
         // Re-run scan to refresh results
         document.getElementById('mem-reconcile-btn').click();
       } else {
@@ -4342,7 +4652,7 @@ async function runtimeApplyFlow(endpoint) {
         const action = await showCompileErrorDialog(data);
         if (action === 'cancel') {
           resultEl.innerHTML = `<div class="banner show err">✗ Operation cancelled — no changes applied.</div>`;
-          await loadModel();
+          await _bus.emit(EV.MODEL_MUTATED);
           return;
         }
         const resolveExcluded = data.details?.excluded_ports ?? excludedPorts;
@@ -4370,7 +4680,7 @@ async function runtimeApplyFlow(endpoint) {
         } else {
           resultEl.innerHTML = `<div class="banner show err">✗ ${escapeHtml(resolveData.error || 'Operation failed')}</div>`;
         }
-        await loadModel();
+        await _bus.emit(EV.MODEL_MUTATED);
         return;
       }
       resultEl.innerHTML = `<div class="banner show err">✗ ${escapeHtml(data.error || 'Operation failed')}</div>`;
@@ -4388,7 +4698,7 @@ async function runtimeApplyFlow(endpoint) {
       _setApplyProgress('Done.', 100);
       setTimeout(_clearApplyProgress, 800);
       resultEl.innerHTML = `<div class="banner show ok">✓ Configs applied — ${escapeHtml(String(data.routes))} route(s)${blocksMsg}${excludedMsg}.</div>`;
-      await loadModel();
+      await _bus.emit(EV.MODEL_MUTATED);
       return;
     }
 
@@ -4433,7 +4743,7 @@ async function runtimeApplyFlow(endpoint) {
       resultEl.innerHTML = `<div class="banner show ok">✓ Configs applied and services safely restarted — ${escapeHtml(String(data.routes))} route(s)${blocksMsg}${excludedMsg}.</div>`;
     }
     setTimeout(loadRuntimeStatus, 1500);
-    await loadModel();
+    await _bus.emit(EV.MODEL_MUTATED);
   } finally {
     applyBtns.forEach(btn => { btn.disabled = false; });
   }
@@ -4830,8 +5140,10 @@ async function pollDeviceStatus() {
   try {
     const { ok, data } = await api('GET', '/devices/status');
     if (ok && data && data.status) {
+      const prev = _deviceStatus;
       _deviceStatus = data.status;
-      renderTree(_currentModel);
+      // Patch only the changed status dots — no full tree rebuild.
+      _patchStatusDots(prev, _deviceStatus);
     }
   } finally {
     _statusPollActive = false;
@@ -4839,7 +5151,12 @@ async function pollDeviceStatus() {
 }
 
 function startStatusPolling() {
-  if (_statusPollTimer) clearInterval(_statusPollTimer);
+  // Idempotency guard: once the polling interval is running, calling this
+  // function again must be a no-op.  Re-creating the interval would reset the
+  // 5-second timer and cause poll drift in long sessions.  The clearInterval
+  // path is preserved for future use (e.g. stop → restart), but an already-
+  // running interval is never replaced.
+  if (_statusPollTimer !== null) return;
   pollDeviceStatus().catch(() => {});
   _statusPollTimer = setInterval(() => pollDeviceStatus().catch(() => {}), STATUS_POLL_INTERVAL_MS);
 }
