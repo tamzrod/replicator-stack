@@ -595,11 +595,39 @@
     /* ── Memory Tab ──────────────────────────────────────────────────── */
     #memory-tab-container {
       display: none;
+    }
+    #memory-tab-container.active { display: flex; align-items: flex-start; }
+    #memory-tree-panel {
+      width: 220px;
+      flex-shrink: 0;
+      background: #fff;
+      border-right: 1px solid #E5E7EB;
+      min-height: calc(100vh - 105px);
+      overflow-y: auto;
+    }
+    #memory-main-wrapper {
+      flex: 1;
+      min-width: 0;
       max-width: 960px;
       margin: 32px auto;
       padding: 0 16px;
     }
-    #memory-tab-container.active { display: block; }
+    .mem-tree-port-header {
+      display: flex; align-items: center;
+      padding: 6px 10px; cursor: pointer; user-select: none; gap: 4px;
+    }
+    .mem-tree-port-header:hover { background: #F3F4F6; }
+    .mem-tree-port-name { font-size: .78rem; font-weight: 700; color: #1F2933; flex: 1; }
+    .mem-tree-unit {
+      padding: 5px 10px 5px 26px;
+      display: flex; align-items: center; cursor: pointer;
+      font-size: .78rem; color: #1F2933;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .mem-tree-unit:hover { background: #F9FAFB; }
+    .mem-tree-unit.selected { background: #EFF6FF; border-left: 3px solid #145DA0; padding-left: 23px; }
+    .mem-tree-unit-count { color: #9CA3AF; font-size: .7rem; flex-shrink: 0; }
+    .mem-tree-no-units { padding-left: 26px; font-size: .72rem; }
 
     .mem-port-card {
       background: #fff;
@@ -616,7 +644,17 @@
       padding: 14px 20px;
       border-bottom: 1px solid #E5E7EB;
       background: #F0FDF4;
+      cursor: pointer;
+      user-select: none;
     }
+    .mem-port-header:hover { background: #DCFCE7; }
+    .mem-port-chevron {
+      font-size: .6rem;
+      color: #6B7280;
+      margin-right: 8px;
+      transition: transform .15s;
+    }
+    .mem-port-chevron.open { transform: rotate(90deg); }
     .mem-port-title {
       font-size: 1rem;
       font-weight: 700;
@@ -1335,6 +1373,9 @@
 <!-- ── Memory Tab ─────────────────────────────────────────────────── -->
 <div id="memory-tab-container">
 
+<aside id="memory-tree-panel"></aside>
+<div id="memory-main-wrapper">
+
   <div class="card" style="margin-bottom:20px">
     <h2>Memory <span style="color:#9CA3AF;font-size:.8rem;font-weight:400">(MMA runtime memory layout)</span></h2>
     <p style="color:#6B7280;font-size:.85rem;margin-bottom:16px">
@@ -1355,6 +1396,7 @@
     </form>
   </div>
 
+</div><!-- #memory-main-wrapper -->
 </div><!-- #memory-tab-container -->
 
 <!-- ── Runtime Tab ────────────────────────────────────────────────── -->
@@ -2027,6 +2069,7 @@ async function loadModel() {
   refreshGroupDropdowns(data);
   renderDeviceWorkspace();
   renderMemoryTab(data);
+  renderMemoryTree(data);
   await loadMmaEndpoint();
 
   // If the config viewer tab is open, keep it in sync with the latest compiled output.
@@ -2575,6 +2618,79 @@ document.getElementById('tree-panel').addEventListener('click', async e => {
   }
 });
 
+// ── Memory Tree ───────────────────────────────────────────────────────────────
+
+const _collapsedMemPorts = new Set();
+let _selectedMemItem = null; // { type: 'port'|'unit', portId, unitId? }
+
+function renderMemoryTree(data) {
+  const panel = document.getElementById('memory-tree-panel');
+  const ports = (data && data.memory && data.memory.ports) || [];
+
+  let html = `<div class="tree-panel-header">
+    <span class="tree-panel-title">Memory Ports</span>
+  </div>`;
+
+  if (ports.length === 0) {
+    html += `<div class="tree-empty">No memory ports defined.</div>`;
+  }
+
+  for (const port of ports) {
+    const collapsed = _collapsedMemPorts.has(port.id);
+    const toggle = collapsed ? '▶' : '▼';
+    const units = port.units || [];
+
+    html += `<div class="tree-group">
+      <div class="mem-tree-port-header" data-mem-port-id="${escapeHtml(port.id)}">
+        <span class="tree-toggle">${toggle}</span>
+        <span class="mem-tree-port-name">🔌 Port ${escapeHtml(String(port.port))}</span>
+        <span class="mem-tree-unit-count">${units.length}u</span>
+      </div>`;
+
+    if (!collapsed) {
+      if (units.length === 0) {
+        html += `<div class="tree-empty mem-tree-no-units">No units</div>`;
+      }
+      for (const unit of units) {
+        const sel = (_selectedMemItem && _selectedMemItem.type === 'unit' && _selectedMemItem.unitId === unit.id) ? ' selected' : '';
+        html += `<div class="mem-tree-unit${sel}" data-mem-unit-id="${escapeHtml(unit.id)}" data-mem-port-id="${escapeHtml(port.id)}">
+          Unit ID: ${escapeHtml(String(unit.unit_id))}
+        </div>`;
+      }
+    }
+
+    html += `</div>`;
+  }
+
+  panel.innerHTML = html;
+}
+
+document.getElementById('memory-tree-panel').addEventListener('click', e => {
+  // Port header: toggle collapse and scroll to port card
+  const portHeader = e.target.closest('[data-mem-port-id].mem-tree-port-header');
+  if (portHeader) {
+    const portId = portHeader.dataset.memPortId;
+    if (_collapsedMemPorts.has(portId)) _collapsedMemPorts.delete(portId);
+    else _collapsedMemPorts.add(portId);
+    _selectedMemItem = { type: 'port', portId };
+    renderMemoryTree(_currentModel);
+    document.querySelector(`#memory-ports-list .mem-port-card[data-port-id="${CSS.escape(portId)}"]`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    return;
+  }
+
+  // Unit row: select and scroll to unit card
+  const unitRow = e.target.closest('.mem-tree-unit[data-mem-unit-id]');
+  if (unitRow) {
+    const unitId = unitRow.dataset.memUnitId;
+    const portId = unitRow.dataset.memPortId;
+    _selectedMemItem = { type: 'unit', portId, unitId };
+    renderMemoryTree(_currentModel);
+    document.querySelector(`.mem-unit-card[data-unit-id="${CSS.escape(unitId)}"]`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+});
+
 async function deleteGroup(groupId) {
   const model = _currentModel || {};
   const group = (model.groups || []).find(g => g.id === groupId);
@@ -2788,15 +2904,18 @@ function renderMemoryTab(data) {
       </form>`;
 
     return `<div class="mem-port-card" data-port-id="${escapeHtml(port.id)}">
-      <div class="mem-port-header">
-        <span class="mem-port-title">🔌 Port ${escapeHtml(String(port.port))}</span>
-        <div style="display:flex;gap:8px;align-items:center">
+      <div class="mem-port-header" data-port-toggle="${escapeHtml(port.id)}">
+        <div style="display:flex;align-items:center">
+          <span class="mem-port-chevron open" data-port-chevron="${escapeHtml(port.id)}">▶</span>
+          <span class="mem-port-title">🔌 Port ${escapeHtml(String(port.port))}</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center" onclick="event.stopPropagation()">
           ${!hasManualUnits && blocks.length > 0 ? `<button class="btn-mem mem-populate-btn" data-port-id="${escapeHtml(port.id)}" style="font-size:.72rem;padding:3px 8px">⚡ Auto-populate</button>` : ''}
           <button class="btn-mem mem-edit-port" data-port-id="${escapeHtml(port.id)}" data-port-num="${escapeHtml(String(port.port))}">✎ Edit Port</button>
           <button class="btn-danger mem-del-port" data-port-id="${escapeHtml(port.id)}" style="font-size:.75rem;padding:4px 10px">✕ Remove</button>
         </div>
       </div>
-      <div class="mem-port-body">
+      <div class="mem-port-body" data-port-body="${escapeHtml(port.id)}">
         ${populateBar}
         <div class="mem-units-list">${unitsHtml}</div>
         ${addUnitForm}
@@ -2960,6 +3079,19 @@ function renderUnit(portId, unit) {
 }
 
 function _attachMemoryTabHandlers(container) {
+  // ── Port collapsible toggle ──────────────────────────────────────────
+  container.querySelectorAll('[data-port-toggle]').forEach(header => {
+    header.addEventListener('click', () => {
+      const id = header.dataset.portToggle;
+      const body = container.querySelector(`[data-port-body="${id}"]`);
+      const chevron = container.querySelector(`[data-port-chevron="${id}"]`);
+      if (!body) return;
+      const isOpen = body.style.display !== 'none';
+      body.style.display = isOpen ? 'none' : '';
+      if (chevron) chevron.classList.toggle('open', !isOpen);
+    });
+  });
+
   // ── Unit collapsible toggle ──────────────────────────────────────────
   container.querySelectorAll('[data-unit-toggle]').forEach(header => {
     header.addEventListener('click', () => {
