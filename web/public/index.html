@@ -3496,42 +3496,117 @@ async function generateReport() {
     const ts = new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
     const esc = (s) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
-    // ── Device rows ──────────────────────────────────────────────────────
-    const groups = model.groups || [];
+    const groups  = model.groups  || [];
     const devices = model.devices || [];
+    const ports   = (model.memory && model.memory.ports) || [];
 
-    function groupLabel(gid) {
-      const g = groups.find(x => x.id === gid);
-      return g ? esc(g.name) : '—';
+    // ── Replicator View — grouped by UI groups ────────────────────────────
+    function buildReplicatorView() {
+      // Map groupId → devices list
+      const grouped = {};
+      for (const d of devices) {
+        const key = d.groupId || '__ungrouped__';
+        if (!grouped[key]) grouped[key] = [];
+        grouped[key].push(d);
+      }
+
+      // Build ordered list: named groups (sorted) then ungrouped
+      const treeGroups = [];
+      for (const g of [...groups].sort((a, b) => a.name.localeCompare(b.name))) {
+        treeGroups.push({ name: g.name, devices: grouped[g.id] || [] });
+      }
+      if (grouped['__ungrouped__'] && grouped['__ungrouped__'].length > 0) {
+        treeGroups.push({ name: 'Ungrouped', devices: grouped['__ungrouped__'] });
+      }
+
+      if (treeGroups.length === 0) return '<p class="note">No devices configured.</p>';
+
+      return treeGroups.map(group => {
+        const devicesHtml = group.devices.length === 0
+          ? '<p class="note rpt-indent1">No devices in this group.</p>'
+          : group.devices.map(d => {
+              const reads = d.reads || [];
+              const pollRows = reads.map(r => {
+                const target = r.target_area
+                  ? `${esc(r.target_area)}:${esc(r.target_address ?? 0)}`
+                  : '—';
+                return `<tr>
+                  <td>${esc(r.name || r.id || '—')}</td>
+                  <td><code>${esc(r.source_area || '—')}</code></td>
+                  <td>${esc(r.source_address ?? '—')}</td>
+                  <td>${esc(r.source_count ?? '—')}</td>
+                  <td><code>${target}</code></td>
+                </tr>`;
+              }).join('');
+
+              const pollTable = reads.length === 0
+                ? '<p class="note">No reads configured.</p>'
+                : `<table>
+                    <thead><tr><th>Read Name</th><th>Area Type</th><th>Address</th><th>Count</th><th>Target</th></tr></thead>
+                    <tbody>${pollRows}</tbody>
+                  </table>`;
+
+              const statusVal = d.status_unit_id != null ? esc(String(d.status_unit_id)) : '—';
+              const slotVal   = d.status_slot    != null ? esc(String(d.status_slot))    : '—';
+
+              return `<div class="rpt-device">
+                <div class="rpt-device-name">📟 ${esc(d.name || d.id)}</div>
+                <div class="rpt-device-meta">
+                  <span><strong>Endpoint:</strong> <code>${esc(d.source_endpoint || '—')}</code></span>
+                  <span><strong>Unit ID:</strong> ${esc(d.source_unit_id ?? '—')}</span>
+                  <span><strong>Status:</strong> ${statusVal}</span>
+                  <span><strong>Slot:</strong> ${slotVal}</span>
+                </div>
+                <div class="rpt-poll-label">Poll Table</div>
+                ${pollTable}
+              </div>`;
+            }).join('');
+
+        return `<div class="rpt-group">
+          <div class="rpt-group-name">${esc(group.name)}</div>
+          ${devicesHtml}
+        </div>`;
+      }).join('');
     }
 
-    const deviceRows = devices.map(d => {
-      const reads = (d.reads || []).length;
-      return `<tr>
-        <td>${esc(d.name || d.id)}</td>
-        <td>${groupLabel(d.groupId)}</td>
-        <td><code>${esc(d.source_endpoint || '—')}</code></td>
-        <td><code>${esc(d.target_endpoint || '—')}</code></td>
-        <td>${esc(d.unitId ?? '—')}</td>
-        <td style="text-align:center">${reads}</td>
-      </tr>`;
-    }).join('');
+    // ── Memory View — PORT → UNIT → AREA ─────────────────────────────────
+    function buildMemoryView() {
+      if (ports.length === 0) return '<p class="note">No memory ports configured.</p>';
 
-    // ── Memory port rows ─────────────────────────────────────────────────
-    const ports = (model.memory && model.memory.ports) || [];
-    const portRows = ports.map(p => {
-      const unitCount = (p.units || []).length;
-      return `<tr>
-        <td><code>:${esc(p.port)}</code></td>
-        <td>${esc(p.id)}</td>
-        <td style="text-align:center">${unitCount}</td>
-      </tr>`;
-    }).join('');
+      return ports.map(p => {
+        const units = p.units || [];
+        const unitsHtml = units.length === 0
+          ? '<p class="note rpt-indent1">No units configured.</p>'
+          : units.map(unit => {
+              const areas = unit.areas || [];
+              const areasHtml = areas.length === 0
+                ? '<p class="note rpt-indent2">No areas.</p>'
+                : `<table class="rpt-area-table">
+                    <thead><tr><th>Area Type</th><th>Start</th><th>Count</th></tr></thead>
+                    <tbody>${areas.map(a => `<tr>
+                      <td><code>${esc(a.type || '—')}</code></td>
+                      <td>${esc(a.start ?? '—')}</td>
+                      <td>${esc(a.count ?? '—')}</td>
+                    </tr>`).join('')}</tbody>
+                  </table>`;
+
+              return `<div class="rpt-unit">
+                <div class="rpt-unit-name">Unit ID: ${esc(String(unit.unit_id ?? '—'))}</div>
+                ${areasHtml}
+              </div>`;
+            }).join('');
+
+        return `<div class="rpt-port">
+          <div class="rpt-port-name">Port :${esc(String(p.port))}</div>
+          ${unitsHtml}
+        </div>`;
+      }).join('');
+    }
 
     // ── Compiled YAML sections ───────────────────────────────────────────
-    const mmaYaml   = config && config.mma   ? `<h2>MMA Compiled Config</h2><pre>${esc(config.mma)}</pre>`   : '';
-    const repYaml   = config && config.replicator ? `<h2>Replicator Compiled Config</h2><pre>${esc(config.replicator)}</pre>` : '';
-    const noConfig  = !mmaYaml && !repYaml ? '<p class="note">No compiled configuration found. Run Save to compile first.</p>' : '';
+    const mmaYaml  = config && config.mma        ? `<h2>MMA Compiled Config</h2><pre>${esc(config.mma)}</pre>`              : '';
+    const repYaml  = config && config.replicator ? `<h2>Replicator Compiled Config</h2><pre>${esc(config.replicator)}</pre>` : '';
+    const noConfig = !mmaYaml && !repYaml ? '<p class="note">No compiled configuration found. Run Save to compile first.</p>' : '';
 
     const compileStateLabelMap = { idle:'IDLE', compiling:'COMPILING', success:'SUCCESS', error:'ERROR' };
     const compileStateLabel = compileStateLabelMap[_appState.compileState] || String(_appState.compileState || 'UNKNOWN').toUpperCase();
@@ -3563,6 +3638,21 @@ async function generateReport() {
   .summary-card { border: 1px solid #E5E7EB; border-radius: 6px; padding: 10px 14px; }
   .summary-card .label { font-size: 10px; font-weight: 700; color: #6B7280; text-transform: uppercase; letter-spacing: .05em; }
   .summary-card .value { font-size: 20px; font-weight: 700; color: #0B3C5D; margin-top: 2px; }
+  /* ── Replicator View tree ── */
+  .rpt-group { margin-bottom: 20px; }
+  .rpt-group-name { font-size: 13px; font-weight: 700; color: #0B3C5D; background: #EFF6FF; border-left: 4px solid #0B3C5D; padding: 6px 10px; margin-bottom: 8px; }
+  .rpt-device { margin-left: 16px; margin-bottom: 12px; border: 1px solid #E5E7EB; border-radius: 4px; padding: 8px 12px; }
+  .rpt-device-name { font-weight: 700; font-size: 12px; margin-bottom: 6px; color: #1F2933; }
+  .rpt-device-meta { display: flex; gap: 16px; flex-wrap: wrap; font-size: 11px; margin-bottom: 6px; color: #374151; }
+  .rpt-poll-label { font-size: 10px; font-weight: 700; color: #6B7280; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; margin-top: 2px; }
+  /* ── Memory View tree ── */
+  .rpt-port { margin-bottom: 16px; }
+  .rpt-port-name { font-size: 12px; font-weight: 700; color: #0B3C5D; background: #F3F4F6; border-left: 3px solid #6B7280; padding: 5px 8px; margin-bottom: 6px; }
+  .rpt-unit { margin-left: 16px; margin-bottom: 8px; }
+  .rpt-unit-name { font-size: 11px; font-weight: 700; color: #374151; padding: 3px 6px; background: #F9FAFB; border-left: 2px solid #D1D5DB; margin-bottom: 4px; }
+  .rpt-area-table { margin-left: 16px; width: auto; }
+  .rpt-indent1 { margin-left: 16px; }
+  .rpt-indent2 { margin-left: 32px; }
   @media print { body { padding: 16px; } }
 </style>
 </head>
@@ -3584,8 +3674,8 @@ async function generateReport() {
     <div class="value">${devices.length}</div>
   </div>
   <div class="summary-card">
-    <div class="label">Memory Ports</div>
-    <div class="value">${ports.length}</div>
+    <div class="label">Groups</div>
+    <div class="value">${groups.length}</div>
   </div>
   <div class="summary-card">
     <div class="label">Total Read Ops</div>
@@ -3593,19 +3683,11 @@ async function generateReport() {
   </div>
 </div>
 
-<h2>Devices</h2>
-${devices.length === 0 ? '<p class="note">No devices configured.</p>' : `
-<table>
-  <thead><tr><th>Name</th><th>Group</th><th>Source Endpoint</th><th>Target Endpoint</th><th>Unit ID</th><th>Reads</th></tr></thead>
-  <tbody>${deviceRows}</tbody>
-</table>`}
+<h2>Replicator View</h2>
+${buildReplicatorView()}
 
-<h2>Memory Ports</h2>
-${ports.length === 0 ? '<p class="note">No memory ports configured.</p>' : `
-<table>
-  <thead><tr><th>Port</th><th>ID</th><th>Units</th></tr></thead>
-  <tbody>${portRows}</tbody>
-</table>`}
+<h2>Memory View</h2>
+${buildMemoryView()}
 
 ${mmaYaml}
 ${repYaml}
