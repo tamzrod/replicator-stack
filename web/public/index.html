@@ -1492,14 +1492,33 @@ async function loadModel() {
 
 // ── Add Device (dialog) ──────────────────────────────────────────────────────
 
+// Returns the next available MMA unit ID for the given target endpoint.
+// Finds the maximum unitId among devices sharing that endpoint and adds 1.
+// Falls back to 1 when no devices use that endpoint yet.
+function nextMmaUnitIdForEndpoint(targetEndpoint) {
+  const devices = (_currentModel?.devices || []).filter(d => d.target_endpoint === targetEndpoint);
+  if (!devices.length) return 1;
+  return Math.max(...devices.map(d => Number(d.unitId) || 0)) + 1;
+}
+
+// Returns the next available status slot for the given status unit ID.
+// Status slots are 0-indexed within a status_unit_id group, so the next
+// available slot equals the current count of devices sharing that unit ID.
+function nextStatusSlotForUnit(statusUnitId) {
+  const uid = Number(statusUnitId);
+  if (!Number.isFinite(uid)) return 0;
+  return (_currentModel?.devices || []).filter(d => d.status_unit_id === uid).length;
+}
+
 function openAddDevice() {
   document.getElementById('add-device-form').reset();
   document.getElementById('ad-src-endpoint').value = '';
-  document.getElementById('ad-tgt-endpoint').value = 'mma:502';
-  document.getElementById('ad-unit').value = '0';
-  document.getElementById('ad-mma-unit').value = '0';
-  document.getElementById('ad-status-slot').value = '0';
-  document.getElementById('ad-status-unit').value = '';
+  const defaultTarget = 'mma:502';
+  document.getElementById('ad-tgt-endpoint').value = defaultTarget;
+  document.getElementById('ad-unit').value = '1';
+  document.getElementById('ad-mma-unit').value = String(nextMmaUnitIdForEndpoint(defaultTarget));
+  document.getElementById('ad-status-unit').value = '100';
+  document.getElementById('ad-status-slot').value = String(nextStatusSlotForUnit(100));
   document.getElementById('add-device-banner').className = 'banner';
 
   document.getElementById('add-device-dialog').showModal();
@@ -1538,6 +1557,20 @@ document.getElementById('add-device-form').addEventListener('submit', async e =>
 
 document.getElementById('ad-cancel').addEventListener('click', () => {
   document.getElementById('add-device-dialog').close();
+});
+
+// Recalculate MMA unit ID when target endpoint changes.
+document.getElementById('ad-tgt-endpoint').addEventListener('input', () => {
+  const endpoint = document.getElementById('ad-tgt-endpoint').value.trim();
+  document.getElementById('ad-mma-unit').value = String(nextMmaUnitIdForEndpoint(endpoint));
+});
+
+// Recalculate status slot when status unit ID changes.
+document.getElementById('ad-status-unit').addEventListener('input', () => {
+  const val = document.getElementById('ad-status-unit').value;
+  document.getElementById('ad-status-slot').value = val !== ''
+    ? String(nextStatusSlotForUnit(Number(val)))
+    : '0';
 });
 
 // ── Compile ──────────────────────────────────────────────────────────────────
