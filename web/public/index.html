@@ -2586,8 +2586,8 @@ function _showDeviceContextMenu(deviceId, x, y) {
   menu.classList.add('visible');
   // Clamp to viewport so the menu never overflows the screen edge.
   const rect = menu.getBoundingClientRect();
-  if (rect.right  > window.innerWidth)  menu.style.left = `${x - rect.width}px`;
-  if (rect.bottom > window.innerHeight) menu.style.top  = `${y - rect.height}px`;
+  if (rect.right  > window.innerWidth)  menu.style.left = `${Math.max(0, x - rect.width)}px`;
+  if (rect.bottom > window.innerHeight) menu.style.top  = `${Math.max(0, y - rect.height)}px`;
 }
 
 function _hideDeviceContextMenu() {
