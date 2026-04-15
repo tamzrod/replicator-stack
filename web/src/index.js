@@ -546,16 +546,21 @@ function toMmaYaml(model) {
         // Determine source: use units[] when manually configured, fall back to blocks[]
         const hasManualUnits = (port.units || []).length > 0;
         let blocksForCompile;
+        // Build a map from unit_id → state_sealing for manual units (first match wins).
+        const stateSealingByUnitId = {};
         if (hasManualUnits) {
             // Flatten units[] → blocks format for compileMma2Config
-            blocksForCompile = (port.units || []).flatMap(u =>
-                (u.areas || []).map(a => ({
+            blocksForCompile = (port.units || []).flatMap(u => {
+                if (u.state_sealing && !stateSealingByUnitId[u.unit_id]) {
+                    stateSealingByUnitId[u.unit_id] = u.state_sealing;
+                }
+                return (u.areas || []).map(a => ({
                     unit_id: u.unit_id,
                     area: a.type || 'holding_registers',
                     address: a.start,
                     count: a.count,
-                }))
-            );
+                }));
+            });
         } else {
             // Fall back to auto-derived blocks from device reads
             blocksForCompile = port.blocks || [];
@@ -578,6 +583,14 @@ function toMmaYaml(model) {
                     lines.push(`        ${area}:`);
                     lines.push(`          start: ${range.start}`);
                     lines.push(`          count: ${range.count}`);
+                }
+
+                // Emit state_sealing if configured on this unit.
+                const ss = stateSealingByUnitId[unit.unitId];
+                if (ss && ss.area === 'coil') {
+                    lines.push(`        state_sealing:`);
+                    lines.push(`          area: coil`);
+                    lines.push(`          address: ${ss.address}`);
                 }
 
                 // Emit policy.  Status units are read-write (FC 3 + 16); regular
@@ -1007,15 +1020,49 @@ app.post('/memory/port/:portId/unit', (req, res) => {
     }
 });
 
-// PUT /memory/port/:portId/unit/:unitId — update a unit's unit_id
+// PUT /memory/port/:portId/unit/:unitId — update a unit's unit_id and/or state_sealing
 app.put('/memory/port/:portId/unit/:unitId', (req, res) => {
     try {
         const { portId, unitId } = req.params;
         const { unit } = req.body;
-        const unitIdNum = Number(unit && unit.unit_id);
-        if (!Number.isFinite(unitIdNum) || unitIdNum < 0 || unitIdNum > 65535) {
-            return res.status(400).json({ error: 'unit.unit_id must be a non-negative integer (0–65535)' });
+        if (!unit || typeof unit !== 'object') {
+            return res.status(400).json({ error: 'Request body must include a unit object' });
         }
+
+        // Validate unit_id when provided
+        let unitIdNum;
+        const hasUnitId = 'unit_id' in unit;
+        if (hasUnitId) {
+            unitIdNum = Number(unit.unit_id);
+            if (!Number.isFinite(unitIdNum) || unitIdNum < 0 || unitIdNum > 65535) {
+                return res.status(400).json({ error: 'unit.unit_id must be a non-negative integer (0–65535)' });
+            }
+        }
+
+        // Validate state_sealing when provided
+        const hasStateSealing = 'state_sealing' in unit;
+        let stateSealingValue;
+        if (hasStateSealing) {
+            if (unit.state_sealing === null) {
+                stateSealingValue = null;
+            } else if (unit.state_sealing && typeof unit.state_sealing === 'object') {
+                if (unit.state_sealing.area !== 'coil') {
+                    return res.status(400).json({ error: 'state_sealing.area must be "coil" (the only supported value)' });
+                }
+                const addr = Number(unit.state_sealing.address);
+                if (!Number.isFinite(addr) || addr < 0) {
+                    return res.status(400).json({ error: 'state_sealing.address must be a non-negative integer' });
+                }
+                stateSealingValue = { area: 'coil', address: addr };
+            } else {
+                return res.status(400).json({ error: 'state_sealing must be null or an object with area and address' });
+            }
+        }
+
+        if (!hasUnitId && !hasStateSealing) {
+            return res.status(400).json({ error: 'unit must include unit_id or state_sealing' });
+        }
+
         const model = readModel();
         const port = findMemoryPort(model, portId);
         if (!port) {
@@ -1025,7 +1072,14 @@ app.put('/memory/port/:portId/unit/:unitId', (req, res) => {
         if (!existing) {
             return res.status(404).json({ error: `Unit ${unitId} not found on port ${portId}` });
         }
-        existing.unit_id = unitIdNum;
+        if (hasUnitId) existing.unit_id = unitIdNum;
+        if (hasStateSealing) {
+            if (stateSealingValue === null) {
+                delete existing.state_sealing;
+            } else {
+                existing.state_sealing = stateSealingValue;
+            }
+        }
         writeModel(model);
         autoCompile(model);
         res.json({ ok: true });
