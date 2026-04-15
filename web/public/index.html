@@ -23,7 +23,7 @@
       justify-content: space-between;
     }
     .header-brand { display: flex; align-items: center; gap: 12px; }
-    .header-save-area { display: flex; align-items: center; gap: 12px; }
+    .header-toolbar { display: flex; align-items: center; gap: 8px; }
     header h1 { font-size: 1.25rem; font-weight: 600; }
     header span { font-size: 0.8rem; color: #93C5D8; }
 
@@ -59,6 +59,54 @@
     }
     .global-save-status.status-ok { color: #86EFAC; }
     .global-save-status.status-err { color: #FCA5A5; }
+
+    /* ── Compile Status Badge ─────────────────────────────────────────── */
+    .compile-status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: .72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      padding: 5px 11px;
+      border-radius: 4px;
+      border: 1.5px solid;
+      white-space: nowrap;
+      user-select: none;
+    }
+    .compile-status-idle     { background: #111827; border-color: #374151; color: #6B7280; }
+    .compile-status-compiling{ background: #1E3A5F; border-color: #2563EB; color: #93C5FD;
+                                animation: compile-pulse .9s ease-in-out infinite; }
+    .compile-status-success  { background: #14532D; border-color: #22C55E; color: #86EFAC; }
+    .compile-status-error    { background: #7F1D1D; border-color: #EF4444; color: #FCA5A5; }
+    @keyframes compile-pulse {
+      0%, 100% { border-color: #2563EB; opacity: 1; }
+      50%       { border-color: #60A5FA; opacity: .75; }
+    }
+
+    /* ── Toolbar separator ───────────────────────────────────────────── */
+    .toolbar-sep {
+      width: 1px;
+      height: 22px;
+      background: #374151;
+      flex-shrink: 0;
+    }
+
+    /* ── Report Button ───────────────────────────────────────────────── */
+    .btn-toolbar-report {
+      background: transparent;
+      border: 1.5px solid #4B5563;
+      color: #D1D5DB;
+      font-size: .875rem;
+      font-weight: 600;
+      padding: 7px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all .15s;
+    }
+    .btn-toolbar-report:hover { border-color: #9CA3AF; color: #fff; background: #374151; }
 
     main {
       padding: 24px 24px;
@@ -999,11 +1047,17 @@
     <h1>⚡ MCS Web</h1>
     <span>Modbus Consolidator System</span>
   </div>
-  <div class="header-save-area">
+  <div class="header-toolbar">
     <span id="global-save-status" class="global-save-status"></span>
     <button id="btn-global-save" class="btn-global-save" disabled
       aria-label="Save, compile, and apply all staged changes to runtime"
       title="Save, compile, and apply all staged changes to runtime">💾 Save</button>
+    <div class="toolbar-sep"></div>
+    <div id="compile-status-badge" class="compile-status-badge compile-status-idle"
+      title="Current compiler state">⚙ IDLE</div>
+    <div class="toolbar-sep"></div>
+    <button id="btn-report" class="btn-toolbar-report"
+      title="Generate a PDF report of the compiled configuration">📄 Report</button>
   </div>
 </header>
 
@@ -1353,6 +1407,7 @@ let _currentModel = null;
 
 const _appState = {
   dirty: false,
+  compileState: 'idle',     // idle | compiling | success | error
   pendingDeviceId: null,    // ID of device whose form fields are currently dirty
   stagedDeviceForms: {},    // { deviceId: payload } — captured when switching away
 };
@@ -1377,6 +1432,22 @@ function updateGlobalSaveBtn() {
     btn.className = 'btn-global-save';
     btn.setAttribute('aria-label', 'Save, compile, and apply staged changes to runtime (no pending changes)');
   }
+}
+
+const _COMPILE_STATE_LABELS = {
+  idle:      { icon: '⚙',  text: 'IDLE',      cls: 'compile-status-idle' },
+  compiling: { icon: '⚙',  text: 'COMPILING', cls: 'compile-status-compiling' },
+  success:   { icon: '✓',  text: 'SUCCESS',   cls: 'compile-status-success' },
+  error:     { icon: '✗',  text: 'ERROR',     cls: 'compile-status-error' },
+};
+
+function setCompileState(state) {
+  _appState.compileState = state;
+  const badge = document.getElementById('compile-status-badge');
+  if (!badge) return;
+  const def = _COMPILE_STATE_LABELS[state] || _COMPILE_STATE_LABELS.idle;
+  badge.textContent = `${def.icon} ${def.text}`;
+  badge.className = `compile-status-badge ${def.cls}`;
 }
 
 function _showGlobalSaveStatus(msg, isError) {
@@ -2074,6 +2145,7 @@ async function globalSave() {
   btn.className = 'btn-global-save save-busy';
   btn.textContent = '⏳ Saving…';
   btn.setAttribute('aria-busy', 'true');
+  setCompileState('compiling');
 
   try {
     // Step 1: Capture any in-progress device form edits
@@ -2085,6 +2157,7 @@ async function globalSave() {
       const { ok, data } = await api('POST', '/config/save', payload);
       if (!ok) {
         _showGlobalSaveStatus(`✗ Failed to save device ${deviceId}: ${data.error || 'Unknown error'}`, true);
+        setCompileState('error');
         return;
       }
     }
@@ -2097,6 +2170,7 @@ async function globalSave() {
     const { ok: precheckOk, data: precheckData } = await api('GET', '/compile/precheck');
     if (!precheckOk) {
       _showGlobalSaveStatus(`✗ Pre-check failed: ${precheckData.error || 'Unknown error'}`, true);
+      setCompileState('error');
       return;
     }
 
@@ -2108,6 +2182,7 @@ async function globalSave() {
         const { ok, data } = await api('POST', '/memory/port', { port: { port } });
         if (!ok) {
           _showGlobalSaveStatus(`✗ Failed to create port ${port}: ${data.error || 'Unknown error'}`, true);
+          setCompileState('error');
           return;
         }
       } else {
@@ -2137,6 +2212,7 @@ async function globalSave() {
       _appendMmaLog('[memory] config recompiled');
       _appendMmaLog(`[Save] Runtime updated — services restarted${excludedMsg}`);
       _showGlobalSaveStatus(`✓ Saved — ${data.routes} route(s)${blocksMsg}${excludedMsg}`, false);
+      setCompileState('success');
       setDirty(false);
       await loadModel();
       await refreshConfigViewerIfActive();
@@ -2146,6 +2222,7 @@ async function globalSave() {
       const action = await showCompileErrorDialog(data);
       if (action === 'cancel') {
         _showGlobalSaveStatus('✗ Save cancelled — no changes applied', true);
+        setCompileState('error');
         return;
       }
       const resolveExcluded = data.details?.excluded_ports ?? excludedPorts;
@@ -2166,9 +2243,11 @@ async function globalSave() {
         if (resolveData.restart_errors) {
           _appendMmaLog(`[Save] Configs applied but restart failed: ${(resolveData.restart_errors || []).join('; ')}`);
           _showGlobalSaveStatus('⚠ Configs applied but restart failed — see runtime log', false);
+          setCompileState('success');
         } else {
           _appendMmaLog('[Save] Runtime updated — services restarted');
           _showGlobalSaveStatus(`✓ Saved — ${resolveData.routes} route(s)${blocksMsg2}`, false);
+          setCompileState('success');
         }
         setDirty(false);
         await loadModel();
@@ -2176,21 +2255,26 @@ async function globalSave() {
         setTimeout(loadRuntimeStatus, 1500);
       } else if (resolveData.status === 'error') {
         _showGlobalSaveStatus(`✗ Auto-fix could not resolve all errors: ${resolveData.errorSummary || ''}`, true);
+        setCompileState('error');
       } else {
         _showGlobalSaveStatus(`✗ ${resolveData.error || 'Save failed'}`, true);
+        setCompileState('error');
       }
     } else if (data.restart_errors) {
       const errMsg = (data.restart_errors || []).join('; ');
       _appendMmaLog(`[Save] Configs applied but restart failed: ${errMsg}`);
       _showGlobalSaveStatus('⚠ Configs applied but restart failed — see runtime log', false);
+      setCompileState('success');
       setDirty(false);
       await loadModel();
       await refreshConfigViewerIfActive();
     } else {
       _showGlobalSaveStatus(`✗ ${data.error || 'Save failed'}`, true);
+      setCompileState('error');
     }
   } catch (err) {
     _showGlobalSaveStatus(`✗ Unexpected error: ${err.message}`, true);
+    setCompileState('error');
   } finally {
     btn.textContent = '💾 Save';
     btn.removeAttribute('aria-busy');
@@ -3388,9 +3472,166 @@ document.getElementById('adv-override-toggle').addEventListener('change', functi
   }
 });
 
+// ── Report Generator ─────────────────────────────────────────────────────────
+
+async function generateReport() {
+  const btn = document.getElementById('btn-report');
+  btn.disabled = true;
+  btn.textContent = '⏳ Generating…';
+
+  try {
+    const [modelResp, configResp] = await Promise.all([
+      api('GET', '/model'),
+      api('GET', '/config'),
+    ]);
+
+    const model = modelResp.ok ? modelResp.data : null;
+    const config = configResp.ok ? configResp.data : null;
+
+    if (!model) {
+      alert('Failed to load model data for report.');
+      return;
+    }
+
+    const ts = new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
+    const esc = (s) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+    // ── Device rows ──────────────────────────────────────────────────────
+    const groups = model.groups || [];
+    const devices = model.devices || [];
+
+    function groupLabel(gid) {
+      const g = groups.find(x => x.id === gid);
+      return g ? esc(g.name) : '—';
+    }
+
+    const deviceRows = devices.map(d => {
+      const reads = (d.reads || []).length;
+      return `<tr>
+        <td>${esc(d.name || d.id)}</td>
+        <td>${groupLabel(d.groupId)}</td>
+        <td><code>${esc(d.source_endpoint || '—')}</code></td>
+        <td><code>${esc(d.target_endpoint || '—')}</code></td>
+        <td>${esc(d.unitId ?? '—')}</td>
+        <td style="text-align:center">${reads}</td>
+      </tr>`;
+    }).join('');
+
+    // ── Memory port rows ─────────────────────────────────────────────────
+    const ports = (model.memory && model.memory.ports) || [];
+    const portRows = ports.map(p => {
+      const unitCount = (p.units || []).length;
+      return `<tr>
+        <td><code>:${esc(p.port)}</code></td>
+        <td>${esc(p.id)}</td>
+        <td style="text-align:center">${unitCount}</td>
+      </tr>`;
+    }).join('');
+
+    // ── Compiled YAML sections ───────────────────────────────────────────
+    const mmaYaml   = config && config.mma   ? `<h2>MMA Compiled Config</h2><pre>${esc(config.mma)}</pre>`   : '';
+    const repYaml   = config && config.replicator ? `<h2>Replicator Compiled Config</h2><pre>${esc(config.replicator)}</pre>` : '';
+    const noConfig  = !mmaYaml && !repYaml ? '<p class="note">No compiled configuration found. Run Save to compile first.</p>' : '';
+
+    const compileStateLabelMap = { idle:'IDLE', compiling:'COMPILING', success:'SUCCESS', error:'ERROR' };
+    const compileStateLabel = compileStateLabelMap[_appState.compileState] || _appState.compileState.toUpperCase();
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>MCS Configuration Report</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; font-size: 12px; color: #1F2933; background: #fff; padding: 32px; }
+  header { border-bottom: 3px solid #0B3C5D; margin-bottom: 24px; padding-bottom: 12px; display: flex; justify-content: space-between; align-items: flex-end; }
+  header h1 { font-size: 18px; color: #0B3C5D; font-weight: 700; }
+  header .meta { font-size: 11px; color: #6B7280; text-align: right; }
+  h2 { font-size: 13px; font-weight: 700; color: #0B3C5D; border-bottom: 1px solid #E5E7EB; padding-bottom: 4px; margin: 24px 0 10px; text-transform: uppercase; letter-spacing: .04em; }
+  table { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 8px; }
+  th { text-align: left; background: #F3F4F6; color: #374151; padding: 5px 8px; border: 1px solid #E5E7EB; font-weight: 700; }
+  td { padding: 4px 8px; border: 1px solid #E5E7EB; vertical-align: top; }
+  tr:nth-child(even) td { background: #F9FAFB; }
+  pre { background: #F3F4F6; border: 1px solid #E5E7EB; border-radius: 4px; padding: 12px; font-size: 10.5px; line-height: 1.5; white-space: pre-wrap; word-break: break-all; }
+  code { font-family: 'Courier New', monospace; font-size: 11px; }
+  .note { color: #9CA3AF; font-style: italic; font-size: 11px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 10px; font-weight: 700; letter-spacing: .05em; }
+  .badge-idle    { background: #E5E7EB; color: #6B7280; }
+  .badge-success { background: #DCFCE7; color: #166534; }
+  .badge-error   { background: #FEF2F2; color: #991B1B; }
+  .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 24px; }
+  .summary-card { border: 1px solid #E5E7EB; border-radius: 6px; padding: 10px 14px; }
+  .summary-card .label { font-size: 10px; font-weight: 700; color: #6B7280; text-transform: uppercase; letter-spacing: .05em; }
+  .summary-card .value { font-size: 20px; font-weight: 700; color: #0B3C5D; margin-top: 2px; }
+  @media print { body { padding: 16px; } }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>⚡ MCS Configuration Report</h1>
+    <div style="font-size:11px;color:#6B7280;margin-top:3px">Modbus Consolidator System — compiled snapshot</div>
+  </div>
+  <div class="meta">
+    Generated: ${esc(ts)}<br/>
+    Compile State: <span class="badge badge-${_appState.compileState === 'success' ? 'success' : _appState.compileState === 'error' ? 'error' : 'idle'}">${esc(compileStateLabel)}</span>
+  </div>
+</header>
+
+<div class="summary-grid">
+  <div class="summary-card">
+    <div class="label">Devices</div>
+    <div class="value">${devices.length}</div>
+  </div>
+  <div class="summary-card">
+    <div class="label">Memory Ports</div>
+    <div class="value">${ports.length}</div>
+  </div>
+  <div class="summary-card">
+    <div class="label">Total Read Ops</div>
+    <div class="value">${devices.reduce((n, d) => n + (d.reads || []).length, 0)}</div>
+  </div>
+</div>
+
+<h2>Devices</h2>
+${devices.length === 0 ? '<p class="note">No devices configured.</p>' : `
+<table>
+  <thead><tr><th>Name</th><th>Group</th><th>Source Endpoint</th><th>Target Endpoint</th><th>Unit ID</th><th>Reads</th></tr></thead>
+  <tbody>${deviceRows}</tbody>
+</table>`}
+
+<h2>Memory Ports</h2>
+${ports.length === 0 ? '<p class="note">No memory ports configured.</p>' : `
+<table>
+  <thead><tr><th>Port</th><th>ID</th><th>Units</th></tr></thead>
+  <tbody>${portRows}</tbody>
+</table>`}
+
+${mmaYaml}
+${repYaml}
+${noConfig}
+
+<script>window.onload = function() { window.print(); };<\/script>
+</body>
+</html>`;
+
+    const win = window.open('', '_blank', 'width=900,height=700');
+    if (!win) {
+      alert('Pop-up blocked. Please allow pop-ups for this site and try again.');
+      return;
+    }
+    win.document.write(html);
+    win.document.close();
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '📄 Report';
+  }
+}
+
 // ── Init ─────────────────────────────────────────────────────────────────────
 document.getElementById('btn-refresh').addEventListener('click', loadModel);
 document.getElementById('btn-global-save').addEventListener('click', globalSave);
+document.getElementById('btn-report').addEventListener('click', generateReport);
 loadModel();
 </script>
 </body>
