@@ -551,7 +551,7 @@ function toMmaYaml(model) {
         if (hasManualUnits) {
             // Flatten units[] → blocks format for compileMma2Config
             blocksForCompile = (port.units || []).flatMap(u => {
-                if (u.state_sealing && !stateSealingByUnitId[u.unit_id]) {
+                if (u.state_sealing && !(u.unit_id in stateSealingByUnitId)) {
                     stateSealingByUnitId[u.unit_id] = u.state_sealing;
                 }
                 return (u.areas || []).map(a => ({

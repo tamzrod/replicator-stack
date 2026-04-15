@@ -2741,8 +2741,9 @@ function renderUnit(portId, unit) {
   const sealAddress = sealEnabled ? Number(ss.address) : 0;
 
   const advancedSection = `
-    <div class="mem-adv-header" data-adv-toggle="${unitDbIdEsc}">
-      <span class="mem-adv-chevron" data-adv-chevron="${unitDbIdEsc}">▶</span>
+    <div class="mem-adv-header" data-adv-toggle="${unitDbIdEsc}"
+      role="button" aria-expanded="false" aria-label="Advanced Settings">
+      <span class="mem-adv-chevron" data-adv-chevron="${unitDbIdEsc}" aria-hidden="true">▶</span>
       Advanced Settings
     </div>
     <div class="mem-adv-body" data-adv-body="${unitDbIdEsc}">
@@ -2824,6 +2825,7 @@ function _attachMemoryTabHandlers(container) {
       if (!body) return;
       const isOpen = body.style.display !== 'none';
       body.style.display = isOpen ? 'none' : '';
+      header.setAttribute('aria-expanded', String(!isOpen));
       if (chevron) chevron.classList.toggle('open', !isOpen);
     });
   });
@@ -2866,14 +2868,17 @@ function _attachMemoryTabHandlers(container) {
           const sel = row.querySelector('.mem-area-type-sel');
           return sel && sel.value === 'coils';
         });
-        if (coilsRow) {
-          const coilStart = Number(coilsRow.querySelector('.mem-area-start-inp').value);
-          const coilCount = Number(coilsRow.querySelector('.mem-area-count-inp').value);
-          if (addr < coilStart || addr >= coilStart + coilCount) {
-            banner.textContent = `✗ Address ${addr} is outside the coils area (${coilStart}–${coilStart + coilCount - 1})`;
-            banner.className = 'mem-adv-banner banner show err';
-            return;
-          }
+        if (!coilsRow) {
+          banner.textContent = '✗ State sealing requires a Coils area to be defined for this unit';
+          banner.className = 'mem-adv-banner banner show err';
+          return;
+        }
+        const coilStart = Number(coilsRow.querySelector('.mem-area-start-inp').value);
+        const coilCount = Number(coilsRow.querySelector('.mem-area-count-inp').value);
+        if (addr < coilStart || addr >= coilStart + coilCount) {
+          banner.textContent = `✗ Address ${addr} is outside the coils area (${coilStart}–${coilStart + coilCount - 1})`;
+          banner.className = 'mem-adv-banner banner show err';
+          return;
         }
 
         stateSealingPayload = { area: 'coil', address: addr };
