@@ -1206,7 +1206,9 @@ app.post('/memory/port/:portId/units/populate', (req, res) => {
                 // Merge areas into existing unit (add derived areas not already present)
                 const existing = existingByUnitId.get(uid);
                 for (const area of areas) {
-                    const alreadyHas = (existing.areas || []).some(a => a.type === area.type);
+                    const alreadyHas = (existing.areas || []).some(
+                        a => a.type === area.type && a.start === area.start && a.count === area.count
+                    );
                     if (!alreadyHas) {
                         existing.areas.push(area);
                         added++;

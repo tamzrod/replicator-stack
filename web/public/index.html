@@ -2776,7 +2776,9 @@ function _attachMemoryTabHandlers(container) {
         alert(`Error saving area: ${data.error || 'Unknown error'}`);
         return;
       }
-      if (field === 'type') _appendMmaLog(`[memory] Memory area moved — type changed to ${patch.type}`);
+      if (field === 'type')  _appendMmaLog(`[memory] Memory area moved — type changed to ${patch.type}`);
+      if (field === 'start') _appendMmaLog(`[memory] Memory area updated — start address set to ${patch.start}`);
+      if (field === 'count') _appendMmaLog(`[memory] Memory area updated — count set to ${patch.count}`);
       setDirty(true);
       // Reload to refresh area count in unit header
       await loadModel();
