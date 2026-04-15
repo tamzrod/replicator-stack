@@ -2223,7 +2223,8 @@ app.post('/compile/resolve', async (req, res) => {
             const restartErrors = [];
             for (const service of ['mma', 'replicator']) {
                 try {
-                    const r = await dockerApi('POST', `/containers/${service}/restart`);
+                    const stopTimeout = service === 'mma' ? `?t=${MMA_SAFE_STOP_TIMEOUT_SECS}` : '';
+                    const r = await dockerApi('POST', `/containers/${service}/restart${stopTimeout}`);
                     if (r.status !== 204 && r.status !== 304) {
                         const msg = (r.body && r.body.message) ? r.body.message : `HTTP ${r.status}`;
                         restartErrors.push(`${service}: ${msg}`);
@@ -2318,6 +2319,8 @@ app.get('/validate', rateLimit, (req, res) => {
 
 const DOCKER_SOCKET = process.env.DOCKER_SOCKET || '/var/run/docker.sock';
 const ALLOWED_SERVICES = new Set(['mma', 'replicator']);
+// Seconds Docker waits for a graceful SIGTERM before sending SIGKILL on safe stop/restart.
+const MMA_SAFE_STOP_TIMEOUT_SECS = 30;
 
 /**
  * Make an HTTP request to the Docker daemon socket.
@@ -2376,6 +2379,7 @@ app.get('/runtime/status', async (req, res) => {
 });
 
 // POST /runtime/:service/start|stop|restart — control a service container
+// Body (optional): { t: <seconds> } — graceful stop timeout before SIGKILL (stop/restart only).
 app.post('/runtime/:service/:action', async (req, res) => {
     try {
         const { service, action } = req.params;
@@ -2386,7 +2390,18 @@ app.post('/runtime/:service/:action', async (req, res) => {
         if (!allowedActions.has(action)) {
             return res.status(400).json({ error: `Unknown action "${action}"` });
         }
-        const result = await dockerApi('POST', `/containers/${service}/${action}`);
+
+        // Optional graceful stop timeout (only meaningful for stop/restart).
+        let apiPath = `/containers/${service}/${action}`;
+        if (action === 'stop' || action === 'restart') {
+            const rawT = req.body && req.body.t;
+            const t = Number.isFinite(Number(rawT)) ? Math.min(120, Math.max(1, Math.floor(Number(rawT)))) : null;
+            if (t !== null) {
+                apiPath += `?t=${t}`;
+            }
+        }
+
+        const result = await dockerApi('POST', apiPath);
         // Docker returns 204 on success, 304 if already in that state — both are OK
         if (result.status === 204 || result.status === 304) {
             return res.json({ ok: true, service, action });
@@ -2595,11 +2610,12 @@ app.post('/runtime/apply-restart', async (req, res) => {
 
         const routes = countRoutes(model, excludedPortNums);
 
-        // Restart both services sequentially: MMA first, then Replicator
+        // Restart both services sequentially: MMA first (with safe stop timeout), then Replicator
         const restartErrors = [];
         for (const service of ['mma', 'replicator']) {
             try {
-                const r = await dockerApi('POST', `/containers/${service}/restart`);
+                const stopTimeout = service === 'mma' ? `?t=${MMA_SAFE_STOP_TIMEOUT_SECS}` : '';
+                const r = await dockerApi('POST', `/containers/${service}/restart${stopTimeout}`);
                 if (r.status !== 204 && r.status !== 304) {
                     const msg = (r.body && r.body.message) ? r.body.message : `HTTP ${r.status}`;
                     restartErrors.push(`${service}: ${msg}`);
