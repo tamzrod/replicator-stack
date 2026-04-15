@@ -1775,6 +1775,72 @@ let _currentModel = null;
 // Device status from MMA status blocks: deviceId → { health_code, device_name }
 let _deviceStatus = {};
 
+// ---------------------------------------------------------------------------
+// _patchStatusDots — update only the status dot (and name) DOM nodes that
+// changed between two status snapshots.  No tree rebuild occurs.
+//
+// Called by pollDeviceStatus() instead of renderTree() so that the 5-second
+// polling cycle never triggers a full innerHTML replacement of the tree panel.
+// If nothing changed, the function returns immediately with zero DOM work.
+// ---------------------------------------------------------------------------
+function _patchStatusDots(prevStatus, nextStatus) {
+  const STATUS_CLASSES = ['ds-unknown', 'ds-ok', 'ds-error', 'ds-stale', 'ds-disabled'];
+  const STATUS_LABELS  = ['UNKNOWN',   'OK',    'ERROR',   'STALE',   'DISABLED'];
+  const panel = document.getElementById('tree-panel');
+  if (!panel) return;
+
+  // Build the union of IDs present in either snapshot so we catch
+  // devices that gained or lost status between polls.
+  const allIds = new Set([
+    ...Object.keys(prevStatus || {}),
+    ...Object.keys(nextStatus || {}),
+  ]);
+
+  for (const id of allIds) {
+    const prev = (prevStatus || {})[id];
+    const next = (nextStatus || {})[id];
+    const prevCode = prev ? (Number(prev.health_code) || 0) : 0;
+    const nextCode = next ? (Number(next.health_code) || 0) : 0;
+    const prevName = prev ? (prev.device_name || '') : '';
+    const nextName = next ? (next.device_name || '') : '';
+
+    // Skip this device entirely if neither the health code nor the display
+    // name changed — avoids any DOM query cost for unchanged devices.
+    if (prevCode === nextCode && prevName === nextName) continue;
+
+    // The device row may be absent from the DOM when its group is collapsed.
+    const row = panel.querySelector(`.tree-device[data-device-id="${CSS.escape(id)}"]`);
+    if (!row) continue;
+
+    if (prevCode !== nextCode) {
+      const dot = row.querySelector('.device-status-dot');
+      if (dot) {
+        dot.className = 'device-status-dot ' + (STATUS_CLASSES[nextCode] || 'ds-unknown');
+        dot.title = STATUS_LABELS[nextCode] || 'UNKNOWN';
+      }
+    }
+
+    if (prevName !== nextName) {
+      const nameEl = row.querySelector('.tree-device-name');
+      if (nameEl) {
+        const device = (_currentModel?.devices || []).find(d => d.id === id);
+        const displayName = nextName || (device?.name) || '';
+        // Use DOM APIs instead of innerHTML to avoid any XSS surface.
+        nameEl.textContent = '';
+        if (displayName) {
+          nameEl.appendChild(document.createTextNode(displayName + ' '));
+          const idSpan = document.createElement('span');
+          idSpan.style.cssText = 'color:#9CA3AF;font-size:.72rem';
+          idSpan.textContent = '\u2014 ' + id;
+          nameEl.appendChild(idSpan);
+        } else {
+          nameEl.textContent = id;
+        }
+      }
+    }
+  }
+}
+
 // ── Global State Manager ──────────────────────────────────────────────────────
 
 const _appState = {
@@ -2849,9 +2915,15 @@ document.getElementById('tree-panel').addEventListener('click', async e => {
   if (deviceRow) {
     // Capture any pending device form edits before switching
     _capturePendingDeviceFormSilent();
+    const prevId = _selectedDeviceId;
     _selectedDeviceId = deviceRow.dataset.deviceId;
     _editingReadId = null;
-    renderTree(_currentModel);
+    // Patch the selected highlight in-place — no full tree rebuild needed.
+    if (prevId !== _selectedDeviceId) {
+      const panel = document.getElementById('tree-panel');
+      panel?.querySelector('.tree-device.selected')?.classList.remove('selected');
+      deviceRow.classList.add('selected');
+    }
     renderDeviceWorkspace();
   }
 });
@@ -2908,22 +2980,48 @@ document.getElementById('memory-tree-panel').addEventListener('click', e => {
   const portHeader = e.target.closest('[data-mem-port-id].mem-tree-port-header');
   if (portHeader) {
     const portId = portHeader.dataset.memPortId;
-    if (_collapsedMemPorts.has(portId)) _collapsedMemPorts.delete(portId);
+    const wasCollapsed = _collapsedMemPorts.has(portId);
+    if (wasCollapsed) _collapsedMemPorts.delete(portId);
     else _collapsedMemPorts.add(portId);
+    const nowCollapsed = !wasCollapsed;
     _selectedMemItem = { type: 'port', portId };
-    renderMemoryTree(_currentModel);
+
+    // Patch the toggle arrow in-place.
+    const toggleSpan = portHeader.querySelector('.tree-toggle');
+    if (toggleSpan) toggleSpan.textContent = nowCollapsed ? '▶' : '▼';
+
+    // Show or hide the unit/no-units elements that live inside the same group div.
+    const groupEl = portHeader.closest('.tree-group');
+    if (groupEl) {
+      const unitEls = groupEl.querySelectorAll('.mem-tree-unit, .mem-tree-no-units');
+      if (nowCollapsed) {
+        // Collapse: hide existing unit rows without removing them from the DOM.
+        unitEls.forEach(el => { el.style.display = 'none'; });
+      } else if (unitEls.length > 0) {
+        // Expand: reveal the rows that were just hidden.
+        unitEls.forEach(el => { el.style.display = ''; });
+      } else {
+        // Expand but rows are not yet in DOM (port was collapsed from initial
+        // load) — fall back to full re-render so nothing is missing.
+        renderMemoryTree(_currentModel);
+      }
+    }
+
     document.querySelector(`#memory-ports-list .mem-port-card[data-port-id="${CSS.escape(portId)}"]`)
       ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     return;
   }
 
-  // Unit row: select and scroll to unit card
+  // Unit row: patch selected class in-place and scroll to unit card
   const unitRow = e.target.closest('.mem-tree-unit[data-mem-unit-id]');
   if (unitRow) {
     const unitId = unitRow.dataset.memUnitId;
     const portId = unitRow.dataset.memPortId;
+    // Patch the selected highlight without a full memory tree rebuild.
+    const panel = document.getElementById('memory-tree-panel');
+    panel?.querySelector('.mem-tree-unit.selected')?.classList.remove('selected');
+    unitRow.classList.add('selected');
     _selectedMemItem = { type: 'unit', portId, unitId };
-    renderMemoryTree(_currentModel);
     document.querySelector(`.mem-unit-card[data-unit-id="${CSS.escape(unitId)}"]`)
       ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
@@ -4830,8 +4928,10 @@ async function pollDeviceStatus() {
   try {
     const { ok, data } = await api('GET', '/devices/status');
     if (ok && data && data.status) {
+      const prev = _deviceStatus;
       _deviceStatus = data.status;
-      renderTree(_currentModel);
+      // Patch only the changed status dots — no full tree rebuild.
+      _patchStatusDots(prev, _deviceStatus);
     }
   } finally {
     _statusPollActive = false;
