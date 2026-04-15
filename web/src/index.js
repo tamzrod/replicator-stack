@@ -1,6 +1,7 @@
 const express = require('express');
 const fs = require('fs');
 const http = require('http');
+const net = require('net');
 const path = require('path');
 const { randomUUID } = require('crypto');
 
@@ -2308,6 +2309,125 @@ app.get('/validate', rateLimit, (req, res) => {
         }
 
         res.json(result);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ---------------------------------------------------------------------------
+// Device status reading (Modbus TCP → MMA status blocks)
+// ---------------------------------------------------------------------------
+
+/**
+ * Read holding registers from a Modbus TCP endpoint.
+ * Uses the built-in `net` module — no extra dependencies.
+ * Returns an array of uint16 register values, or null on any error/timeout.
+ *
+ * @param {string} host
+ * @param {number} port
+ * @param {number} unitId   - Modbus unit ID
+ * @param {number} startAddr - First register address (0-based)
+ * @param {number} count     - Number of registers to read
+ * @param {number} [timeoutMs=2000]
+ * @returns {Promise<number[]|null>}
+ */
+function modbusReadHoldingRegisters(host, port, unitId, startAddr, count, timeoutMs) {
+    timeoutMs = timeoutMs || 2000;
+    return new Promise(resolve => {
+        let settled = false;
+        const done = val => { if (!settled) { settled = true; resolve(val); } };
+
+        const socket = net.createConnection({ host, port: Number(port) });
+        const timer = setTimeout(() => { socket.destroy(); done(null); }, timeoutMs);
+
+        // Modbus TCP request (MBAP header + PDU)
+        const req = Buffer.alloc(12);
+        req.writeUInt16BE(1, 0);          // Transaction ID
+        req.writeUInt16BE(0, 2);          // Protocol ID
+        req.writeUInt16BE(6, 4);          // Length (bytes that follow)
+        req.writeUInt8(unitId & 0xFF, 6); // Unit ID
+        req.writeUInt8(3, 7);             // FC 03: Read Holding Registers
+        req.writeUInt16BE(startAddr, 8);
+        req.writeUInt16BE(count, 10);
+
+        const chunks = [];
+        socket.on('connect', () => socket.write(req));
+        socket.on('data', chunk => {
+            chunks.push(chunk);
+            const data = Buffer.concat(chunks);
+            // Wait for at least MBAP header (7 bytes) + FC byte + byte-count byte
+            if (data.length < 9) return;
+            const byteCount = data[8];
+            if (data.length < 9 + byteCount) return;
+            clearTimeout(timer);
+            socket.destroy();
+            // Validate FC and byte count
+            if (data[7] !== 3 || byteCount !== count * 2) { done(null); return; }
+            const regs = [];
+            for (let i = 0; i < count; i++) {
+                regs.push(data.readUInt16BE(9 + i * 2));
+            }
+            done(regs);
+        });
+        socket.on('error', () => { clearTimeout(timer); socket.destroy(); done(null); });
+        socket.on('close', () => { clearTimeout(timer); done(null); });
+    });
+}
+
+// GET /devices/status — read health_code (Slot 0) and device_name (Slots 3–10)
+//   from each device's status block in MMA.
+//   Reads are batched per (endpoint, status_unit_id) to minimise TCP connections.
+//   Returns { ok: true, status: { [deviceId]: { health_code, device_name } } }
+app.get('/devices/status', async (req, res) => {
+    try {
+        const model = readModel();
+        const devices = model.devices || [];
+        const result = {};
+
+        // Group devices by (host, port, status_unit_id) so we can batch-read.
+        const groupMap = new Map();
+        for (const device of devices) {
+            if (device.status_unit_id == null) continue;
+            const ep = device.target_endpoint || `${TARGET_HOST}:502`;
+            const lastColon = ep.lastIndexOf(':');
+            const host = lastColon > 0 ? ep.slice(0, lastColon) : ep;
+            const port = lastColon > 0 ? parseInt(ep.slice(lastColon + 1), 10) : 502;
+            const key = `${host}\x00${port}\x00${device.status_unit_id}`;
+            if (!groupMap.has(key)) {
+                groupMap.set(key, { host, port, unitId: Number(device.status_unit_id), devices: [] });
+            }
+            groupMap.get(key).devices.push(device);
+        }
+
+        await Promise.all([...groupMap.values()].map(async ({ host, port, unitId, devices: grpDevs }) => {
+            const maxSlot = Math.max(...grpDevs.map(d => Number(d.status_slot) || 0));
+            // Read from address 0 through end of last device's Slot 10 (device_name end).
+            const readCount = maxSlot * STATUS_SLOT_SIZE + 11;
+            const regs = await modbusReadHoldingRegisters(host, port, unitId, 0, readCount);
+
+            for (const device of grpDevs) {
+                const base = (Number(device.status_slot) || 0) * STATUS_SLOT_SIZE;
+                let health_code = 0;
+                let device_name = '';
+                if (regs && regs.length > base) {
+                    health_code = regs[base] !== undefined ? regs[base] : 0;
+                    // Slots 3–10: 8 registers = 16 ASCII bytes; only read if registers are present
+                    const nameStart = base + 3;
+                    const nameEnd = Math.min(base + 11, regs.length);
+                    if (nameEnd > nameStart) {
+                        const nameRegs = regs.slice(nameStart, nameEnd);
+                        const nameBytes = Buffer.alloc(nameRegs.length * 2);
+                        for (let i = 0; i < nameRegs.length; i++) {
+                            nameBytes.writeUInt16BE(nameRegs[i] || 0, i * 2);
+                        }
+                        device_name = nameBytes.toString('ascii').replace(/\0.*/, '').trim();
+                    }
+                }
+                result[device.id] = { health_code, device_name };
+            }
+        }));
+
+        res.json({ ok: true, status: result });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
