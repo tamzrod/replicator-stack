@@ -733,6 +733,71 @@
       cursor: pointer;
       accent-color: #145DA0;
     }
+
+    /* ── Live Logs ─────────────────────────────────────────────────────── */
+    .rt-log-card {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.07);
+      overflow: hidden;
+    }
+    .rt-log-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 20px;
+      border-bottom: 1px solid #E5E7EB;
+      background: #F9FAFB;
+    }
+    .rt-log-header h2 {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: #0B3C5D;
+      margin: 0;
+      flex: 1;
+    }
+    .rt-log-service-select {
+      font-size: .8rem;
+      padding: 4px 8px;
+      border: 1px solid #D1D5DB;
+      border-radius: 4px;
+      background: #fff;
+      color: #374151;
+      cursor: pointer;
+    }
+    .rt-log-box {
+      background: #0B1A2E;
+      color: #D1FAE5;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: .78rem;
+      line-height: 1.5;
+      padding: 12px 16px;
+      height: 300px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .rt-log-line { display: block; }
+    .rt-log-line.stderr { color: #FCA5A5; }
+    .rt-log-footer {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      border-top: 1px solid #E5E7EB;
+      background: #F9FAFB;
+      font-size: .75rem;
+      color: #6B7280;
+    }
+    .rt-log-status { flex: 1; font-style: italic; }
+    .btn-log-clear {
+      font-size: .75rem;
+      padding: 4px 10px;
+      background: #6B7280;
+      color: #fff;
+      border-radius: 4px;
+    }
+    .btn-log-clear:hover { background: #4B5563; }
   </style>
 </head>
 <body>
@@ -932,6 +997,22 @@
       <button class="btn-apply-restart" id="btn-rt-apply-restart">⚙ Apply + Restart All</button>
     </div>
     <div class="rt-result" id="rt-result"></div>
+  </div>
+
+  <!-- Live Logs -->
+  <div class="rt-log-card">
+    <div class="rt-log-header">
+      <h2>📋 Live Logs</h2>
+      <select class="rt-log-service-select" id="rt-log-service">
+        <option value="mma">MMA</option>
+        <option value="replicator">Replicator</option>
+      </select>
+      <button class="btn-log-clear" id="btn-log-clear">🗑 Clear</button>
+    </div>
+    <div class="rt-log-box" id="rt-log-box" aria-live="polite" aria-label="Container log output"></div>
+    <div class="rt-log-footer">
+      <span class="rt-log-status" id="rt-log-status">Not connected</span>
+    </div>
   </div>
 
 </div><!-- #runtime-tab-container -->
@@ -2216,14 +2297,18 @@ document.getElementById('tab-bar').addEventListener('click', e => {
 
   if (tab === 'model') {
     appContainer.style.display = '';
+    stopLogStream();
   } else if (tab === 'memory') {
     memContainer.classList.add('active');
+    stopLogStream();
   } else if (tab === 'runtime') {
     rtContainer.classList.add('active');
     loadRuntimeStatus();
+    startRuntimeLogs();
   } else if (tab === 'config-viewer') {
     cvContainer.classList.add('active');
     loadConfigs();
+    stopLogStream();
   }
 });
 
@@ -2354,6 +2439,101 @@ async function runtimeApplyFlow(endpoint) {
 
 document.getElementById('btn-rt-apply').addEventListener('click', () => runtimeApplyFlow('/runtime/apply'));
 document.getElementById('btn-rt-apply-restart').addEventListener('click', () => runtimeApplyFlow('/runtime/apply-restart'));
+
+// ── Live Logs (SSE) ───────────────────────────────────────────────────────────
+
+let _logEventSource = null;
+let _logAutoScroll = true;
+const _logBox = document.getElementById('rt-log-box');
+const _logStatusEl = document.getElementById('rt-log-status');
+const _logServiceSelect = document.getElementById('rt-log-service');
+const LOG_LINE_LIMIT = 2000;
+
+function _setLogStatus(text) {
+  _logStatusEl.textContent = text;
+}
+
+function _appendLogLine(line, isStderr) {
+  const el = document.createElement('span');
+  el.className = 'rt-log-line' + (isStderr ? ' stderr' : '');
+  el.textContent = line + '\n';
+  _logBox.appendChild(el);
+  while (_logBox.children.length > LOG_LINE_LIMIT) {
+    _logBox.removeChild(_logBox.firstChild);
+  }
+  if (_logAutoScroll) {
+    _logBox.scrollTop = _logBox.scrollHeight;
+  }
+}
+
+function stopLogStream() {
+  if (_logEventSource) {
+    _logEventSource.close();
+    _logEventSource = null;
+  }
+  _setLogStatus('Not connected');
+}
+
+function startLogStream(service) {
+  stopLogStream();
+  _setLogStatus('Connecting…');
+
+  const es = new EventSource(`/runtime/logs/${encodeURIComponent(service)}`);
+  _logEventSource = es;
+
+  es.addEventListener('log', (e) => {
+    let payload;
+    try { payload = JSON.parse(e.data); } catch { return; }
+    _appendLogLine(payload.line || '', payload.t === 2);
+  });
+
+  es.addEventListener('log-error', (e) => {
+    let payload;
+    try { payload = JSON.parse(e.data); } catch { payload = {}; }
+    _appendLogLine(`[error] ${payload.message || e.data}`, true);
+    _setLogStatus(`Error — reconnecting…`);
+  });
+
+  es.addEventListener('stream-end', () => {
+    _setLogStatus(`Stream ended — reconnecting…`);
+  });
+
+  es.onopen = () => {
+    _setLogStatus(`Streaming: ${service}`);
+  };
+
+  es.onerror = () => {
+    if (es.readyState === EventSource.CONNECTING) {
+      _setLogStatus(`Reconnecting…`);
+    } else if (es.readyState === EventSource.CLOSED) {
+      _setLogStatus(`Disconnected`);
+    }
+  };
+}
+
+function startRuntimeLogs() {
+  if (!_logEventSource) {
+    startLogStream(_logServiceSelect.value);
+  }
+}
+
+// Pause auto-scroll when user scrolls up; resume when at bottom
+_logBox.addEventListener('scroll', () => {
+  _logAutoScroll = _logBox.scrollHeight - _logBox.scrollTop - _logBox.clientHeight < 30;
+});
+
+// Service selector: switch streams and clear the box
+_logServiceSelect.addEventListener('change', () => {
+  _logBox.innerHTML = '';
+  _logAutoScroll = true;
+  startLogStream(_logServiceSelect.value);
+});
+
+// Clear button
+document.getElementById('btn-log-clear').addEventListener('click', () => {
+  _logBox.innerHTML = '';
+  _logAutoScroll = true;
+});
 
 // ── Advanced Configuration ────────────────────────────────────────────────────
 

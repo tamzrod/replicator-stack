@@ -1638,6 +1638,107 @@ app.post('/runtime/:service/:action', async (req, res) => {
     }
 });
 
+// GET /runtime/logs/:service — stream Docker container logs via Server-Sent Events
+app.get('/runtime/logs/:service', (req, res) => {
+    const { service } = req.params;
+    if (!ALLOWED_SERVICES.has(service)) {
+        return res.status(400).json({ error: `Unknown service "${service}"` });
+    }
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+
+    const tail = 100;
+    const apiPath = `/containers/${encodeURIComponent(service)}/logs?follow=1&stdout=1&stderr=1&timestamps=1&tail=${tail}`;
+
+    const opts = {
+        socketPath: DOCKER_SOCKET,
+        method: 'GET',
+        path: apiPath,
+    };
+
+    let dockerReq = null;
+    let buffer = Buffer.alloc(0);
+    let closed = false;
+
+    const sendEvent = (eventName, data) => {
+        if (!closed) {
+            res.write(`event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`);
+        }
+    };
+
+    const cleanup = () => {
+        closed = true;
+        if (dockerReq) {
+            try { dockerReq.destroy(); } catch (_) {}
+            dockerReq = null;
+        }
+    };
+
+    req.on('close', cleanup);
+
+    try {
+        dockerReq = http.request(opts, (dockerRes) => {
+            if (dockerRes.statusCode !== 200) {
+                sendEvent('log-error', { message: `Docker returned HTTP ${dockerRes.statusCode} for ${service}` });
+                res.end();
+                return;
+            }
+
+            dockerRes.on('data', (chunk) => {
+                if (closed) return;
+                buffer = Buffer.concat([buffer, chunk]);
+                // Parse Docker multiplexed log stream frames.
+                // Each frame has an 8-byte header: [stream(1), 0, 0, 0, size_big_endian(4)]
+                // stream: 1 = stdout, 2 = stderr
+                while (buffer.length >= 8) {
+                    const streamType = buffer[0]; // 1=stdout, 2=stderr
+                    const frameSize = buffer.readUInt32BE(4);
+                    if (buffer.length < 8 + frameSize) break;
+                    const payload = buffer.slice(8, 8 + frameSize).toString('utf8');
+                    buffer = buffer.slice(8 + frameSize);
+                    const lines = payload.split('\n');
+                    for (const line of lines) {
+                        if (line) {
+                            sendEvent('log', { t: streamType, line });
+                        }
+                    }
+                }
+            });
+
+            dockerRes.on('end', () => {
+                sendEvent('stream-end', {});
+                res.end();
+            });
+
+            dockerRes.on('error', (err) => {
+                sendEvent('log-error', { message: err.message });
+                res.end();
+            });
+        });
+
+        dockerReq.on('error', (err) => {
+            if (!res.headersSent) {
+                res.status(500).json({ error: err.message });
+            } else {
+                sendEvent('log-error', { message: err.message });
+                res.end();
+            }
+        });
+
+        dockerReq.end();
+    } catch (err) {
+        if (!res.headersSent) {
+            res.status(500).json({ error: err.message });
+        } else {
+            sendEvent('log-error', { message: err.message });
+            res.end();
+        }
+    }
+});
+
 /**
  * Count routes (reads) for all devices whose target port is not in excludedPortNums.
  * @param {object} model
