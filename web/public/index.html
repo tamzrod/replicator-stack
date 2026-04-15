@@ -1878,7 +1878,7 @@ async function compile() {
       await loadModel();
       return;
     }
-    const resolveExcluded = (data.details && data.details.excluded_ports) || excludedPorts;
+    const resolveExcluded = data.details?.excluded_ports ?? excludedPorts;
     const resolveBody = { action, excluded_ports: resolveExcluded, restart: false };
     const { ok: resolveOk, data: resolveData } = await api('POST', '/compile/resolve', resolveBody);
     if (resolveData.status === 'resolved' && resolveData.mode !== 'cancel') {
@@ -1985,7 +1985,7 @@ async function globalSave() {
         _showGlobalSaveStatus('✗ Save cancelled — no changes applied', true);
         return;
       }
-      const resolveExcluded = (data.details && data.details.excluded_ports) || excludedPorts;
+      const resolveExcluded = data.details?.excluded_ports ?? excludedPorts;
       const resolveBody = { action, excluded_ports: resolveExcluded, restart: true };
       const { data: resolveData } = await api('POST', '/compile/resolve', resolveBody);
       if (resolveData.status === 'resolved' && resolveData.mode !== 'cancel') {
@@ -2754,7 +2754,7 @@ async function runtimeApplyFlow(endpoint) {
       await loadModel();
       return;
     }
-    const resolveExcluded = (data.details && data.details.excluded_ports) || excludedPorts;
+    const resolveExcluded = data.details?.excluded_ports ?? excludedPorts;
     const shouldRestart = endpoint === '/runtime/apply-restart'
       || (data.details && data.details.restart === true);
     const resolveBody = { action, excluded_ports: resolveExcluded, restart: shouldRestart };

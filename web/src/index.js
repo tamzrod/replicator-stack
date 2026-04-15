@@ -1461,11 +1461,13 @@ function autoFixDuplicateUnitIds(model) {
  * @returns {string}
  */
 function buildErrorSummary(mmaErrors, replicatorErrors) {
-    const total = (mmaErrors || []).length + (replicatorErrors || []).length;
+    const mma = mmaErrors || [];
+    const rep = replicatorErrors || [];
     const parts = [];
-    if ((mmaErrors || []).length > 0) parts.push(`MMA: ${mmaErrors[0]}`);
-    if ((replicatorErrors || []).length > 0) parts.push(`Replicator: ${replicatorErrors[0]}`);
-    const extra = total - parts.length;
+    if (mma.length > 0) parts.push(`MMA: ${mma[0]}`);
+    if (rep.length > 0) parts.push(`Replicator: ${rep[0]}`);
+    // extra = total errors minus the one from each array already shown in parts
+    const extra = (mma.length + rep.length) - parts.length;
     if (extra > 0) parts.push(`…and ${extra} more issue(s)`);
     return parts.join(' | ') || 'Config validation failed';
 }
