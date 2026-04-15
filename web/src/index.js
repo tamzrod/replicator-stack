@@ -1639,6 +1639,8 @@ app.post('/runtime/:service/:action', async (req, res) => {
 });
 
 // GET /runtime/logs/:service — stream Docker container logs via Server-Sent Events
+const DOCKER_LOG_TAIL_LINES = 100;
+
 app.get('/runtime/logs/:service', (req, res) => {
     const { service } = req.params;
     if (!ALLOWED_SERVICES.has(service)) {
@@ -1650,8 +1652,7 @@ app.get('/runtime/logs/:service', (req, res) => {
     res.setHeader('Connection', 'keep-alive');
     res.flushHeaders();
 
-    const tail = 100;
-    const apiPath = `/containers/${encodeURIComponent(service)}/logs?follow=1&stdout=1&stderr=1&timestamps=1&tail=${tail}`;
+    const apiPath = `/containers/${encodeURIComponent(service)}/logs?follow=1&stdout=1&stderr=1&timestamps=1&tail=${DOCKER_LOG_TAIL_LINES}`;
 
     const opts = {
         socketPath: DOCKER_SOCKET,
@@ -1665,7 +1666,11 @@ app.get('/runtime/logs/:service', (req, res) => {
 
     const sendEvent = (eventName, data) => {
         if (!closed) {
-            res.write(`event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`);
+            try {
+                res.write(`event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`);
+            } catch (_) {
+                closed = true;
+            }
         }
     };
 
@@ -1702,7 +1707,7 @@ app.get('/runtime/logs/:service', (req, res) => {
                     const lines = payload.split('\n');
                     for (const line of lines) {
                         if (line) {
-                            sendEvent('log', { t: streamType, line });
+                            sendEvent('log', { type: streamType, line });
                         }
                     }
                 }

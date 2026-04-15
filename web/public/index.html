@@ -2448,6 +2448,7 @@ const _logBox = document.getElementById('rt-log-box');
 const _logStatusEl = document.getElementById('rt-log-status');
 const _logServiceSelect = document.getElementById('rt-log-service');
 const LOG_LINE_LIMIT = 2000;
+const AUTO_SCROLL_THRESHOLD_PX = 30;
 
 function _setLogStatus(text) {
   _logStatusEl.textContent = text;
@@ -2484,7 +2485,7 @@ function startLogStream(service) {
   es.addEventListener('log', (e) => {
     let payload;
     try { payload = JSON.parse(e.data); } catch { return; }
-    _appendLogLine(payload.line || '', payload.t === 2);
+    _appendLogLine(payload.line || '', payload.type === 2);
   });
 
   es.addEventListener('log-error', (e) => {
@@ -2519,7 +2520,7 @@ function startRuntimeLogs() {
 
 // Pause auto-scroll when user scrolls up; resume when at bottom
 _logBox.addEventListener('scroll', () => {
-  _logAutoScroll = _logBox.scrollHeight - _logBox.scrollTop - _logBox.clientHeight < 30;
+  _logAutoScroll = _logBox.scrollHeight - _logBox.scrollTop - _logBox.clientHeight < AUTO_SCROLL_THRESHOLD_PX;
 });
 
 // Service selector: switch streams and clear the box
