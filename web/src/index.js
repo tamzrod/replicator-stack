@@ -853,6 +853,11 @@ app.post('/device/:id/duplicate', (req, res) => {
         let newSourceUnitId = (Number(orig.source_unit_id) || 0) + 1;
         while (usedSourceUnitIds.has(newSourceUnitId)) newSourceUnitId++;
 
+        // Find the next free target_unit_id / unitId (increment from original until no collision).
+        const usedUnitIds = new Set((model.devices || []).map(d => d.unitId));
+        let newUnitId = (Number(orig.unitId) || 0) + 1;
+        while (usedUnitIds.has(newUnitId)) newUnitId++;
+
         // Find the next free status_slot within the same status_unit_id group.
         const statusUnitId = orig.status_unit_id ?? null;
         const usedSlots = new Set(
@@ -874,7 +879,7 @@ app.post('/device/:id/duplicate', (req, res) => {
             source_endpoint: orig.source_endpoint,
             source_unit_id: newSourceUnitId,
             target_endpoint: orig.target_endpoint,
-            unitId: orig.unitId,
+            unitId: newUnitId,
             status_slot: newStatusSlot,
             status_unit_id: statusUnitId,
             reads: newReads,
