@@ -17,13 +17,48 @@
     header {
       background: #0B3C5D;
       color: #E2E8F0;
-      padding: 16px 24px;
+      padding: 12px 24px;
       display: flex;
       align-items: center;
-      gap: 12px;
+      justify-content: space-between;
     }
+    .header-brand { display: flex; align-items: center; gap: 12px; }
+    .header-save-area { display: flex; align-items: center; gap: 12px; }
     header h1 { font-size: 1.25rem; font-weight: 600; }
     header span { font-size: 0.8rem; color: #93C5D8; }
+
+    .btn-global-save {
+      background: transparent;
+      border: 1.5px solid #4B5563;
+      color: #6B7280;
+      font-size: 0.875rem;
+      font-weight: 600;
+      padding: 7px 18px;
+      border-radius: 6px;
+      cursor: default;
+      transition: all .15s;
+      white-space: nowrap;
+    }
+    .btn-global-save:disabled { opacity: 1; cursor: default; }
+    .btn-global-save.save-dirty {
+      background: #1D4ED8;
+      border-color: #3B82F6;
+      color: #fff;
+      cursor: pointer;
+      box-shadow: 0 0 0 3px rgba(59,130,246,.25);
+    }
+    .btn-global-save.save-dirty:hover { background: #2563EB; }
+    .btn-global-save.save-busy { background: #374151; border-color: #6B7280; color: #D1D5DB; cursor: wait; }
+
+    .global-save-status {
+      font-size: .78rem;
+      font-weight: 500;
+      max-width: 300px;
+      text-align: right;
+      line-height: 1.3;
+    }
+    .global-save-status.status-ok { color: #86EFAC; }
+    .global-save-status.status-err { color: #FCA5A5; }
 
     main {
       padding: 24px 24px;
@@ -803,8 +838,16 @@
 <body>
 
 <header>
-  <h1>⚡ MCS Web</h1>
-  <span>Modbus Consolidator System</span>
+  <div class="header-brand">
+    <h1>⚡ MCS Web</h1>
+    <span>Modbus Consolidator System</span>
+  </div>
+  <div class="header-save-area">
+    <span id="global-save-status" class="global-save-status"></span>
+    <button id="btn-global-save" class="btn-global-save" disabled
+      aria-label="Save, compile, and apply all staged changes to runtime"
+      title="Save, compile, and apply all staged changes to runtime">💾 Save</button>
+  </div>
 </header>
 
 <div id="tab-bar">
@@ -854,13 +897,6 @@
     </div>
   </div>
 
-  <!-- ── Compile ────────────────────────────────────────────────────── -->
-  <div class="card compile-area">
-    <h2>Compile Config</h2>
-    <p>Generate Replicator and MMA config files from the model. No services are restarted.</p>
-    <button class="btn-compile" id="btn-compile">⚙ Compile</button>
-    <div id="compile-result"></div>
-  </div>
 
 </main>
 
@@ -1126,6 +1162,48 @@ async function refreshConfigViewerIfActive() {
 
 let _currentModel = null;
 
+// ── Global State Manager ──────────────────────────────────────────────────────
+
+const _appState = {
+  dirty: false,
+  pendingDeviceId: null,    // ID of device whose form fields are currently dirty
+  stagedDeviceForms: {},    // { deviceId: payload } — captured when switching away
+};
+
+let _saveStatusTimer = null;
+const SAVE_STATUS_DISPLAY_MS = 6000;
+
+function setDirty(isDirty) {
+  _appState.dirty = isDirty;
+  updateGlobalSaveBtn();
+}
+
+function updateGlobalSaveBtn() {
+  const btn = document.getElementById('btn-global-save');
+  if (!btn) return;
+  if (_appState.dirty) {
+    btn.disabled = false;
+    btn.className = 'btn-global-save save-dirty';
+    btn.setAttribute('aria-label', 'Save, compile, and apply staged changes to runtime (unsaved changes pending)');
+  } else {
+    btn.disabled = true;
+    btn.className = 'btn-global-save';
+    btn.setAttribute('aria-label', 'Save, compile, and apply staged changes to runtime (no pending changes)');
+  }
+}
+
+function _showGlobalSaveStatus(msg, isError) {
+  const el = document.getElementById('global-save-status');
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'global-save-status ' + (isError ? 'status-err' : 'status-ok');
+  clearTimeout(_saveStatusTimer);
+  _saveStatusTimer = setTimeout(() => {
+    el.textContent = '';
+    el.className = 'global-save-status';
+  }, SAVE_STATUS_DISPLAY_MS);
+}
+
 function findGroupById(model, groupId) {
   const groups = (model && model.groups) || [];
   return groups.find(g => g.id === groupId) || null;
@@ -1322,65 +1400,25 @@ function renderDeviceWorkspace() {
     </div>
   </div>`;
 
-  // ── Save Configuration (unified) ───────────────────────────────────
-  html += `<div class="card" style="padding:16px 20px">
-    <div id="ws-config-banner" class="banner" style="margin-bottom:10px"></div>
-    <button type="submit" form="ws-config-form" class="btn-primary" style="font-size:.9rem;padding:9px 20px">💾 Save Configuration</button>
-  </div>`;
-
   el.innerHTML = html;
 
   // ── Event Listeners ────────────────────────────────────────────────
 
   document.getElementById('ws-btn-del-device').addEventListener('click', () => deleteDevice(device.id));
 
-  // Unified save: source config + target config + MMA endpoint
-  document.getElementById('ws-config-form').addEventListener('submit', async e => {
-    e.preventDefault();
-    const banner = document.getElementById('ws-config-banner');
-    banner.className = 'banner';
-
-    const sourceUnitIdVal = document.getElementById('ws-ed-src-unit').value.trim();
-    if (!sourceUnitIdVal) {
-      banner.textContent = '✗ Source Unit ID is required';
-      banner.className = 'banner show err';
-      document.getElementById('ws-ed-src-unit').focus();
-      return;
-    }
-
-    const payload = {
-      deviceId: device.id,
-      sourceConfig: {
-        name:            document.getElementById('ws-ed-name').value.trim(),
-        source_endpoint: document.getElementById('ws-ed-src-endpoint').value.trim(),
-        source_unit_id:  Number(sourceUnitIdVal),
-        groupId:         device.groupId || null,
-        status_slot:     Number(document.getElementById('ws-ed-status-slot').value) || 0,
-      },
-      targetConfig: {
-        target_endpoint: document.getElementById('ws-tgt-endpoint').value.trim(),
-        unitId:          Number(document.getElementById('ws-tgt-unit').value),
-        status_unit_id:  document.getElementById('ws-tgt-status-unit').value !== ''
-                           ? Number(document.getElementById('ws-tgt-status-unit').value)
-                           : null,
-      },
-      mmaEndpointConfig: (() => {
-        const overrideOn = document.getElementById('adv-override-toggle').checked;
-        if (!overrideOn) return null;
-        const host = document.getElementById('adv-mma-host').value.trim();
-        const port = document.getElementById('adv-mma-port').value.trim();
-        return host && port ? `${host}:${port}` : null;
-      })(),
-    };
-
-    const { ok, data } = await api('POST', '/config/save', payload);
-    if (ok) {
-      await loadModel();
-    } else {
-      banner.textContent = `✗ ${data.error || 'Unknown error'}`;
-      banner.className = 'banner show err';
-    }
+  // ── Dirty tracking: mark dirty when any device form field changes ──
+  const _trackDirty = () => {
+    _appState.pendingDeviceId = device.id;
+    setDirty(true);
+  };
+  ['ws-ed-name','ws-ed-src-endpoint','ws-ed-src-unit','ws-ed-status-slot',
+   'ws-tgt-endpoint','ws-tgt-unit','ws-tgt-status-unit'].forEach(id => {
+    document.getElementById(id)?.addEventListener('input', _trackDirty);
   });
+  // Also track advanced MMA endpoint toggle / inputs
+  document.getElementById('adv-override-toggle')?.addEventListener('change', _trackDirty);
+  document.getElementById('adv-mma-host')?.addEventListener('input', _trackDirty);
+  document.getElementById('adv-mma-port')?.addEventListener('input', _trackDirty);
 
   // Show/hide add-read panel
   document.getElementById('ws-btn-show-add-read').addEventListener('click', () => {
@@ -1421,6 +1459,7 @@ function renderDeviceWorkspace() {
     const { ok, data } = await api('POST', '/read', payload);
     if (ok) {
       _pendingReadId = null;
+      setDirty(true);
       await loadModel();
     } else {
       banner.textContent = `✗ ${data.error || 'Unknown error'}`;
@@ -1462,6 +1501,7 @@ function renderDeviceWorkspace() {
       const { ok, data } = await api('PUT', `/read/${encodeURIComponent(device.id)}/${encodeURIComponent(readId)}`, payload);
       if (ok) {
         _editingReadId = null;
+        setDirty(true);
         await loadModel();
       } else {
         banner.textContent = `✗ ${data.error || 'Unknown error'}`;
@@ -1573,6 +1613,52 @@ async function loadModel() {
 
 // ── Add Device (dialog) ──────────────────────────────────────────────────────
 
+// Capture the current device form values and store them in stagedDeviceForms
+// before the workspace is re-rendered for a different device.
+function _capturePendingDeviceFormSilent() {
+  const deviceId = _appState.pendingDeviceId;
+  if (!deviceId) return;
+  const device = (_currentModel?.devices || []).find(d => d.id === deviceId);
+  if (!device) { _appState.pendingDeviceId = null; return; }
+
+  const nameEl      = document.getElementById('ws-ed-name');
+  const srcEpEl     = document.getElementById('ws-ed-src-endpoint');
+  const srcUnitEl   = document.getElementById('ws-ed-src-unit');
+  const slotEl      = document.getElementById('ws-ed-status-slot');
+  const tgtEpEl     = document.getElementById('ws-tgt-endpoint');
+  const tgtUnitEl   = document.getElementById('ws-tgt-unit');
+  const tgtStEl     = document.getElementById('ws-tgt-status-unit');
+  const advToggle   = document.getElementById('adv-override-toggle');
+  const advHost     = document.getElementById('adv-mma-host');
+  const advPort     = document.getElementById('adv-mma-port');
+
+  if (!nameEl || !srcUnitEl) { _appState.pendingDeviceId = null; return; }
+
+  const srcUnitVal = srcUnitEl.value.trim();
+  _appState.stagedDeviceForms[deviceId] = {
+    deviceId: device.id,
+    sourceConfig: {
+      name:            nameEl.value.trim(),
+      source_endpoint: srcEpEl ? srcEpEl.value.trim() : (device.source_endpoint || ''),
+      source_unit_id:  srcUnitVal ? Number(srcUnitVal) : device.source_unit_id,
+      groupId:         device.groupId || null,
+      status_slot:     slotEl ? (Number(slotEl.value) || 0) : (device.status_slot || 0),
+    },
+    targetConfig: {
+      target_endpoint: tgtEpEl ? tgtEpEl.value.trim() : (device.target_endpoint || ''),
+      unitId:          tgtUnitEl ? Number(tgtUnitEl.value) : device.unitId,
+      status_unit_id:  tgtStEl && tgtStEl.value !== '' ? Number(tgtStEl.value) : null,
+    },
+    mmaEndpointConfig: (() => {
+      if (!advToggle || !advToggle.checked) return null;
+      const h = advHost ? advHost.value.trim() : '';
+      const p = advPort ? advPort.value.trim() : '';
+      return h && p ? `${h}:${p}` : null;
+    })(),
+  };
+  _appState.pendingDeviceId = null;
+}
+
 // Returns the next available MMA unit ID for the given target endpoint.
 // Finds the maximum unitId among devices sharing that endpoint and adds 1.
 // Falls back to 1 when no devices use that endpoint yet.
@@ -1629,6 +1715,7 @@ document.getElementById('add-device-form').addEventListener('submit', async e =>
   if (ok) {
     document.getElementById('add-device-dialog').close();
     _selectedDeviceId = data.id;
+    setDirty(true);
     await loadModel();
   } else {
     banner.textContent = `✗ ${data.error || 'Unknown error'}`;
@@ -1713,6 +1800,101 @@ async function compile() {
   await loadModel();
 }
 
+// ── Global Save Pipeline ──────────────────────────────────────────────────────
+
+async function globalSave() {
+  const btn = document.getElementById('btn-global-save');
+  const origClass = btn.className;
+  btn.disabled = true;
+  btn.className = 'btn-global-save save-busy';
+  btn.textContent = '⏳ Saving…';
+  btn.setAttribute('aria-busy', 'true');
+
+  try {
+    // Step 1: Capture any in-progress device form edits
+    _capturePendingDeviceFormSilent();
+
+    // Step 2: POST all staged device forms to /config/save
+    const stagedEntries = Object.entries(_appState.stagedDeviceForms);
+    for (const [deviceId, payload] of stagedEntries) {
+      const { ok, data } = await api('POST', '/config/save', payload);
+      if (!ok) {
+        _showGlobalSaveStatus(`✗ Failed to save device ${deviceId}: ${data.error || 'Unknown error'}`, true);
+        return;
+      }
+    }
+    if (stagedEntries.length > 0) {
+      _appState.stagedDeviceForms = {};
+      _appendMmaLog('[Save] Config saved');
+    }
+
+    // Step 3: Pre-check for MMA ports referenced by devices that don't exist yet
+    const { ok: precheckOk, data: precheckData } = await api('GET', '/compile/precheck');
+    if (!precheckOk) {
+      _showGlobalSaveStatus(`✗ Pre-check failed: ${precheckData.error || 'Unknown error'}`, true);
+      return;
+    }
+
+    const missingPorts = precheckData.missingPorts || [];
+    const excludedPorts = [];
+    for (const port of missingPorts) {
+      const confirmed = confirm(`MMA port ${port} does not exist. Do you want to create it?`);
+      if (confirmed) {
+        const { ok, data } = await api('POST', '/memory/port', { port: { port } });
+        if (!ok) {
+          _showGlobalSaveStatus(`✗ Failed to create port ${port}: ${data.error || 'Unknown error'}`, true);
+          return;
+        }
+      } else {
+        excludedPorts.push(port);
+      }
+    }
+
+    // Step 4: Compile + Apply + Restart All
+    _appendMmaLog('[Save] Compile executing…');
+    const body = excludedPorts.length > 0 ? { excluded_ports: excludedPorts } : undefined;
+    const { ok, data } = await api('POST', '/runtime/apply-restart', body);
+
+    if (ok) {
+      const blocksMsg = data.blocksCreated > 0 ? ` (${data.blocksCreated} block(s) created)` : '';
+      const excludedMsg = excludedPorts.length > 0
+        ? ` — ${excludedPorts.length} port(s) skipped (${excludedPorts.join(', ')})`
+        : '';
+      const resLog = data.resolution_log || [];
+      if (resLog.length > 0) {
+        _appendMmaLog(`[Save] ${resLog.length} identity conflict(s) auto-resolved`);
+      }
+      _appendMmaLog(`[Save] Compile executed — ${data.routes} route(s)${blocksMsg}`);
+      _appendMmaLog(`[Save] Runtime updated — services restarted${excludedMsg}`);
+      _showGlobalSaveStatus(`✓ Saved — ${data.routes} route(s)${blocksMsg}${excludedMsg}`, false);
+      setDirty(false);
+      await loadModel();
+      await refreshConfigViewerIfActive();
+      setTimeout(loadRuntimeStatus, 1500);
+    } else if (data.mma_errors || data.replicator_errors) {
+      const mmaDetail = (data.mma_errors || []).join('; ');
+      const repDetail = (data.replicator_errors || []).join('; ');
+      const detail = [mmaDetail && `MMA: ${mmaDetail}`, repDetail && `Replicator: ${repDetail}`].filter(Boolean).join(' | ');
+      _showGlobalSaveStatus(`✗ Config violation: ${detail}`, true);
+    } else if (data.restart_errors) {
+      const errMsg = (data.restart_errors || []).join('; ');
+      _appendMmaLog(`[Save] Configs applied but restart failed: ${errMsg}`);
+      _showGlobalSaveStatus('⚠ Configs applied but restart failed — see runtime log', false);
+      setDirty(false);
+      await loadModel();
+      await refreshConfigViewerIfActive();
+    } else {
+      _showGlobalSaveStatus(`✗ ${data.error || 'Save failed'}`, true);
+    }
+  } catch (err) {
+    _showGlobalSaveStatus(`✗ Unexpected error: ${err.message}`, true);
+  } finally {
+    btn.textContent = '💾 Save';
+    btn.removeAttribute('aria-busy');
+    updateGlobalSaveBtn();
+  }
+}
+
 // ── Device Delete ────────────────────────────────────────────────────────────
 
 async function deleteDevice(id) {
@@ -1723,6 +1905,7 @@ async function deleteDevice(id) {
   const { ok, data } = await api('DELETE', `/device/${encodeURIComponent(id)}`);
   if (ok) {
     if (_selectedDeviceId === id) _selectedDeviceId = null;
+    setDirty(true);
     await loadModel();
   } else {
     alert(`Error: ${data.error || 'Unknown error'}`);
@@ -1832,6 +2015,8 @@ document.getElementById('tree-panel').addEventListener('click', async e => {
   // Select device → drive workspace
   const deviceRow = e.target.closest('.tree-device[data-device-id]');
   if (deviceRow) {
+    // Capture any pending device form edits before switching
+    _capturePendingDeviceFormSilent();
     _selectedDeviceId = deviceRow.dataset.deviceId;
     _editingReadId = null;
     renderTree(_currentModel);
@@ -1846,6 +2031,7 @@ async function deleteGroup(groupId) {
   if (!confirm(`Remove group "${name}"? Devices in this group will become Ungrouped.`)) return;
   const { ok, data } = await api('DELETE', `/group/${encodeURIComponent(groupId)}`);
   if (!ok) { alert(`Error: ${data.error || 'Unknown error'}`); return; }
+  setDirty(true);
   await loadModel();
 }
 
@@ -1888,6 +2074,7 @@ document.getElementById('group-form').addEventListener('submit', async e => {
 
   if (result.ok) {
     document.getElementById('group-dialog').close();
+    setDirty(true);
     await loadModel();
   } else {
     banner.textContent = `✗ ${result.data.error || 'Unknown error'}`;
@@ -1908,6 +2095,7 @@ async function deleteRead(deviceId, readId) {
   if (!confirm(`Delete read "${readId}" from device "${devLabel}"?`)) return;
   const { ok, data } = await api('DELETE', `/read/${encodeURIComponent(deviceId)}/${encodeURIComponent(readId)}`);
   if (ok) {
+    setDirty(true);
     await loadModel();
   } else {
     alert(`Error: ${data.error || 'Unknown error'}`);
@@ -1944,6 +2132,7 @@ async function importReadsCsv(deviceId, file, banner) {
       : '';
     banner.textContent = `✓ Imported ${data.imported} read(s)${warn}`;
     banner.className = 'banner show ok';
+    setDirty(true);
     await loadModel();
   } else {
     banner.textContent = `✗ ${(data && data.error) || 'Import failed'}`;
@@ -2010,6 +2199,7 @@ function renderMemoryTab(data) {
       }
       const { ok, data } = await api('PUT', `/memory/port/${encodeURIComponent(portId)}`, { port: { port: portNum } });
       if (!ok) { alert(`Error: ${data.error || 'Unknown error'}`); return; }
+      setDirty(true);
       await loadModel();
     });
   });
@@ -2024,6 +2214,7 @@ function renderMemoryTab(data) {
       const { ok, data } = await api('DELETE', `/memory/port/${encodeURIComponent(portId)}`);
       if (!ok) { alert(`Error: ${data.error || 'Unknown error'}`); return; }
       _editingBlockId = null;
+      setDirty(true);
       await loadModel();
     });
   });
@@ -2040,6 +2231,7 @@ document.getElementById('memory-port-form').addEventListener('submit', async e =
     banner.textContent = `✓ Memory port ${portNum} added.`;
     banner.className = 'banner show ok';
     document.getElementById('memory-port-form').reset();
+    setDirty(true);
     await loadModel();
   } else {
     banner.textContent = `✗ ${data.error || 'Unknown error'}`;
@@ -2467,6 +2659,20 @@ function _appendLogLine(line, isStderr) {
   }
 }
 
+function _appendMmaLog(msg) {
+  const el = document.createElement('span');
+  el.className = 'rt-log-line';
+  el.style.color = '#60A5FA';
+  el.textContent = msg + '\n';
+  _logBox.appendChild(el);
+  while (_logBox.children.length > LOG_LINE_LIMIT) {
+    _logBox.removeChild(_logBox.firstChild);
+  }
+  if (_logAutoScroll) {
+    _logBox.scrollTop = _logBox.scrollHeight;
+  }
+}
+
 function stopLogStream() {
   if (_logEventSource) {
     _logEventSource.close();
@@ -2562,7 +2768,7 @@ document.getElementById('adv-override-toggle').addEventListener('change', functi
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 document.getElementById('btn-refresh').addEventListener('click', loadModel);
-document.getElementById('btn-compile').addEventListener('click', compile);
+document.getElementById('btn-global-save').addEventListener('click', globalSave);
 loadModel();
 </script>
 </body>
