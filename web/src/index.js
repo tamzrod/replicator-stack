@@ -1454,6 +1454,116 @@ app.post('/memory/port/:portId/units/populate', (req, res) => {
     }
 });
 
+// ---------------------------------------------------------------------------
+// Memory Reconciliation — diagnostic + corrective tool (no runtime impact)
+// ---------------------------------------------------------------------------
+
+// GET /memory/reconcile — compare replicator device configs vs memory registry
+// Returns { missing, orphaned, valid } lists.  Read-only; never mutates model.
+app.get('/memory/reconcile', (req, res) => {
+    try {
+        const model = readModel();
+        const devices = model.devices || [];
+        const ports = (model.memory && model.memory.ports) || [];
+
+        // Build lookup: portNum → { portId, unitSet: Map<unit_id → unit> }
+        const portMap = new Map();
+        for (const port of ports) {
+            const portNum = Number(port.port);
+            const unitMap = new Map();
+            for (const unit of (port.units || [])) {
+                unitMap.set(Number(unit.unit_id), unit);
+            }
+            portMap.set(portNum, { portId: port.id, units: unitMap });
+        }
+
+        const missing = [];
+        const valid = [];
+        // Track units that are accounted for by a device
+        const accountedUnits = new Set(); // key: `${portId}:${unit.id}`
+
+        for (const device of devices) {
+            const portNum = endpointPort(device.target_endpoint);
+            const unitId = Number(device.unitId);
+            if (portNum == null || !Number.isFinite(unitId) || unitId < 0) continue;
+
+            const portEntry = portMap.get(portNum);
+            const unit = portEntry && portEntry.units.get(unitId);
+
+            if (!unit) {
+                missing.push({
+                    device: {
+                        id: device.id,
+                        name: device.name,
+                        unitId: device.unitId,
+                        target_endpoint: device.target_endpoint,
+                        status_slot: device.status_slot,
+                        status_unit_id: device.status_unit_id,
+                    },
+                    portNum,
+                    portId: portEntry ? portEntry.portId : null,
+                });
+            } else {
+                accountedUnits.add(`${portEntry.portId}:${unit.id}`);
+                valid.push({
+                    device: {
+                        id: device.id,
+                        name: device.name,
+                        unitId: device.unitId,
+                        target_endpoint: device.target_endpoint,
+                        status_slot: device.status_slot,
+                        status_unit_id: device.status_unit_id,
+                    },
+                    unit: { id: unit.id, unit_id: unit.unit_id, areas: unit.areas || [] },
+                    portId: portEntry.portId,
+                    portNum,
+                });
+            }
+        }
+
+        // Collect orphaned: units not matched by any device
+        const orphaned = [];
+        for (const port of ports) {
+            const portNum = Number(port.port);
+            for (const unit of (port.units || [])) {
+                if (!accountedUnits.has(`${port.id}:${unit.id}`)) {
+                    orphaned.push({
+                        unit: { id: unit.id, unit_id: unit.unit_id, areas: unit.areas || [] },
+                        portId: port.id,
+                        portNum,
+                    });
+                }
+            }
+        }
+
+        res.json({ missing, orphaned, valid });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /memory/reconcile/create — create missing memory allocation for a device
+// Body: { device_id }
+app.post('/memory/reconcile/create', (req, res) => {
+    try {
+        const { device_id } = req.body;
+        if (!device_id) {
+            return res.status(400).json({ error: 'device_id is required' });
+        }
+        const model = readModel();
+        const device = findDevice(model, device_id);
+        if (!device) {
+            return res.status(404).json({ error: `Device ${device_id} not found` });
+        }
+        ensureTargetMemory(model, device);
+        writeModel(model);
+        autoCompile(model);
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // POST /read — add read to device, validate no overlap in same area
 app.post('/read', (req, res) => {
     try {

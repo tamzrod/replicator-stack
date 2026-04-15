@@ -1044,6 +1044,99 @@
       margin-bottom: 6px;
     }
 
+    /* ── Memory Reconciliation Tool ─────────────────────────────────── */
+    #mem-reconcile-card {
+      margin-bottom: 20px;
+    }
+    #mem-reconcile-results {
+      margin-top: 16px;
+    }
+    .mem-recon-section {
+      margin-bottom: 18px;
+    }
+    .mem-recon-section-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: .72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      padding: 5px 10px;
+      border-radius: 5px;
+      margin-bottom: 8px;
+    }
+    .mem-recon-section-title.missing { background: #FEF9C3; color: #854D0E; border-left: 4px solid #EAB308; }
+    .mem-recon-section-title.orphaned { background: #FEE2E2; color: #991B1B; border-left: 4px solid #EF4444; }
+    .mem-recon-section-title.valid { background: #DCFCE7; color: #166534; border-left: 4px solid #22C55E; }
+    .mem-recon-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border: 1px solid #E5E7EB;
+      border-radius: 6px;
+      margin-bottom: 6px;
+      background: #FAFAFA;
+      font-size: .82rem;
+      flex-wrap: wrap;
+    }
+    .mem-recon-row.missing { border-color: #FDE68A; background: #FFFBEB; }
+    .mem-recon-row.orphaned { border-color: #FECACA; background: #FFF5F5; }
+    .mem-recon-row.valid { border-color: #BBF7D0; background: #F0FDF4; }
+    .mem-recon-field {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+      min-width: 80px;
+    }
+    .mem-recon-field label {
+      font-size: .6rem;
+      font-weight: 700;
+      color: #9CA3AF;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+    }
+    .mem-recon-field span {
+      font-size: .82rem;
+      color: #1F2933;
+      font-family: monospace;
+    }
+    .mem-recon-actions { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+    .mem-recon-badge {
+      font-size: .65rem;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 99px;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+    }
+    .mem-recon-badge.missing { background: #FEF9C3; color: #854D0E; }
+    .mem-recon-badge.orphaned { background: #FEE2E2; color: #991B1B; }
+    .mem-recon-badge.valid { background: #DCFCE7; color: #166534; }
+    #mem-reconcile-btn {
+      background: #1E3A5F;
+      color: #fff;
+      font-size: .82rem;
+      font-weight: 600;
+      padding: 7px 16px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    #mem-reconcile-btn:hover { background: #145DA0; }
+    #mem-reconcile-btn:disabled { opacity: .6; cursor: not-allowed; }
+    #mem-reconcile-banner { font-size: .8rem; margin-top: 8px; }
+    .mem-recon-empty {
+      font-size: .8rem;
+      color: #9CA3AF;
+      padding: 4px 0;
+      font-style: italic;
+    }
+
     /* ── Runtime Tab ──────────────────────────────────────────────────── */
     #runtime-tab-container {
       display: none;
@@ -1435,6 +1528,19 @@
       <div id="memory-port-banner" class="banner" style="margin-top:8px"></div>
       <div style="margin-top:10px"><button type="submit" class="btn-primary">+ Add Memory Port</button></div>
     </form>
+  </div>
+
+  <!-- Memory Reconciliation Tool -->
+  <div class="card" id="mem-reconcile-card">
+    <h2>🔍 Memory Consistency Check</h2>
+    <p style="color:#6B7280;font-size:.85rem;margin-bottom:14px">
+      Scan replicator device configurations against the memory registry to detect
+      <strong>missing</strong> or <strong>orphaned</strong> memory allocations.
+      No changes are made automatically — all actions require explicit confirmation.
+    </p>
+    <button id="mem-reconcile-btn">🔍 Check Memory Consistency</button>
+    <div id="mem-reconcile-banner" class="banner"></div>
+    <div id="mem-reconcile-results"></div>
   </div>
 
 </div><!-- #memory-main-wrapper -->
@@ -3635,6 +3741,208 @@ document.getElementById('memory-port-form').addEventListener('submit', async e =
     banner.className = 'banner show err';
   }
 });
+
+// ── Memory Reconciliation Tool ────────────────────────────────────────────────
+
+document.getElementById('mem-reconcile-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('mem-reconcile-btn');
+  const banner = document.getElementById('mem-reconcile-banner');
+  const results = document.getElementById('mem-reconcile-results');
+
+  btn.disabled = true;
+  btn.textContent = '⏳ Scanning…';
+  banner.className = 'banner';
+  results.innerHTML = '';
+
+  const { ok, data } = await api('GET', '/memory/reconcile');
+
+  btn.disabled = false;
+  btn.textContent = '🔍 Check Memory Consistency';
+
+  if (!ok) {
+    banner.textContent = `✗ Scan failed: ${data.error || 'Unknown error'}`;
+    banner.className = 'banner show err';
+    return;
+  }
+
+  const { missing, orphaned, valid } = data;
+  const total = missing.length + orphaned.length + valid.length;
+  banner.textContent = `✓ Scan complete — ${total} device/unit pair(s) analyzed: ${missing.length} missing, ${orphaned.length} orphaned, ${valid.length} valid.`;
+  banner.className = 'banner show ok';
+
+  results.innerHTML = renderReconcileResults(missing, orphaned, valid);
+  _attachReconcileHandlers(results);
+});
+
+function renderReconcileResults(missing, orphaned, valid) {
+  const missingHtml = missing.length === 0
+    ? '<div class="mem-recon-empty">None — all devices have a memory allocation.</div>'
+    : missing.map(entry => {
+        const dev = entry.device;
+        const portLabel = entry.portId ? `Port ${entry.portNum}` : `Port ${entry.portNum} (not yet created)`;
+        return `<div class="mem-recon-row missing"
+            data-device-id="${escapeHtml(dev.id)}"
+            data-port-num="${escapeHtml(String(entry.portNum))}"
+            data-port-id="${escapeHtml(entry.portId || '')}">
+          <span class="mem-recon-badge missing">MISSING MEMORY</span>
+          <div class="mem-recon-field">
+            <label>Device</label>
+            <span>${escapeHtml(dev.name || dev.id)}</span>
+          </div>
+          <div class="mem-recon-field">
+            <label>Unit ID</label>
+            <span>${escapeHtml(String(dev.unitId))}</span>
+          </div>
+          <div class="mem-recon-field">
+            <label>Target Port</label>
+            <span>${escapeHtml(portLabel)}</span>
+          </div>
+          <div class="mem-recon-field">
+            <label>Status Slot</label>
+            <span>${escapeHtml(String(dev.status_slot ?? 0))}</span>
+          </div>
+          <div class="mem-recon-actions">
+            <button class="btn-mem mem-recon-create-btn"
+              data-device-id="${escapeHtml(dev.id)}"
+              data-device-name="${escapeHtml(dev.name || dev.id)}"
+              data-unit-id="${escapeHtml(String(dev.unitId))}">
+              + Create Allocation
+            </button>
+          </div>
+        </div>`;
+      }).join('');
+
+  const orphanedHtml = orphaned.length === 0
+    ? '<div class="mem-recon-empty">None — no unused memory allocations detected.</div>'
+    : orphaned.map(entry => {
+        const unit = entry.unit;
+        return `<div class="mem-recon-row orphaned"
+            data-port-id="${escapeHtml(entry.portId)}"
+            data-unit-db-id="${escapeHtml(unit.id)}">
+          <span class="mem-recon-badge orphaned">UNUSED MEMORY</span>
+          <div class="mem-recon-field">
+            <label>Unit ID</label>
+            <span>${escapeHtml(String(unit.unit_id))}</span>
+          </div>
+          <div class="mem-recon-field">
+            <label>Port</label>
+            <span>${escapeHtml(String(entry.portNum))}</span>
+          </div>
+          <div class="mem-recon-field">
+            <label>Areas</label>
+            <span>${escapeHtml(String(unit.areas.length))}</span>
+          </div>
+          <div class="mem-recon-actions">
+            <button class="btn-mem-danger mem-recon-delete-btn"
+              data-port-id="${escapeHtml(entry.portId)}"
+              data-unit-db-id="${escapeHtml(unit.id)}"
+              data-unit-id="${escapeHtml(String(unit.unit_id))}">
+              ✕ Delete
+            </button>
+          </div>
+        </div>`;
+      }).join('');
+
+  const validHtml = valid.length === 0
+    ? '<div class="mem-recon-empty">No matched pairs.</div>'
+    : valid.map(entry => {
+        const dev = entry.device;
+        const unit = entry.unit;
+        return `<div class="mem-recon-row valid">
+          <span class="mem-recon-badge valid">VALID</span>
+          <div class="mem-recon-field">
+            <label>Device</label>
+            <span>${escapeHtml(dev.name || dev.id)}</span>
+          </div>
+          <div class="mem-recon-field">
+            <label>Unit ID</label>
+            <span>${escapeHtml(String(dev.unitId))}</span>
+          </div>
+          <div class="mem-recon-field">
+            <label>Port</label>
+            <span>${escapeHtml(String(entry.portNum))}</span>
+          </div>
+          <div class="mem-recon-field">
+            <label>Areas</label>
+            <span>${escapeHtml(String(unit.areas.length))}</span>
+          </div>
+          <div class="mem-recon-field">
+            <label>Status Slot</label>
+            <span>${escapeHtml(String(dev.status_slot ?? 0))}</span>
+          </div>
+        </div>`;
+      }).join('');
+
+  return `
+    <div class="mem-recon-section">
+      <div class="mem-recon-section-title missing">⚠ Missing Memory — ${missing.length} device(s) need allocation</div>
+      ${missingHtml}
+    </div>
+    <div class="mem-recon-section">
+      <div class="mem-recon-section-title orphaned">✗ Unused Memory — ${orphaned.length} orphaned unit(s)</div>
+      ${orphanedHtml}
+    </div>
+    <div class="mem-recon-section">
+      <div class="mem-recon-section-title valid">✔ Valid Memory — ${valid.length} correctly mapped pair(s)</div>
+      ${validHtml}
+    </div>`;
+}
+
+function _attachReconcileHandlers(container) {
+  // Create allocation for missing device
+  container.querySelectorAll('.mem-recon-create-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const deviceId = btn.dataset.deviceId;
+      const deviceName = btn.dataset.deviceName;
+      const unitId = btn.dataset.unitId;
+      if (!confirm(`Create memory allocation for device "${deviceName}" (unit_id: ${unitId})?`)) return;
+
+      btn.disabled = true;
+      btn.textContent = '…';
+
+      const { ok, data } = await api('POST', '/memory/reconcile/create', { device_id: deviceId });
+
+      if (ok) {
+        _appendMmaLog(`[memory reconcile] Created allocation for device "${deviceName}" (unit_id: ${unitId})`);
+        setDirty(true);
+        await loadModel();
+        // Re-run scan to refresh results
+        document.getElementById('mem-reconcile-btn').click();
+      } else {
+        btn.disabled = false;
+        btn.textContent = '+ Create Allocation';
+        alert(`Error: ${data.error || 'Unknown error'}`);
+      }
+    });
+  });
+
+  // Delete orphaned unit
+  container.querySelectorAll('.mem-recon-delete-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const portId = btn.dataset.portId;
+      const unitDbId = btn.dataset.unitDbId;
+      const unitId = btn.dataset.unitId;
+      if (!confirm(`Delete unused memory block (unit_id: ${unitId})?\n\nThis cannot be undone.`)) return;
+
+      btn.disabled = true;
+      btn.textContent = '…';
+
+      const { ok, data } = await api('DELETE', `/memory/port/${encodeURIComponent(portId)}/unit/${encodeURIComponent(unitDbId)}`);
+
+      if (ok) {
+        _appendMmaLog(`[memory reconcile] Deleted orphaned unit (unit_id: ${unitId})`);
+        setDirty(true);
+        await loadModel();
+        // Re-run scan to refresh results
+        document.getElementById('mem-reconcile-btn').click();
+      } else {
+        btn.disabled = false;
+        btn.textContent = '✕ Delete';
+        alert(`Error: ${data.error || 'Unknown error'}`);
+      }
+    });
+  });
+}
 
 // Raw config snapshots (strings)
 const _cvRaw = { replicator: null, mma: null };
