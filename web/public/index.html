@@ -1057,7 +1057,7 @@
       title="Current compiler state">⚙ IDLE</div>
     <div class="toolbar-sep"></div>
     <button id="btn-report" class="btn-toolbar-report"
-      title="Generate a PDF report of the compiled configuration">📄 Report</button>
+      title="Generate a printable configuration report (open browser print dialog to save as PDF)">📄 Report</button>
   </div>
 </header>
 
@@ -3534,7 +3534,7 @@ async function generateReport() {
     const noConfig  = !mmaYaml && !repYaml ? '<p class="note">No compiled configuration found. Run Save to compile first.</p>' : '';
 
     const compileStateLabelMap = { idle:'IDLE', compiling:'COMPILING', success:'SUCCESS', error:'ERROR' };
-    const compileStateLabel = compileStateLabelMap[_appState.compileState] || _appState.compileState.toUpperCase();
+    const compileStateLabel = compileStateLabelMap[_appState.compileState] || String(_appState.compileState || 'UNKNOWN').toUpperCase();
 
     const html = `<!DOCTYPE html>
 <html lang="en">
@@ -3552,7 +3552,7 @@ async function generateReport() {
   th { text-align: left; background: #F3F4F6; color: #374151; padding: 5px 8px; border: 1px solid #E5E7EB; font-weight: 700; }
   td { padding: 4px 8px; border: 1px solid #E5E7EB; vertical-align: top; }
   tr:nth-child(even) td { background: #F9FAFB; }
-  pre { background: #F3F4F6; border: 1px solid #E5E7EB; border-radius: 4px; padding: 12px; font-size: 10.5px; line-height: 1.5; white-space: pre-wrap; word-break: break-all; }
+  pre { background: #F3F4F6; border: 1px solid #E5E7EB; border-radius: 4px; padding: 12px; font-size: 10.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: break-word; }
   code { font-family: 'Courier New', monospace; font-size: 11px; }
   .note { color: #9CA3AF; font-style: italic; font-size: 11px; }
   .badge { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 10px; font-weight: 700; letter-spacing: .05em; }
@@ -3611,7 +3611,7 @@ ${mmaYaml}
 ${repYaml}
 ${noConfig}
 
-<script>window.onload = function() { window.print(); };<\/script>
+<script>window.onload = function() { setTimeout(function() { window.print(); }, 200); };<\/script>
 </body>
 </html>`;
 
