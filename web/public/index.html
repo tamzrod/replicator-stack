@@ -626,6 +626,8 @@
     }
     .mem-tree-unit:hover { background: #F9FAFB; }
     .mem-tree-unit.selected { background: #EFF6FF; border-left: 3px solid #145DA0; padding-left: 23px; }
+    .mem-tree-unit-count { color: #9CA3AF; font-size: .7rem; flex-shrink: 0; }
+    .mem-tree-no-units { padding-left: 26px; font-size: .72rem; }
 
     .mem-port-card {
       background: #fff;
@@ -2609,7 +2611,7 @@ document.getElementById('tree-panel').addEventListener('click', async e => {
 // ── Memory Tree ───────────────────────────────────────────────────────────────
 
 const _collapsedMemPorts = new Set();
-let _selectedMemItem = null; // { type: 'port'|'unit', portId, unitId }
+let _selectedMemItem = null; // { type: 'port'|'unit', portId, unitId? }
 
 function renderMemoryTree(data) {
   const panel = document.getElementById('memory-tree-panel');
@@ -2632,12 +2634,12 @@ function renderMemoryTree(data) {
       <div class="mem-tree-port-header" data-mem-port-id="${escapeHtml(port.id)}">
         <span class="tree-toggle">${toggle}</span>
         <span class="mem-tree-port-name">🔌 Port ${escapeHtml(String(port.port))}</span>
-        <span style="color:#9CA3AF;font-size:.7rem">${units.length}u</span>
+        <span class="mem-tree-unit-count">${units.length}u</span>
       </div>`;
 
     if (!collapsed) {
       if (units.length === 0) {
-        html += `<div class="tree-empty" style="padding:4px 14px 4px 26px;font-size:.72rem">No units</div>`;
+        html += `<div class="tree-empty mem-tree-no-units">No units</div>`;
       }
       for (const unit of units) {
         const sel = (_selectedMemItem && _selectedMemItem.type === 'unit' && _selectedMemItem.unitId === unit.id) ? ' selected' : '';
