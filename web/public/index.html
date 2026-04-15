@@ -644,7 +644,17 @@
       padding: 14px 20px;
       border-bottom: 1px solid #E5E7EB;
       background: #F0FDF4;
+      cursor: pointer;
+      user-select: none;
     }
+    .mem-port-header:hover { background: #DCFCE7; }
+    .mem-port-chevron {
+      font-size: .6rem;
+      color: #6B7280;
+      margin-right: 8px;
+      transition: transform .15s;
+    }
+    .mem-port-chevron.open { transform: rotate(90deg); }
     .mem-port-title {
       font-size: 1rem;
       font-weight: 700;
@@ -2894,15 +2904,18 @@ function renderMemoryTab(data) {
       </form>`;
 
     return `<div class="mem-port-card" data-port-id="${escapeHtml(port.id)}">
-      <div class="mem-port-header">
-        <span class="mem-port-title">🔌 Port ${escapeHtml(String(port.port))}</span>
-        <div style="display:flex;gap:8px;align-items:center">
+      <div class="mem-port-header" data-port-toggle="${escapeHtml(port.id)}">
+        <div style="display:flex;align-items:center">
+          <span class="mem-port-chevron open" data-port-chevron="${escapeHtml(port.id)}">▶</span>
+          <span class="mem-port-title">🔌 Port ${escapeHtml(String(port.port))}</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center" onclick="event.stopPropagation()">
           ${!hasManualUnits && blocks.length > 0 ? `<button class="btn-mem mem-populate-btn" data-port-id="${escapeHtml(port.id)}" style="font-size:.72rem;padding:3px 8px">⚡ Auto-populate</button>` : ''}
           <button class="btn-mem mem-edit-port" data-port-id="${escapeHtml(port.id)}" data-port-num="${escapeHtml(String(port.port))}">✎ Edit Port</button>
           <button class="btn-danger mem-del-port" data-port-id="${escapeHtml(port.id)}" style="font-size:.75rem;padding:4px 10px">✕ Remove</button>
         </div>
       </div>
-      <div class="mem-port-body">
+      <div class="mem-port-body" data-port-body="${escapeHtml(port.id)}">
         ${populateBar}
         <div class="mem-units-list">${unitsHtml}</div>
         ${addUnitForm}
@@ -3066,6 +3079,19 @@ function renderUnit(portId, unit) {
 }
 
 function _attachMemoryTabHandlers(container) {
+  // ── Port collapsible toggle ──────────────────────────────────────────
+  container.querySelectorAll('[data-port-toggle]').forEach(header => {
+    header.addEventListener('click', () => {
+      const id = header.dataset.portToggle;
+      const body = container.querySelector(`[data-port-body="${id}"]`);
+      const chevron = container.querySelector(`[data-port-chevron="${id}"]`);
+      if (!body) return;
+      const isOpen = body.style.display !== 'none';
+      body.style.display = isOpen ? 'none' : '';
+      if (chevron) chevron.classList.toggle('open', !isOpen);
+    });
+  });
+
   // ── Unit collapsible toggle ──────────────────────────────────────────
   container.querySelectorAll('[data-unit-toggle]').forEach(header => {
     header.addEventListener('click', () => {
