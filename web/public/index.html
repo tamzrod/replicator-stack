@@ -1789,6 +1789,10 @@ function _patchStatusDots(prevStatus, nextStatus) {
   const panel = document.getElementById('tree-panel');
   if (!panel) return;
 
+  // Build a Map from device ID → device object once so that name lookups
+  // inside the loop are O(1) instead of O(n) per iteration.
+  const deviceById = new Map((_currentModel?.devices || []).map(d => [d.id, d]));
+
   // Build the union of IDs present in either snapshot so we catch
   // devices that gained or lost status between polls.
   const allIds = new Set([
@@ -1823,7 +1827,7 @@ function _patchStatusDots(prevStatus, nextStatus) {
     if (prevName !== nextName) {
       const nameEl = row.querySelector('.tree-device-name');
       if (nameEl) {
-        const device = (_currentModel?.devices || []).find(d => d.id === id);
+        const device = deviceById.get(id);
         const displayName = nextName || (device?.name) || '';
         // Use DOM APIs instead of innerHTML to avoid any XSS surface.
         nameEl.textContent = '';
@@ -1839,6 +1843,129 @@ function _patchStatusDots(prevStatus, nextStatus) {
       }
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// RENDER ROUTING LAYER (Phase 5)
+//
+// Lightweight snapshot-based diffing that decides which render passes are
+// needed after each loadModel() call.  The three render functions below are
+// the ONLY callers of renderTree / renderMemoryTab / renderMemoryTree inside
+// the loadModel path.  Direct mutation handlers that already know what changed
+// may still call individual render functions directly.
+//
+// Key design points:
+//   • _lastRenderedModelSnapshot  — retained between calls; null on first load
+//   • fullRender()    — always calls all four render passes
+//   • partialRender() — calls only the passes flagged in `flags`
+//   • smartRender()   — diffs old vs new snapshot to decide which passes run
+// ---------------------------------------------------------------------------
+
+let _lastRenderedModelSnapshot = null;
+
+// Returns a compact, stable string key representing the tree domain:
+// device identity/name/group and the group list.  Order matches server order.
+function _snapshotTree(model) {
+  const devs = (model.devices || []).map(d => `${d.id}|${d.name || ''}|${d.groupId || ''}`);
+  const grps = (model.groups  || []).map(g => `${g.id}|${g.name || ''}`);
+  return devs.join('~') + '##' + grps.join('~');
+}
+
+// Returns a compact, stable string key representing the memory domain:
+// ports → units → areas (including policy and state_sealing).
+function _snapshotMemory(model) {
+  const ports = (model.memory && model.memory.ports) || [];
+  return ports.map(p => {
+    const units = (p.units || []).map(u => {
+      const areas = (u.areas || []).map(a =>
+        `${a.id}:${a.type}:${a.start}:${a.count}`
+      ).join(',');
+      const seal  = u.state_sealing ? JSON.stringify(u.state_sealing) : '';
+      const pol   = u.policy ? JSON.stringify(u.policy) : '';
+      return `${u.id}:${u.unit_id}:[${areas}]:${seal}:${pol}`;
+    }).join(';');
+    return `${p.id}:${p.port}:{${units}}`;
+  }).join('|');
+}
+
+// Returns a compact, stable string key for the currently selected device,
+// covering every field that renderDeviceWorkspace() displays.
+// deviceMap is a pre-built Map<id, device> passed from _takeModelSnapshot()
+// so we avoid a repeated O(n) scan when the map is already available.
+function _snapshotDevice(deviceMap, deviceId) {
+  if (!deviceId) return '';
+  const d = deviceMap.get(deviceId);
+  if (!d) return '__not_found__';
+  const reads = (d.reads || []).map(r =>
+    `${r.id}:${r.name || ''}:${r.source_area}:${r.source_address}:${r.source_count}:${r.poll_interval}`
+  ).join(',');
+  return [
+    d.id, d.name || '', d.groupId || '',
+    d.source_endpoint || '', d.source_unit_id,
+    d.target_endpoint || '', d.unitId,
+    d.status_slot || 0, d.status_unit_id || '',
+    reads,
+  ].join('|');
+}
+
+// Build a full snapshot object from a model.  Called inside smartRender()
+// after `_selectedDeviceId` is known.  A single Map is built once and shared
+// across all snapshot helpers that need per-device lookups.
+function _takeModelSnapshot(model) {
+  const deviceMap = new Map((model.devices || []).map(d => [d.id, d]));
+  return {
+    tree:   _snapshotTree(model),
+    memory: _snapshotMemory(model),
+    device: _snapshotDevice(deviceMap, _selectedDeviceId),
+  };
+}
+
+// Always runs all four render passes.  Used on first load and as a safe
+// fallback whenever the diff is uncertain.
+function fullRender(data) {
+  renderTree(data);
+  refreshGroupDropdowns(data);
+  renderDeviceWorkspace();
+  renderMemoryTab(data);
+  renderMemoryTree(data);
+}
+
+// Runs only the render passes whose flag is true.
+// flags = { tree: bool, workspace: bool, memory: bool }
+function partialRender(data, flags) {
+  if (flags.tree) {
+    renderTree(data);
+    refreshGroupDropdowns(data);
+  }
+  if (flags.workspace) {
+    renderDeviceWorkspace();
+  }
+  if (flags.memory) {
+    renderMemoryTab(data);
+    renderMemoryTree(data);
+  }
+}
+
+// Core diff-based dispatcher.  Compares `oldSnap` (the snapshot from the
+// previous loadModel call) against `newModel` and calls only the render passes
+// whose domain actually changed.  Also updates _lastRenderedModelSnapshot.
+//
+// Callers must have already set _currentModel = newModel before calling this.
+function smartRender(oldSnap, newModel) {
+  const newSnap = _takeModelSnapshot(newModel);
+  _lastRenderedModelSnapshot = newSnap;
+
+  if (!oldSnap) {
+    // First load — no previous snapshot to compare; run everything.
+    fullRender(newModel);
+    return;
+  }
+
+  partialRender(newModel, {
+    tree:      newSnap.tree   !== oldSnap.tree,
+    workspace: newSnap.device !== oldSnap.device,
+    memory:    newSnap.memory !== oldSnap.memory,
+  });
 }
 
 // ── Global State Manager ──────────────────────────────────────────────────────
@@ -2296,12 +2423,15 @@ async function loadModel() {
     return;
   }
 
+  // Capture previous snapshot BEFORE updating _currentModel so that the diff
+  // compares the previously-rendered state against the freshly-fetched data.
+  const oldSnap = _lastRenderedModelSnapshot;
   _currentModel = data;
-  renderTree(data);
-  refreshGroupDropdowns(data);
-  renderDeviceWorkspace();
-  renderMemoryTab(data);
-  renderMemoryTree(data);
+
+  // Route only to the render passes whose domain actually changed.
+  // On first load (oldSnap === null), smartRender() does a full render.
+  smartRender(oldSnap, data);
+
   await loadMmaEndpoint();
 
   // If the config viewer tab is open, keep it in sync with the latest compiled output.
@@ -2904,9 +3034,31 @@ document.getElementById('tree-panel').addEventListener('click', async e => {
   const toggleGrp = e.target.closest('[data-toggle-group]');
   if (toggleGrp) {
     const g = toggleGrp.dataset.toggleGroup;
-    if (_collapsedGroups.has(g)) _collapsedGroups.delete(g);
+    const wasCollapsed = _collapsedGroups.has(g);
+    if (wasCollapsed) _collapsedGroups.delete(g);
     else _collapsedGroups.add(g);
-    renderTree(_currentModel);
+    const nowCollapsed = !wasCollapsed;
+
+    // Patch the toggle arrow in-place.
+    const arrowEl = toggleGrp.querySelector('.tree-toggle');
+    if (arrowEl) arrowEl.textContent = nowCollapsed ? '▶' : '▼';
+
+    // Show or hide device rows inside this group without rebuilding the tree.
+    const groupEl = toggleGrp.closest('.tree-group');
+    if (groupEl) {
+      const deviceRows = groupEl.querySelectorAll('.tree-device');
+      if (nowCollapsed) {
+        // Collapse: hide existing device rows in-place.
+        deviceRows.forEach(row => { row.style.display = 'none'; });
+      } else if (deviceRows.length > 0) {
+        // Expand: rows are already in DOM (hidden) — just reveal them.
+        deviceRows.forEach(row => { row.style.display = ''; });
+      } else {
+        // Expand: device rows not yet in DOM (group was collapsed at initial
+        // render) — fall back to full tree rebuild so nothing is missing.
+        renderTree(_currentModel);
+      }
+    }
     return;
   }
 
