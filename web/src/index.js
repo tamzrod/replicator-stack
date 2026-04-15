@@ -378,16 +378,129 @@ function toReplicatorYaml(model, excludedPortNums = new Set()) {
     return lines.join('\n') + '\n';
 }
 
+/**
+ * Return the primary Modbus read function code for an area type.
+ * FC 1 = Read Coils, FC 2 = Read Discrete Inputs,
+ * FC 3 = Read Holding Registers, FC 4 = Read Input Registers.
+ */
+function domainReadFc(area) {
+    switch (area) {
+        case 'coils':             return 1;
+        case 'discrete_inputs':   return 2;
+        case 'input_registers':   return 4;
+        default:                  return 3; // holding_registers
+    }
+}
+
+/**
+ * MMA2 CONFIG COMPILER
+ *
+ * unit_id is a CONTAINER ID — not a strict unique memory block.  A single
+ * unit_id may own multiple memory domains (holding_registers, input_registers,
+ * coils, discrete_inputs).  When multiple blocks share the same unit_id on
+ * the same listener port they are MERGED into one unit object rather than
+ * flagged as errors.
+ *
+ * Merge rules:
+ *   - Domains are combined into the same unit entry.
+ *   - When two blocks for the same (unit_id, area) exist the widest address
+ *     range is preserved (lowest start, highest end).
+ *   - Policy rules are unioned and deduplicated by rule id.
+ *   - Status units (driven by status_unit_id) always receive the read-write
+ *     policy; regular units receive a read-only policy whose allow_fc list
+ *     covers all present domain types.
+ *
+ * @param {Array}  blocks    - port.blocks entries (unit_id, area, address, count)
+ * @param {Map}    statusMap - Map<statusUnitId, deviceCount> for status blocks
+ * @returns {{ mergedUnits: Array, mergeLog: Array }}
+ *   mergedUnits  — ordered list of merged unit objects ready for YAML emission
+ *   mergeLog     — diagnostic records: source entries merged, fields combined,
+ *                  rules deduplicated
+ */
+function compileMma2Config(blocks, statusMap = new Map()) {
+    // byUnitId: unit_id → { unitId, isStatus, domains: Map<area,{start,count}>, sourceCount }
+    const byUnitId = new Map();
+    const mergeLog = [];
+
+    function mergeBlock(uid, area, address, count, isStatus) {
+        if (!byUnitId.has(uid)) {
+            byUnitId.set(uid, { unitId: uid, isStatus: false, domains: new Map(), sourceCount: 0 });
+        }
+        const entry = byUnitId.get(uid);
+        entry.sourceCount += 1;
+        if (isStatus) entry.isStatus = true;
+
+        if (entry.domains.has(area)) {
+            // Preserve widest range across duplicate (unit_id, area) blocks.
+            const existing = entry.domains.get(area);
+            const newStart = Math.min(existing.start, address);
+            const newEnd   = Math.max(existing.start + existing.count - 1, address + count - 1);
+            const oldEntry = { start: existing.start, count: existing.count };
+            existing.start = newStart;
+            existing.count = newEnd - newStart + 1;
+            if (existing.start !== oldEntry.start || existing.count !== oldEntry.count) {
+                mergeLog.push({
+                    unit_id: uid,
+                    area,
+                    action: 'range_widened',
+                    from: oldEntry,
+                    to: { start: existing.start, count: existing.count },
+                });
+            }
+        } else {
+            entry.domains.set(area, { start: address, count });
+        }
+    }
+
+    // Process regular device-read blocks.
+    for (const block of blocks) {
+        mergeBlock(
+            Number(block.unit_id),
+            block.area || 'holding_registers',
+            block.address,
+            block.count,
+            false
+        );
+    }
+
+    // Process status memory entries (derived from devices with status_unit_id).
+    for (const [suid, deviceCount] of statusMap) {
+        mergeBlock(suid, 'holding_registers', 0, deviceCount * STATUS_SLOT_SIZE, true);
+    }
+
+    // Build merge log entries for unit_ids that had more than one source block.
+    for (const entry of byUnitId.values()) {
+        if (entry.sourceCount > 1) {
+            mergeLog.push({
+                unit_id:             entry.unitId,
+                action:              'units_merged',
+                sourceEntriesMerged: entry.sourceCount,
+                fieldsCombined:      [...entry.domains.keys()],
+                rulesDeduped:        0, // one synthesised rule per unit; no raw duplicates
+            });
+        }
+    }
+
+    // Return units sorted by unit_id for deterministic output.
+    const mergedUnits = [...byUnitId.values()].sort((a, b) => a.unitId - b.unitId);
+    return { mergedUnits, mergeLog };
+}
+
 function toMmaYaml(model) {
     // MMA runtime config generated from Memory tab ports and blocks.
     // Format per docs/sample yaml/mma.yaml:
     //   - top-level listeners: array
     //   - each listener has id, listen (":PORT"), and memory
-    //   - memory is a list of unit entries with unit_id, holding_registers (start/count), and policy
+    //   - memory is a list of unit entries with unit_id, one or more domain
+    //     sections (holding_registers / input_registers / coils / discrete_inputs),
+    //     and a policy block.
+    //
+    // unit_id is a CONTAINER ID.  Multiple blocks sharing the same unit_id on
+    // the same port are merged by compileMma2Config before YAML emission.
     const memoryPorts = (model.memory && model.memory.ports) || [];
 
     if (memoryPorts.length === 0) {
-        return 'listeners: []\n';
+        return { yaml: 'listeners: []\n', mergeLog: [] };
     }
 
     // Pre-compute status memory requirements from devices:
@@ -404,6 +517,7 @@ function toMmaYaml(model) {
     }
 
     const lines = ['listeners:'];
+    const allMergeLog = [];
 
     for (let pi = 0; pi < memoryPorts.length; pi++) {
         const port = memoryPorts[pi];
@@ -414,47 +528,53 @@ function toMmaYaml(model) {
         lines.push(`  - id: ${listenerId}`);
         lines.push(`    listen: ":${portNum}"`);
         lines.push(`    memory:`);
+
         const blocks = port.blocks || [];
         const statusMap = statusByPort[portNum] || new Map();
 
-        if (blocks.length === 0 && statusMap.size === 0) {
+        // Run the MMA2 compiler: group + merge all blocks for this port.
+        const { mergedUnits, mergeLog } = compileMma2Config(blocks, statusMap);
+        for (const entry of mergeLog) {
+            allMergeLog.push({ listener: listenerId, port: portNum, ...entry });
+        }
+
+        if (mergedUnits.length === 0) {
             lines.push(`      []`);
         } else {
-            for (const block of blocks) {
-                lines.push(`      - unit_id: ${block.unit_id}`);
-                // Emit register range based on area type
-                if (!block.area || block.area === 'holding_registers') {
-                    lines.push(`        holding_registers:`);
-                    lines.push(`          start: ${block.address}`);
-                    lines.push(`          count: ${block.count}`);
-                    lines.push(`        policy:`);
-                    lines.push(`          rules:`);
+            for (const unit of mergedUnits) {
+                lines.push(`      - unit_id: ${unit.unitId}`);
+
+                // Emit each domain section present in this unit.
+                for (const [area, range] of unit.domains) {
+                    lines.push(`        ${area}:`);
+                    lines.push(`          start: ${range.start}`);
+                    lines.push(`          count: ${range.count}`);
+                }
+
+                // Emit policy.  Status units are read-write (FC 3 + 16); regular
+                // units are read-only with the union of read FCs for all domains.
+                lines.push(`        policy:`);
+                lines.push(`          rules:`);
+                if (unit.isStatus) {
+                    lines.push(`            - id: read-write`);
+                    lines.push(`              source_ip:`);
+                    lines.push(`                - 0.0.0.0/0`);
+                    lines.push(`                - ::/0`);
+                    lines.push(`              allow_fc: [3, 16]`);
+                } else {
+                    const fcs = [...unit.domains.keys()]
+                        .map(domainReadFc)
+                        .sort((a, b) => a - b);
                     lines.push(`            - id: read-only`);
                     lines.push(`              source_ip:`);
                     lines.push(`                - 0.0.0.0/0`);
                     lines.push(`                - ::/0`);
-                    lines.push(`              allow_fc: [3]`);
+                    lines.push(`              allow_fc: [${fcs.join(', ')}]`);
                 }
-            }
-            // Emit dynamically-sized status memory blocks, sorted by unit_id for determinism.
-            // Size = device_count × STATUS_SLOT_SIZE (one slot per active device, no gaps).
-            for (const [suid, deviceCount] of [...statusMap.entries()].sort((a, b) => a[0] - b[0])) {
-                const count = deviceCount * STATUS_SLOT_SIZE;
-                lines.push(`      - unit_id: ${suid}`);
-                lines.push(`        holding_registers:`);
-                lines.push(`          start: 0`);
-                lines.push(`          count: ${count}`);
-                lines.push(`        policy:`);
-                lines.push(`          rules:`);
-                lines.push(`            - id: read-write`);
-                lines.push(`              source_ip:`);
-                lines.push(`                - 0.0.0.0/0`);
-                lines.push(`                - ::/0`);
-                lines.push(`              allow_fc: [3, 16]`);
             }
         }
     }
-    return lines.join('\n') + '\n';
+    return { yaml: lines.join('\n') + '\n', mergeLog: allMergeLog };
 }
 
 // ---------------------------------------------------------------------------
@@ -484,32 +604,9 @@ function validateMmaConfig(yaml) {
         errors.push('MMA config must not contain block_id — block references belong in Replicator config');
     }
 
-    // Detect duplicate unit_id values within each listener.
-    // Incomplete memory entries (e.g. "- unit_id: 1" without registers/policy) are
-    // still counted — they must not bypass duplicate detection.
-    // currentListener is null until the first listener id line is encountered; unit_id
-    // lines appearing before any listener declaration are ignored (malformed YAML).
-    let currentListener = null;
-    const listenerUnitIds = new Map(); // listenerId → Set<unit_id>
-    for (const line of yaml.split('\n')) {
-        const listenerMatch = line.match(/^  - id:\s+(\S+)/);
-        if (listenerMatch) {
-            currentListener = listenerMatch[1];
-            listenerUnitIds.set(currentListener, new Set());
-            continue;
-        }
-        // Match any indented "- unit_id: N" list entry (memory block inside a listener).
-        const unitIdMatch = line.match(/^\s+-\s+unit_id:\s+(\d+)/);
-        if (unitIdMatch && currentListener) {
-            const uid = Number(unitIdMatch[1]);
-            const seen = listenerUnitIds.get(currentListener);
-            if (seen.has(uid)) {
-                errors.push(`MMA listener "${currentListener}": duplicate unit_id ${uid} — each unit_id must be unique within a listener`);
-            } else {
-                seen.add(uid);
-            }
-        }
-    }
+    // NOTE: duplicate unit_id values within a listener are intentional — unit_id is a
+    // CONTAINER ID that may hold multiple memory domains.  compileMma2Config merges them
+    // before YAML emission, so duplicates in hand-crafted YAML are left to the runtime.
 
     return errors;
 }
@@ -1387,14 +1484,12 @@ function resolveIdentityConflicts(model) {
 /**
  * Auto-fix duplicate unit_id conflicts across devices on the same listener port.
  *
- * When two or more devices share the same unitId on the same target port, the MMA
- * listener receives duplicate unit_id entries which it rejects.  This function
- * detects those inter-device conflicts and reassigns the later device's unitId to
- * the next available slot (0–255) on that port.
- *
- * Same-device, multi-area duplicates (a single device with reads on both
- * holding_registers and coils) cannot be resolved by unitId reassignment alone and
- * are left for the user to handle manually.
+ * NOTE: Under MMA2 semantics, unit_id is a CONTAINER ID — multiple blocks sharing
+ * the same unit_id on the same port are merged by compileMma2Config at compile time.
+ * This function is therefore retained only for the /compile/resolve auto_fix flow and
+ * will be a no-op in the common case where duplicates should be merged rather than
+ * reassigned.  It reassigns device.unitId when there is a pre-existing model-level
+ * conflict that the user explicitly wants resolved by splitting.
  *
  * Mutates model.devices in-place.  Returns { fixed, resolutionLog, error }.
  *
@@ -1480,7 +1575,7 @@ function buildErrorSummary(mmaErrors, replicatorErrors) {
  * @param {object} model
  * @param {Set<number>} [excludedPortNums] - port numbers whose devices should be omitted from replicator YAML
  * @param {{ skipValidation?: boolean }} [opts]
- *   skipValidation — when true, bypass duplicate-unit_id and YAML validation checks
+ *   skipValidation — when true, bypass YAML structural validation checks
  *                    (used for "ignore & force continue" user override).  Unsafe: the
  *                    runtime may behave unpredictably with an invalid config.
  */
@@ -1508,31 +1603,10 @@ function compileAndWrite(model, excludedPortNums = new Set(), opts = {}) {
 
     if (!skipValidation) {
         // Validate no duplicate unit_id within the same port (listener).
-        // rehydrateFromYaml keys blocks by portId|unitId|area, so a device that has reads
-        // in more than one area type (e.g. holding_registers AND coils) for the same unit_id
-        // on the same port produces multiple blocks with the same unit_id — which MMA rejects.
-        // Incomplete entries (blocks whose area type is not holding_registers) also emit
-        // "- unit_id: X" without register/policy sections; they must not bypass this check.
-        const duplicateUnitIdErrors = [];
-        for (const port of (model.memory.ports || [])) {
-            const portNum = Number(port.port);
-            const seenUnitIds = new Map(); // unit_id → first area seen
-            for (const block of (port.blocks || [])) {
-                const uid = Number(block.unit_id);
-                const area = block.area || 'holding_registers';
-                if (seenUnitIds.has(uid)) {
-                    duplicateUnitIdErrors.push(
-                        `Port ${portNum}: duplicate unit_id ${uid} — unit IDs must be unique per listener` +
-                        ` (first area: "${seenUnitIds.get(uid)}", duplicate area: "${area}")`
-                    );
-                } else {
-                    seenUnitIds.set(uid, area);
-                }
-            }
-        }
-        if (duplicateUnitIdErrors.length > 0) {
-            return { ok: false, mmaErrors: duplicateUnitIdErrors, replicatorErrors: [], resolutionLog };
-        }
+        // NOTE: per MMA2 semantics, duplicate unit_id entries are MERGED by
+        // compileMma2Config (unit_id is a container ID, not a unique block ID).
+        // This check has been intentionally removed — duplicates produce a merged
+        // unit in the output, not an error.
     }
 
     // Validate that no included port has an empty memory block list AND no status devices.
@@ -1563,19 +1637,19 @@ function compileAndWrite(model, excludedPortNums = new Set(), opts = {}) {
     }
 
     const replicatorYaml = toReplicatorYaml(model, excludedPortNums);
-    const mmaYaml = toMmaYaml(model);
+    const { yaml: mmaYaml, mergeLog } = toMmaYaml(model);
 
     if (!skipValidation) {
         const mmaErrors = validateMmaConfig(mmaYaml);
         const replicatorErrors = validateReplicatorConfig(replicatorYaml);
         if (mmaErrors.length > 0 || replicatorErrors.length > 0) {
-            return { ok: false, mmaErrors, replicatorErrors, resolutionLog };
+            return { ok: false, mmaErrors, replicatorErrors, resolutionLog, mergeLog };
         }
     }
 
     atomicWrite(REPLICATOR_CONFIG_PATH, replicatorYaml);
     atomicWrite(MMA_CONFIG_PATH, mmaYaml);
-    return { ok: true, blocksCreated: rehydrated.blocksCreated, resolutionLog };
+    return { ok: true, blocksCreated: rehydrated.blocksCreated, resolutionLog, mergeLog };
 }
 
 /**
@@ -1653,6 +1727,7 @@ app.post('/compile', (req, res) => {
             blocksCreated: result.blocksCreated || 0,
             excluded_ports: [...excludedPortNums],
             resolution_log: result.resolutionLog || [],
+            merge_log: result.mergeLog || [],
         });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -1707,9 +1782,7 @@ app.post('/compile/resolve', async (req, res) => {
 
         const result = compileAndWrite(model, excludedPortNums, { skipValidation });
 
-        // After an auto_fix attempt the compile may still fail (e.g. area-type duplicates
-        // that can't be resolved by unitId reassignment).  Surface remaining errors with
-        // updated recovery options.
+        // After an auto_fix attempt the compile may still fail.  Surface remaining errors.
         if (!result.ok) {
             return res.status(409).json({
                 status: 'error',
@@ -1720,6 +1793,7 @@ app.post('/compile/resolve', async (req, res) => {
                     mma_errors: result.mmaErrors,
                     replicator_errors: result.replicatorErrors,
                     resolution_log: [...resolutionLog, ...(result.resolutionLog || [])],
+                    merge_log: result.mergeLog || [],
                     excluded_ports: [...excludedPortNums],
                 },
             });
@@ -1727,6 +1801,7 @@ app.post('/compile/resolve', async (req, res) => {
 
         const routes = countRoutes(model, excludedPortNums);
         const allResolutionLog = [...resolutionLog, ...(result.resolutionLog || [])];
+        const mergeLog = result.mergeLog || [];
 
         if (shouldRestart) {
             const restartErrors = [];
@@ -1748,6 +1823,7 @@ app.post('/compile/resolve', async (req, res) => {
                     routes,
                     blocksCreated: result.blocksCreated || 0,
                     resolutionLog: allResolutionLog,
+                    merge_log: mergeLog,
                     restart_errors: restartErrors,
                 });
             }
@@ -1759,6 +1835,7 @@ app.post('/compile/resolve', async (req, res) => {
             routes,
             blocksCreated: result.blocksCreated || 0,
             resolutionLog: allResolutionLog,
+            merge_log: mergeLog,
         });
     } catch (err) {
         res.status(500).json({ error: err.message });
