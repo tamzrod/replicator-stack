@@ -2369,7 +2369,7 @@ function modbusReadHoldingRegisters(host, port, unitId, startAddr, count, timeou
             }
             done(regs);
         });
-        socket.on('error', () => { clearTimeout(timer); done(null); });
+        socket.on('error', () => { clearTimeout(timer); socket.destroy(); done(null); });
         socket.on('close', () => { clearTimeout(timer); done(null); });
     });
 }
@@ -2409,15 +2409,19 @@ app.get('/devices/status', async (req, res) => {
                 const base = (Number(device.status_slot) || 0) * STATUS_SLOT_SIZE;
                 let health_code = 0;
                 let device_name = '';
-                if (regs) {
+                if (regs && regs.length > base) {
                     health_code = regs[base] !== undefined ? regs[base] : 0;
-                    // Slots 3–10: 8 registers = 16 ASCII bytes
-                    const nameRegs = regs.slice(base + 3, base + 11);
-                    const nameBytes = Buffer.alloc(nameRegs.length * 2);
-                    for (let i = 0; i < nameRegs.length; i++) {
-                        nameBytes.writeUInt16BE(nameRegs[i] || 0, i * 2);
+                    // Slots 3–10: 8 registers = 16 ASCII bytes; only read if registers are present
+                    const nameStart = base + 3;
+                    const nameEnd = Math.min(base + 11, regs.length);
+                    if (nameEnd > nameStart) {
+                        const nameRegs = regs.slice(nameStart, nameEnd);
+                        const nameBytes = Buffer.alloc(nameRegs.length * 2);
+                        for (let i = 0; i < nameRegs.length; i++) {
+                            nameBytes.writeUInt16BE(nameRegs[i] || 0, i * 2);
+                        }
+                        device_name = nameBytes.toString('ascii').replace(/\0.*/, '').trim();
                     }
-                    device_name = nameBytes.toString('ascii').replace(/\0.*/, '').trim();
                 }
                 result[device.id] = { health_code, device_name };
             }

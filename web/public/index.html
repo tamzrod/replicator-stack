@@ -4425,18 +4425,26 @@ ${noConfig}
 // derived values. Renders are only triggered when data changes.
 const STATUS_POLL_INTERVAL_MS = 5000;
 let _statusPollTimer = null;
+let _statusPollActive = false;
 
 async function pollDeviceStatus() {
-  const { ok, data } = await api('GET', '/devices/status');
-  if (!ok || !data || !data.status) return;
-  _deviceStatus = data.status;
-  renderTree(_currentModel);
+  if (_statusPollActive) return;
+  _statusPollActive = true;
+  try {
+    const { ok, data } = await api('GET', '/devices/status');
+    if (ok && data && data.status) {
+      _deviceStatus = data.status;
+      renderTree(_currentModel);
+    }
+  } finally {
+    _statusPollActive = false;
+  }
 }
 
 function startStatusPolling() {
   if (_statusPollTimer) clearInterval(_statusPollTimer);
-  pollDeviceStatus();
-  _statusPollTimer = setInterval(pollDeviceStatus, STATUS_POLL_INTERVAL_MS);
+  pollDeviceStatus().catch(() => {});
+  _statusPollTimer = setInterval(() => pollDeviceStatus().catch(() => {}), STATUS_POLL_INTERVAL_MS);
 }
 
 document.getElementById('btn-refresh').addEventListener('click', loadModel);
