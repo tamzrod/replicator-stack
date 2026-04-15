@@ -118,6 +118,21 @@ function rebuildIndexes(model) {
         _idx.portsById.set(port.id, port);
         _idx.portsByNumber.set(Number(port.port), port);
     }
+
+    // Debug-level consistency check: index sizes must match source array lengths.
+    // Mismatches indicate duplicate IDs in the model (a data-integrity violation
+    // enforced at creation time).  This assertion is informational only — it
+    // does not alter the model or raise an exception in production.
+    const deviceCount = (model.devices || []).length;
+    const portCount   = ((model.memory && model.memory.ports) || []).length;
+    console.assert(
+        _idx.devicesById.size === deviceCount,
+        `[idx] devicesById size mismatch: ${_idx.devicesById.size} entries vs ${deviceCount} devices — duplicate device IDs detected`
+    );
+    console.assert(
+        _idx.portsById.size === portCount,
+        `[idx] portsById size mismatch: ${_idx.portsById.size} entries vs ${portCount} ports — duplicate port IDs detected`
+    );
 }
 
 // ---------------------------------------------------------------------------

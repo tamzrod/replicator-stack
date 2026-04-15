@@ -1794,6 +1794,10 @@ const _bus = (() => {
   return {
     on(event, handler) {
       if (!_handlers[event]) _handlers[event] = [];
+      // Guard: same function reference must not be registered twice for the same
+      // event.  Prevents accidental duplication if this call-site is ever reached
+      // more than once (e.g. after a hypothetical hot-reload or re-init).
+      if (_handlers[event].includes(handler)) return;
       _handlers[event].push(handler);
     },
     async emit(event, payload) {
@@ -2913,6 +2917,10 @@ async function deleteDevice(id) {
   const { ok, data } = await api('DELETE', `/device/${encodeURIComponent(id)}`);
   if (ok) {
     if (_selectedDeviceId === id) _selectedDeviceId = null;
+    // Remove any staged (unsaved) form payload for this device — it is now
+    // permanently deleted and the payload is stale.  Leaving it would cause
+    // globalSave() to attempt a /config/save call for a non-existent device.
+    delete _appState.stagedDeviceForms[id];
     setDirty(true);
     await _bus.emit(EV.MODEL_MUTATED);
   } else {
@@ -5143,7 +5151,12 @@ async function pollDeviceStatus() {
 }
 
 function startStatusPolling() {
-  if (_statusPollTimer) clearInterval(_statusPollTimer);
+  // Idempotency guard: once the polling interval is running, calling this
+  // function again must be a no-op.  Re-creating the interval would reset the
+  // 5-second timer and cause poll drift in long sessions.  The clearInterval
+  // path is preserved for future use (e.g. stop → restart), but an already-
+  // running interval is never replaced.
+  if (_statusPollTimer !== null) return;
   pollDeviceStatus().catch(() => {});
   _statusPollTimer = setInterval(() => pollDeviceStatus().catch(() => {}), STATUS_POLL_INTERVAL_MS);
 }
