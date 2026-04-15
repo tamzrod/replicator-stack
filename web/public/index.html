@@ -595,11 +595,37 @@
     /* ── Memory Tab ──────────────────────────────────────────────────── */
     #memory-tab-container {
       display: none;
+    }
+    #memory-tab-container.active { display: flex; align-items: flex-start; }
+    #memory-tree-panel {
+      width: 220px;
+      flex-shrink: 0;
+      background: #fff;
+      border-right: 1px solid #E5E7EB;
+      min-height: calc(100vh - 105px);
+      overflow-y: auto;
+    }
+    #memory-main-wrapper {
+      flex: 1;
+      min-width: 0;
       max-width: 960px;
       margin: 32px auto;
       padding: 0 16px;
     }
-    #memory-tab-container.active { display: block; }
+    .mem-tree-port-header {
+      display: flex; align-items: center;
+      padding: 6px 10px; cursor: pointer; user-select: none; gap: 4px;
+    }
+    .mem-tree-port-header:hover { background: #F3F4F6; }
+    .mem-tree-port-name { font-size: .78rem; font-weight: 700; color: #1F2933; flex: 1; }
+    .mem-tree-unit {
+      padding: 5px 10px 5px 26px;
+      display: flex; align-items: center; cursor: pointer;
+      font-size: .78rem; color: #1F2933;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .mem-tree-unit:hover { background: #F9FAFB; }
+    .mem-tree-unit.selected { background: #EFF6FF; border-left: 3px solid #145DA0; padding-left: 23px; }
 
     .mem-port-card {
       background: #fff;
@@ -1335,6 +1361,9 @@
 <!-- ── Memory Tab ─────────────────────────────────────────────────── -->
 <div id="memory-tab-container">
 
+<aside id="memory-tree-panel"></aside>
+<div id="memory-main-wrapper">
+
   <div class="card" style="margin-bottom:20px">
     <h2>Memory <span style="color:#9CA3AF;font-size:.8rem;font-weight:400">(MMA runtime memory layout)</span></h2>
     <p style="color:#6B7280;font-size:.85rem;margin-bottom:16px">
@@ -1355,6 +1384,7 @@
     </form>
   </div>
 
+</div><!-- #memory-main-wrapper -->
 </div><!-- #memory-tab-container -->
 
 <!-- ── Runtime Tab ────────────────────────────────────────────────── -->
@@ -2027,6 +2057,7 @@ async function loadModel() {
   refreshGroupDropdowns(data);
   renderDeviceWorkspace();
   renderMemoryTab(data);
+  renderMemoryTree(data);
   await loadMmaEndpoint();
 
   // If the config viewer tab is open, keep it in sync with the latest compiled output.
@@ -2572,6 +2603,79 @@ document.getElementById('tree-panel').addEventListener('click', async e => {
     _editingReadId = null;
     renderTree(_currentModel);
     renderDeviceWorkspace();
+  }
+});
+
+// ── Memory Tree ───────────────────────────────────────────────────────────────
+
+const _collapsedMemPorts = new Set();
+let _selectedMemItem = null; // { type: 'port'|'unit', portId, unitId }
+
+function renderMemoryTree(data) {
+  const panel = document.getElementById('memory-tree-panel');
+  const ports = (data && data.memory && data.memory.ports) || [];
+
+  let html = `<div class="tree-panel-header">
+    <span class="tree-panel-title">Memory Ports</span>
+  </div>`;
+
+  if (ports.length === 0) {
+    html += `<div class="tree-empty">No memory ports defined.</div>`;
+  }
+
+  for (const port of ports) {
+    const collapsed = _collapsedMemPorts.has(port.id);
+    const toggle = collapsed ? '▶' : '▼';
+    const units = port.units || [];
+
+    html += `<div class="tree-group">
+      <div class="mem-tree-port-header" data-mem-port-id="${escapeHtml(port.id)}">
+        <span class="tree-toggle">${toggle}</span>
+        <span class="mem-tree-port-name">🔌 Port ${escapeHtml(String(port.port))}</span>
+        <span style="color:#9CA3AF;font-size:.7rem">${units.length}u</span>
+      </div>`;
+
+    if (!collapsed) {
+      if (units.length === 0) {
+        html += `<div class="tree-empty" style="padding:4px 14px 4px 26px;font-size:.72rem">No units</div>`;
+      }
+      for (const unit of units) {
+        const sel = (_selectedMemItem && _selectedMemItem.type === 'unit' && _selectedMemItem.unitId === unit.id) ? ' selected' : '';
+        html += `<div class="mem-tree-unit${sel}" data-mem-unit-id="${escapeHtml(unit.id)}" data-mem-port-id="${escapeHtml(port.id)}">
+          Unit ID: ${escapeHtml(String(unit.unit_id))}
+        </div>`;
+      }
+    }
+
+    html += `</div>`;
+  }
+
+  panel.innerHTML = html;
+}
+
+document.getElementById('memory-tree-panel').addEventListener('click', e => {
+  // Port header: toggle collapse and scroll to port card
+  const portHeader = e.target.closest('[data-mem-port-id].mem-tree-port-header');
+  if (portHeader) {
+    const portId = portHeader.dataset.memPortId;
+    if (_collapsedMemPorts.has(portId)) _collapsedMemPorts.delete(portId);
+    else _collapsedMemPorts.add(portId);
+    _selectedMemItem = { type: 'port', portId };
+    renderMemoryTree(_currentModel);
+    document.querySelector(`#memory-ports-list .mem-port-card[data-port-id="${CSS.escape(portId)}"]`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    return;
+  }
+
+  // Unit row: select and scroll to unit card
+  const unitRow = e.target.closest('.mem-tree-unit[data-mem-unit-id]');
+  if (unitRow) {
+    const unitId = unitRow.dataset.memUnitId;
+    const portId = unitRow.dataset.memPortId;
+    _selectedMemItem = { type: 'unit', portId, unitId };
+    renderMemoryTree(_currentModel);
+    document.querySelector(`.mem-unit-card[data-unit-id="${CSS.escape(unitId)}"]`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 });
 
