@@ -323,9 +323,11 @@ function findGroup(model, groupId) {
     return (model.groups || []).find(g => g.id === groupId) || null;
 }
 
-// Ensure a memory port and unit exist for the device's target_endpoint + unitId.
-// Creates the port and/or unit if absent.  Safe to call with an already-mutated
-// model before writeModel() — all changes are applied in-place.
+// Ensure a memory port, unit, and areas exist for the device's target_endpoint + unitId.
+// Creates the port and/or unit if absent, then adds any area types required by the
+// device's current reads that are not already present on the unit.
+// Safe to call with an already-mutated model before writeModel() — all changes are
+// applied in-place and _idx is kept consistent for subsequent calls in the same request.
 function ensureTargetMemory(model, device) {
     const portNum = endpointPort(device.target_endpoint);
     if (portNum == null) return; // invalid endpoint — validation catches this separately
@@ -338,17 +340,49 @@ function ensureTargetMemory(model, device) {
     if (!port) {
         port = { id: randomUUID(), port: portNum, blocks: [], units: [] };
         model.memory.ports.push(port);
+        // Keep _idx current so subsequent ensureTargetMemory calls in the same
+        // request find this port without requiring a writeModel() round-trip.
+        _idx.portsByNumber.set(portNum, port);
+        _idx.portsById.set(port.id, port);
         console.log(`[ensureTargetMemory] Created target memory port ${portNum} for unit_id: ${unitId}`);
     }
 
     // Find or create the unit within the port.
-    const existingUnit = (port.units || []).find(u => Number(u.unit_id) === unitId);
-    if (!existingUnit) {
-        if (!port.units) port.units = [];
-        port.units.push({ id: randomUUID(), unit_id: unitId, areas: [] });
+    if (!port.units) port.units = [];
+    let unit = port.units.find(u => Number(u.unit_id) === unitId);
+    if (!unit) {
+        unit = { id: randomUUID(), unit_id: unitId, areas: [] };
+        port.units.push(unit);
         console.log(`[ensureTargetMemory] Created target memory unit_id: ${unitId} on port ${portNum}`);
     } else {
         console.log(`[ensureTargetMemory] Using existing memory unit_id: ${unitId} on port ${portNum}`);
+    }
+
+    // Ensure the unit has area entries for every source_area type used by the device's
+    // reads.  Existing areas are never modified — only missing area types are added.
+    // This is a no-op when the device has no reads (e.g. immediately after creation).
+    const readsByArea = {};
+    for (const read of (device.reads || [])) {
+        const areaType = read.source_area || 'holding_registers';
+        const start = Number(read.source_address);
+        const count = Number(read.source_count);
+        if (!Number.isFinite(start) || !Number.isFinite(count) || count < 1) continue;
+        if (!readsByArea[areaType]) readsByArea[areaType] = [];
+        readsByArea[areaType].push({ start, end: start + count - 1 });
+    }
+    if (!unit.areas) unit.areas = [];
+    const existingAreaTypes = new Set(unit.areas.map(a => a.type));
+    for (const [areaType, ranges] of Object.entries(readsByArea)) {
+        if (existingAreaTypes.has(areaType)) continue; // never overwrite user config
+        for (const m of mergeRanges(ranges)) {
+            unit.areas.push({
+                id: randomUUID(),
+                type: areaType,
+                start: m.start,
+                count: m.end - m.start + 1,
+            });
+            console.log(`[ensureTargetMemory] Added area ${areaType} start=${m.start} count=${m.end - m.start + 1} to unit_id ${unitId}`);
+        }
     }
 }
 
@@ -974,6 +1008,13 @@ app.put('/device/:id', (req, res) => {
         if (device.status_slot !== undefined) existing.status_slot = Number(device.status_slot);
         if (device.status_unit_id !== undefined) {
             existing.status_unit_id = device.status_unit_id != null ? Number(device.status_unit_id) : null;
+        }
+        // Ensure memory is allocated whenever target-related fields change (target_endpoint
+        // or unitId).  This prevents drift when the user edits a device's destination
+        // after initial creation — the old allocation may become orphaned, but the new
+        // one is guaranteed to exist.
+        if (device.target_endpoint !== undefined || device.unitId !== undefined) {
+            ensureTargetMemory(model, existing);
         }
         writeModel(model);
         scheduleCompile();
