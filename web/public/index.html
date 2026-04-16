@@ -1818,6 +1818,37 @@ function escapeHtml(str) {
 }
 
 // Refresh config viewer only when its tab is currently visible.
+// Render the Config Viewer panels from the in-memory canonical config snapshot.
+// This is the primary render path used after every loadModel() call — it reads
+// from _canonicalConfig (populated by the /model/snapshot response) so the
+// Config Viewer always displays the same compiled YAML that was used to derive
+// the Memory Tab and Device View state.  No extra network request is made.
+function refreshConfigViewerFromCanonical() {
+  const cvContainer = document.getElementById('config-viewer-container');
+  if (!cvContainer.classList.contains('active')) return;
+  // _canonicalConfig is always populated from the latest /model/snapshot fetch.
+  // Render using the stored YAML directly — no separate /config fetch needed.
+  _applyCanonicalConfigToViewer(_canonicalConfig, _canonicalVersion);
+}
+
+// Render compiled YAML into the Config Viewer panels and update the status bar.
+// config  — { replicator: string|null, mma: string|null }
+// version — the canonical version stamp for traceability (may be null)
+function _applyCanonicalConfigToViewer(config, version) {
+  console.debug('[canonical:%s] renderConfigViewer', version);
+  const statusEl = document.getElementById('cv-status');
+  const now = new Date().toLocaleTimeString();
+  const vLabel = version != null ? ` [v${version}]` : '';
+  statusEl.textContent = `Snapshot loaded at ${now}${vLabel} — read-only`;
+  renderCvPanel('replicator', config ? config.replicator : null);
+  renderCvPanel('mma',        config ? config.mma        : null);
+}
+
+// Legacy helper — kept for backward compatibility.  The primary refresh path
+// is now refreshConfigViewerFromCanonical() (called by loadModel) and the
+// manual loadConfigs() (bound to the ↻ Refresh button).  This function is
+// intentionally left here as a thin alias so any external code that still
+// references it does not break.
 async function refreshConfigViewerIfActive() {
   const cvContainer = document.getElementById('config-viewer-container');
   if (cvContainer.classList.contains('active')) {
@@ -1827,7 +1858,23 @@ async function refreshConfigViewerIfActive() {
 
 // ── Model ────────────────────────────────────────────────────────────────────
 
+// _currentModel is the canonical model state on the client.  It is always set
+// from a GET /model/snapshot response so it is guaranteed to match the compiled
+// YAML held in _canonicalConfig.  No view may derive its own version of this
+// data — all views must read from _currentModel (or _canonicalConfig for the
+// Config Viewer) and re-render whenever loadModel() updates these variables.
 let _currentModel = null;
+
+// Opaque version stamp that advances every time the server successfully writes
+// both YAML files.  All three views (Device, Memory, Config Viewer) receive the
+// same stamp from the single /model/snapshot response so it is trivial to assert
+// that they are all rendering identical canonical state.
+let _canonicalVersion = null;
+
+// Last compiled YAML content received from the server as part of the snapshot.
+// The Config Viewer reads exclusively from this object — it never fetches
+// /config independently unless the user presses the manual Refresh button.
+const _canonicalConfig = { replicator: null, mma: null };
 
 // Device status from MMA status blocks: deviceId → { health_code, device_name }
 let _deviceStatus = {};
@@ -1977,7 +2024,10 @@ function _snapshotTree(model) {
 }
 
 // Returns a compact, stable string key representing the memory domain:
-// ports → units → areas (including policy and state_sealing).
+// ports → units → areas (including policy and state_sealing) + auto-derived blocks.
+// Blocks are included so that smartRender() detects post-compile block changes
+// and re-renders the Memory Tab — without this, a compile that changes only the
+// auto-derived blocks (e.g. min/max consolidation) would leave a stale populate bar.
 function _snapshotMemory(model) {
   const ports = (model.memory && model.memory.ports) || [];
   return ports.map(p => {
@@ -1989,7 +2039,12 @@ function _snapshotMemory(model) {
       const pol   = u.policy ? JSON.stringify(u.policy) : '';
       return `${u.id}:${u.unit_id}:[${areas}]:${seal}:${pol}`;
     }).join(';');
-    return `${p.id}:${p.port}:{${units}}`;
+    // Include a compact block fingerprint: unit_id:area:address:count per block.
+    // New UUIDs are assigned on every compile so we key on content, not id.
+    const blocks = (p.blocks || []).map(b =>
+      `${b.unit_id}:${b.area}:${b.address}:${b.count}`
+    ).sort().join(',');
+    return `${p.id}:${p.port}:{${units}}|blocks:[${blocks}]`;
   }).join('|');
 }
 
@@ -2162,6 +2217,7 @@ function generateUniqueReadId(reads) {
   return `read_${n}`;
 }
 function renderDeviceWorkspace() {
+  console.debug('[canonical:%s] renderDeviceWorkspace', _canonicalVersion);
   const el = document.getElementById('device-workspace');
 
   if (!_selectedDeviceId || !_currentModel) {
@@ -2528,26 +2584,40 @@ async function loadMmaEndpoint() {
 }
 
 async function loadModel() {
-  const { ok, data } = await api('GET', '/model');
+  // Fetch model + compiled YAML atomically from the single canonical snapshot
+  // endpoint.  All three views (Device, Memory, Config Viewer) derive their
+  // state from this one response, so they are guaranteed to render the same
+  // canonical version and can never diverge after a save/apply cycle.
+  const { ok, data } = await api('GET', '/model/snapshot');
   if (!ok) {
     document.getElementById('device-workspace').innerHTML =
       `<div class="card"><div class="empty-state" style="color:#ef4444">Failed to load model</div></div>`;
     return;
   }
 
+  const { model, canonicalVersion, config } = data;
+
   // Capture previous snapshot BEFORE updating _currentModel so that the diff
   // compares the previously-rendered state against the freshly-fetched data.
   const oldSnap = _lastRenderedModelSnapshot;
-  _currentModel = data;
+  _currentModel = model;
+
+  // Advance the client-side canonical version stamp and store the compiled YAML
+  // so the Config Viewer can render from the same snapshot without re-fetching.
+  _canonicalVersion = canonicalVersion;
+  _canonicalConfig.replicator = config ? config.replicator : null;
+  _canonicalConfig.mma        = config ? config.mma        : null;
 
   // Route only to the render passes whose domain actually changed.
   // On first load (oldSnap === null), smartRender() does a full render.
-  smartRender(oldSnap, data);
+  smartRender(oldSnap, model);
 
   await loadMmaEndpoint();
 
-  // If the config viewer tab is open, keep it in sync with the latest compiled output.
-  await refreshConfigViewerIfActive();
+  // Refresh the Config Viewer from the snapshot data (no extra API call).
+  // The YAML and model come from the same canonical version so the Config
+  // Viewer is guaranteed to match what Memory Tab and Device View show.
+  refreshConfigViewerFromCanonical();
 }
 
 // ── Event Bus handler registrations ──────────────────────────────────────────
@@ -2787,7 +2857,9 @@ async function compile() {
       ? `<details class="resolution-log" style="margin-top:8px;text-align:left"><summary>⚠ ${resolutionLog.length} identity conflict(s) auto-resolved</summary><ul>${resolutionLog.map(r => `<li>${escapeHtml(r.reason)}</li>`).join('')}</ul></details>`
       : '';
     el.innerHTML = `<div class="banner show ok">✓ Compiled successfully — ${escapeHtml(String(data.routes))} route(s) written to Replicator and MMA configs${blocksMsg}${excludedMsg}.${resolutionHtml}</div>`;
-    await refreshConfigViewerIfActive();
+    // Do not refresh the Config Viewer here — MODEL_MUTATED (emitted below)
+    // triggers loadModel() → /model/snapshot which updates ALL views from the
+    // same canonical state atomically, preventing pre/post-apply mixing.
   } else if (data.status === 'error') {
     // Structured recovery error — pause and present options to user
     const action = await showCompileErrorDialog(data);
@@ -2807,7 +2879,7 @@ async function compile() {
         : '';
       const modeLabel = action === 'auto_fix' ? 'Auto-fixed and compiled' : 'Force-compiled (unsafe override)';
       el.innerHTML = `<div class="banner show ok">✓ ${modeLabel} — ${escapeHtml(String(resolveData.routes))} route(s)${blocksMsg2}.${resHtml2}</div>`;
-      await refreshConfigViewerIfActive();
+      // Config Viewer is refreshed atomically via MODEL_MUTATED → loadModel() below.
     } else if (resolveData.status === 'error') {
       // Auto-fix itself failed — show updated error
       const mmaItems2 = ((resolveData.details && resolveData.details.mma_errors) || []).map(e => `<li>${escapeHtml(e)}</li>`).join('');
@@ -2904,7 +2976,7 @@ async function globalSave() {
       setCompileState('success');
       setDirty(false);
       await _bus.emit(EV.MODEL_MUTATED);
-      await refreshConfigViewerIfActive();
+      // Config Viewer is refreshed automatically via loadModel() → refreshConfigViewerFromCanonical().
       setTimeout(loadRuntimeStatus, 1500);
     } else if (data.status === 'error') {
       // Structured recovery error — pause and present options to user
@@ -2940,7 +3012,7 @@ async function globalSave() {
         }
         setDirty(false);
         await _bus.emit(EV.MODEL_MUTATED);
-        await refreshConfigViewerIfActive();
+        // Config Viewer is refreshed automatically via loadModel() → refreshConfigViewerFromCanonical().
         setTimeout(loadRuntimeStatus, 1500);
       } else if (resolveData.status === 'error') {
         _showGlobalSaveStatus(`✗ Auto-fix could not resolve all errors: ${resolveData.errorSummary || ''}`, true);
@@ -2956,7 +3028,7 @@ async function globalSave() {
       setCompileState('success');
       setDirty(false);
       await _bus.emit(EV.MODEL_MUTATED);
-      await refreshConfigViewerIfActive();
+      // Config Viewer is refreshed automatically via loadModel() → refreshConfigViewerFromCanonical().
     } else {
       _showGlobalSaveStatus(`✗ ${data.error || 'Save failed'}`, true);
       setCompileState('error');
@@ -3085,6 +3157,7 @@ function buildTreeGroups(data) {
 }
 
 function renderTree(data) {
+  console.debug('[canonical:%s] renderTree', _canonicalVersion);
   const panel = document.getElementById('tree-panel');
   const treeGroups = buildTreeGroups(data);
 
@@ -3477,6 +3550,7 @@ function renderPolicyRuleCardHtml(rule) {
 }
 
 function renderMemoryTab(data) {
+  console.debug('[canonical:%s] renderMemoryTab', _canonicalVersion);
   const container = document.getElementById('memory-ports-list');
   const ports = (data && data.memory && data.memory.ports) || [];
 
@@ -4539,6 +4613,9 @@ function renderCvPanel(panelId, text) {
 }
 
 async function loadConfigs() {
+  // Explicit manual refresh — fetches the latest compiled YAML from the server
+  // and updates _canonicalConfig so the in-memory snapshot stays current even
+  // when the user refreshes without triggering a full model reload.
   const statusEl = document.getElementById('cv-status');
   statusEl.textContent = 'Loading…';
   const { ok, data } = await api('GET', '/config');
@@ -4546,8 +4623,12 @@ async function loadConfigs() {
     statusEl.textContent = `✗ Failed to load configs: ${data.error || 'Unknown error'}`;
     return;
   }
+  // Persist into canonical store so all views reference the same state.
+  _canonicalConfig.replicator = data.replicator;
+  _canonicalConfig.mma        = data.mma;
   const now = new Date().toLocaleTimeString();
-  statusEl.textContent = `Snapshot loaded at ${now} — read-only`;
+  const vLabel = _canonicalVersion != null ? ` [v${_canonicalVersion}]` : '';
+  statusEl.textContent = `Snapshot loaded at ${now}${vLabel} — read-only`;
   renderCvPanel('replicator', data.replicator);
   renderCvPanel('mma', data.mma);
 
@@ -4659,7 +4740,16 @@ document.getElementById('tab-bar').addEventListener('click', e => {
     startRuntimeLogs();
   } else if (tab === 'config-viewer') {
     cvContainer.classList.add('active');
-    loadConfigs();
+    // Use the already-fetched canonical config snapshot when available so the
+    // Config Viewer always shows data that matches the current Memory Tab and
+    // Device View state.  Fall back to an explicit API fetch only when the
+    // canonical snapshot has not yet been populated (e.g. very first page load
+    // before loadModel() has completed).
+    if (_canonicalConfig.replicator !== null || _canonicalConfig.mma !== null) {
+      _applyCanonicalConfigToViewer(_canonicalConfig, _canonicalVersion);
+    } else {
+      loadConfigs();
+    }
     stopLogStream();
   }
 });
