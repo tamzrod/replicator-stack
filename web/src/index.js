@@ -1852,23 +1852,23 @@ app.post('/group/:id/duplicate', (req, res) => {
         const newDeviceIds = [];
 
         for (const orig of (model.devices || []).filter(d => d.groupId === id)) {
-            // Unique name
+            // Unique name: start with a _1 suffix and increment until free
             const origBase = (orig.name || '').replace(/_(\d+)$/, '');
-            let newName = orig.name || '';
-            let ni = 1;
+            let newName = `${origBase}_1`;
+            let ni = 2;
             while (existingDeviceNames.has(newName)) {
                 newName = `${origBase}_${ni}`;
                 ni++;
             }
             existingDeviceNames.add(newName);
 
-            // Next free source_unit_id
-            let newSourceUnitId = (Number(orig.source_unit_id) || 0) + 1;
+            // Next free source_unit_id (use ?? 0 to treat 0 as valid)
+            let newSourceUnitId = (Number(orig.source_unit_id ?? 0)) + 1;
             while (usedSourceUnitIds.has(newSourceUnitId)) newSourceUnitId++;
             usedSourceUnitIds.add(newSourceUnitId);
 
-            // Next free unitId
-            let newUnitId = (Number(orig.unitId) || 0) + 1;
+            // Next free unitId (use ?? 0 to treat 0 as valid)
+            let newUnitId = (Number(orig.unitId ?? 0)) + 1;
             while (usedUnitIds.has(newUnitId)) newUnitId++;
             usedUnitIds.add(newUnitId);
 
@@ -2943,7 +2943,7 @@ function modbusReadHoldingRegisters(host, port, unitId, startAddr, count, timeou
 app.get('/devices/status', async (req, res) => {
     try {
         const model = readModel();
-        const devices = (model.devices || []).filter(d => d.state === 'ACTIVE'); // only runtime devices
+        const devices = (model.devices || []).filter(d => d.state === 'ACTIVE' || !d.state); // only runtime devices
         const result = {};
 
         // Group devices by (host, port, status_unit_id) so we can batch-read.

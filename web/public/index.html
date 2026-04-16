@@ -3199,11 +3199,12 @@ document.getElementById('ctx-validate-group').addEventListener('click', async ()
   const { ok, data } = await api('POST', `/group/${encodeURIComponent(id)}/validate`);
   if (ok) {
     await _bus.emit(EV.MODEL_MUTATED);
-    alert(`Group validated: ${data.validated} device(s) marked Validated.`);
+    const n = data.validated;
+    alert(`Group validated: ${n} device${n === 1 ? '' : 's'} marked Validated.`);
   } else {
     let msg = data.error || 'Validation failed';
     if (Array.isArray(data.errors)) {
-      msg = data.errors.map(e => `${e.name || e.deviceId}: ${e.errors.join(', ')}`).join('\n');
+      msg = data.errors.map(e => `${e.name || e.deviceId}: ${Array.isArray(e.errors) ? e.errors.join(', ') : e.errors}`).join('\n');
     }
     alert(`Validation errors:\n${msg}`);
   }
@@ -3474,8 +3475,8 @@ async function deleteGroup(groupId) {
   const group = (model.groups || []).find(g => g.id === groupId);
   const name = group ? group.name : groupId;
   const deviceCount = (model.devices || []).filter(d => d.groupId === groupId).length;
-  const deviceMsg = deviceCount > 0 ? ` and ${deviceCount} device(s)` : '';
-  if (!confirm(`Delete group "${name}"${deviceMsg}?\n\nThis will permanently remove the group and all its devices.`)) return;
+  const deviceMsg = deviceCount > 0 ? ` and its ${deviceCount} device${deviceCount === 1 ? '' : 's'}` : '';
+  if (!confirm(`Delete group "${name}"${deviceMsg}?\n\nThis will permanently remove the group${deviceMsg ? ' and all its devices' : ''}.`)) return;
   const { ok, data } = await api('DELETE', `/group/${encodeURIComponent(groupId)}`);
   if (!ok) { alert(`Error: ${data.error || 'Unknown error'}`); return; }
   setDirty(true);
