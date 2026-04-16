@@ -323,9 +323,16 @@ function findGroup(model, groupId) {
     return (model.groups || []).find(g => g.id === groupId) || null;
 }
 
-// Ensure a memory port, unit, and areas exist for the device's target_endpoint + unitId.
-// Creates the port and/or unit if absent, then adds any area types required by the
-// device's current reads that are not already present on the unit.
+// Ensure a memory port, unit, and areas exist for the device's target_endpoint + unitId,
+// and keep the unit's area types in sync with the actual reads.
+//
+// Creates the port and/or unit if absent.  Then it computes the complete set of
+// source_area types required by ALL devices that target the same (portNum, unitId) —
+// including the triggering device — and:
+//   • removes areas whose type is no longer required by any device read (stale areas)
+//   • adds areas for types that are missing, using the merged address range from reads
+//   • leaves areas whose type is still required untouched (preserving user-set start/count)
+//
 // Safe to call with an already-mutated model before writeModel() — all changes are
 // applied in-place and _idx is kept consistent for subsequent calls in the same request.
 function ensureTargetMemory(model, device) {
@@ -355,25 +362,40 @@ function ensureTargetMemory(model, device) {
         port.units.push(unit);
         console.log(`[ensureTargetMemory] Created target memory unit_id: ${unitId} on port ${portNum}`);
     } else {
-        console.log(`[ensureTargetMemory] Using existing memory unit_id: ${unitId} on port ${portNum}`);
+        console.log(`[ensureTargetMemory] Syncing areas for unit_id: ${unitId} on port ${portNum}`);
     }
 
-    // Ensure the unit has area entries for every source_area type used by the device's
-    // reads.  Existing areas are never modified — only missing area types are added.
-    // This is a no-op when the device has no reads (e.g. immediately after creation).
+    // Collect required area types from ALL devices that target this (portNum, unitId).
+    // Using the full device list ensures that an area shared by multiple devices is only
+    // removed when no device still requires it.
     const readsByArea = {};
-    for (const read of (device.reads || [])) {
-        const areaType = read.source_area || 'holding_registers';
-        const start = Number(read.source_address);
-        const count = Number(read.source_count);
-        if (!Number.isFinite(start) || !Number.isFinite(count) || count < 1) continue;
-        if (!readsByArea[areaType]) readsByArea[areaType] = [];
-        readsByArea[areaType].push({ start, end: start + count - 1 });
+    for (const dev of (model.devices || [])) {
+        if (endpointPort(dev.target_endpoint) !== portNum || Number(dev.unitId) !== unitId) continue;
+        for (const read of (dev.reads || [])) {
+            const areaType = read.source_area || 'holding_registers';
+            const start = Number(read.source_address);
+            const count = Number(read.source_count);
+            if (!Number.isFinite(start) || !Number.isFinite(count) || count < 1) continue;
+            if (!readsByArea[areaType]) readsByArea[areaType] = [];
+            readsByArea[areaType].push({ start, end: start + count - 1 });
+        }
     }
+
     if (!unit.areas) unit.areas = [];
+    const requiredAreaTypes = new Set(Object.keys(readsByArea));
+
+    // Remove areas whose type is no longer required by any device read.
+    const before = unit.areas.length;
+    unit.areas = unit.areas.filter(a => requiredAreaTypes.has(a.type));
+    const removed = before - unit.areas.length;
+    if (removed > 0) {
+        console.log(`[ensureTargetMemory] Removed ${removed} stale area(s) from unit_id ${unitId} on port ${portNum}`);
+    }
+
+    // Add areas for types that are now required but not yet present.
     const existingAreaTypes = new Set(unit.areas.map(a => a.type));
     for (const [areaType, ranges] of Object.entries(readsByArea)) {
-        if (existingAreaTypes.has(areaType)) continue; // never overwrite user config
+        if (existingAreaTypes.has(areaType)) continue; // already present — preserve user's start/count
         for (const m of mergeRanges(ranges)) {
             unit.areas.push({
                 id: randomUUID(),
@@ -1829,6 +1851,7 @@ app.post('/read', (req, res) => {
         }
 
         device.reads.push(read);
+        ensureTargetMemory(model, device);
         writeModel(model);
         scheduleCompile();
 
@@ -1939,6 +1962,7 @@ app.put('/read/:deviceId/:readId', (req, res) => {
         if (read.source_address !== undefined) existing.source_address = Number(read.source_address);
         if (read.source_count !== undefined) existing.source_count = Number(read.source_count);
         if (read.poll_interval !== undefined) existing.poll_interval = Number(read.poll_interval);
+        ensureTargetMemory(model, device);
         writeModel(model);
         scheduleCompile();
         res.json({ ok: true });
@@ -1961,6 +1985,7 @@ app.delete('/read/:deviceId/:readId', (req, res) => {
             return res.status(404).json({ error: `Read ${readId} not found on device ${deviceId}` });
         }
         device.reads.splice(idx, 1);
+        ensureTargetMemory(model, device);
         writeModel(model);
         scheduleCompile();
         res.json({ ok: true });
@@ -2086,6 +2111,7 @@ app.post('/read/:deviceId/import-csv', express.text({ type: 'text/plain' }), (re
         }
 
         if (imported.length > 0) {
+            ensureTargetMemory(model, device);
             writeModel(model);
             scheduleCompile();
         }
