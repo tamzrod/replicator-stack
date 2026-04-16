@@ -4225,6 +4225,14 @@ function renderReconcileResults(missing, orphaned, valid, area_mismatch) {
             <label>Missing Areas</label>
             <span>${escapeHtml(entry.missingAreas.join(', '))}</span>
           </div>
+          <div class="mem-recon-actions">
+            <button class="btn-mem mem-recon-fix-areas-btn"
+              data-device-id="${escapeHtml(dev.id)}"
+              data-device-name="${escapeHtml(dev.name || dev.id)}"
+              data-unit-id="${escapeHtml(String(dev.unitId))}">
+              ✚ Fix Areas
+            </button>
+          </div>
         </div>`;
       }).join('');
 
@@ -4358,6 +4366,33 @@ function _attachReconcileHandlers(container) {
       } else {
         btn.disabled = false;
         btn.textContent = '✕ Delete';
+        alert(`Error: ${data.error || 'Unknown error'}`);
+      }
+    });
+  });
+
+  // Add missing areas to an area-mismatch unit
+  container.querySelectorAll('.mem-recon-fix-areas-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const deviceId = btn.dataset.deviceId;
+      const deviceName = btn.dataset.deviceName;
+      const unitId = btn.dataset.unitId;
+      if (!confirm(`Add missing areas for device "${deviceName}" (unit_id: ${unitId})?`)) return;
+
+      btn.disabled = true;
+      btn.textContent = '…';
+
+      const { ok, data } = await api('POST', '/memory/reconcile/create', { device_id: deviceId });
+
+      if (ok) {
+        _appendMmaLog(`[memory reconcile] Fixed areas for device "${deviceName}" (unit_id: ${unitId})`);
+        setDirty(true);
+        await _bus.emit(EV.MODEL_MUTATED);
+        // Re-run scan to refresh results
+        document.getElementById('mem-reconcile-btn').click();
+      } else {
+        btn.disabled = false;
+        btn.textContent = '✚ Fix Areas';
         alert(`Error: ${data.error || 'Unknown error'}`);
       }
     });
