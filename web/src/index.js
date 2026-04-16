@@ -1043,13 +1043,18 @@ app.post('/device/:id/duplicate', (req, res) => {
 
         // Find the next free target_endpoint by incrementing the port number.
         // target_endpoint must be unique across all devices.
+        // Fall back to orig.target_endpoint if it cannot be parsed (isValidEndpoint
+        // guarantees host:port for any stored device, but defensive parsing is safer).
         const origTarget = orig.target_endpoint || '';
         const targetColonIdx = origTarget.lastIndexOf(':');
-        const targetHost = targetColonIdx !== -1 ? origTarget.slice(0, targetColonIdx) : origTarget;
-        const origPort = targetColonIdx !== -1 ? Number(origTarget.slice(targetColonIdx + 1)) : 502;
-        let newTargetPort = (Number.isFinite(origPort) ? origPort : 502) + 1;
-        while (_idx.devicesByTarget.has(`${targetHost}:${newTargetPort}`)) newTargetPort++;
-        const newTargetEndpoint = `${targetHost}:${newTargetPort}`;
+        const targetHost = targetColonIdx > 0 ? origTarget.slice(0, targetColonIdx) : null;
+        const parsedOrigPort = targetColonIdx > 0 ? Number(origTarget.slice(targetColonIdx + 1)) : NaN;
+        let newTargetEndpoint = origTarget; // fallback: keep original if unparseable
+        if (targetHost && Number.isFinite(parsedOrigPort)) {
+            let newTargetPort = parsedOrigPort + 1;
+            while (_idx.devicesByTarget.has(`${targetHost}:${newTargetPort}`)) newTargetPort++;
+            newTargetEndpoint = `${targetHost}:${newTargetPort}`;
+        }
 
         // Deep-copy reads so the new device shares no references with the original.
         const newReads = JSON.parse(JSON.stringify(orig.reads || []));
