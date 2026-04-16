@@ -2,6 +2,7 @@ const express = require('express');
 const fs = require('fs');
 const http = require('http');
 const net = require('net');
+const os = require('os');
 const path = require('path');
 const { randomUUID } = require('crypto');
 
@@ -11,7 +12,7 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 
 const DATA_DIR = process.env.DATA_DIR || '/app/data';
 const TARGET_HOST = process.env.TARGET_HOST || 'mma';
-const APP_VERSION = process.env.APP_VERSION || 'dev';
+let APP_VERSION = process.env.APP_VERSION || 'dev';
 const MODEL_PATH = path.join(DATA_DIR, 'model.json');
 const REPLICATOR_CONFIG_PATH = path.join(DATA_DIR, 'replicator/config.yaml');
 const MMA_CONFIG_PATH = path.join(DATA_DIR, 'mma/config.yaml');
@@ -3098,6 +3099,29 @@ app.post('/runtime/apply-restart', async (req, res) => {
 
 // ---------------------------------------------------------------------------
 
-app.listen(8080, () => {
-    console.log('Web running on 8080');
+/**
+ * Discover the running image tag via the Docker socket and update APP_VERSION.
+ * Falls back to the current value (env var or 'dev') if discovery fails.
+ */
+async function discoverVersion() {
+    try {
+        const id = os.hostname();
+        const result = await dockerApi('GET', `/containers/${id}/json`);
+        if (result.status === 200 && result.body?.Config?.Image) {
+            const image = result.body.Config.Image; // e.g. "rodtamin/mcs-web:v1.2.3"
+            const tag = image.includes(':') ? image.split(':').pop() : null;
+            if (tag) {
+                APP_VERSION = tag;
+                console.log(`[version] Discovered version from image tag: ${APP_VERSION}`);
+            }
+        }
+    } catch (err) {
+        console.warn(`[version] Could not self-discover version via Docker socket: ${err.message}`);
+    }
+}
+
+discoverVersion().finally(() => {
+    app.listen(8080, () => {
+        console.log('Web running on 8080');
+    });
 });
