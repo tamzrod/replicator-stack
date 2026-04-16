@@ -1445,7 +1445,7 @@
         </button>
         <div class="burger-about-section">
           <strong>MCS Web</strong><br>
-          Version 1.0.0<br>
+          Version <span id="app-version">…</span><br>
           Modbus Consolidator System<br>
           <span style="opacity:.6">— tamzrod</span>
         </div>
@@ -5258,6 +5258,18 @@ document.getElementById('btn-report').addEventListener('click', () => {
 })();
 
 loadModel().then(startStatusPolling);
+
+fetch('/version')
+  .then(r => r.json())
+  .then(data => {
+    const el = document.getElementById('app-version');
+    if (el) el.textContent = data.version || 'dev';
+  })
+  .catch(err => {
+    console.warn('Could not fetch app version:', err);
+    const el = document.getElementById('app-version');
+    if (el) el.textContent = 'dev';
+  });
 </script>
 </body>
 </html>

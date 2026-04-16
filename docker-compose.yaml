@@ -11,6 +11,8 @@ services:
     volumes:
       - ./data/mma:/config
     command: ["/config/config.yaml"]
+    environment:
+      - APP_VERSION=${APP_VERSION:-dev}
     networks:
       - replicator-net
 
@@ -23,12 +25,15 @@ services:
     volumes:
       - ./data/replicator:/config
     command: ["/config/config.yaml"]
+    environment:
+      - APP_VERSION=${APP_VERSION:-dev}
     networks:
       - replicator-net
 
   web:
-    build: ./web
-    image: rodtamin/mcs-web
+    build:
+      context: ./web
+    image: rodtamin/mcs-web:${APP_VERSION:-dev}
     container_name: mcs-web
     restart: unless-stopped
     ports:
