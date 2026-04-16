@@ -93,20 +93,64 @@
       flex-shrink: 0;
     }
 
-    /* ── Report Button ───────────────────────────────────────────────── */
-    .btn-toolbar-report {
+    /* ── Burger Menu ─────────────────────────────────────────────────── */
+    .burger-menu-wrap { position: relative; }
+    .btn-burger {
       background: transparent;
       border: 1.5px solid #4B5563;
       color: #D1D5DB;
-      font-size: .875rem;
-      font-weight: 600;
-      padding: 7px 14px;
+      font-size: 1.1rem;
+      font-weight: 700;
+      padding: 5px 11px;
       border-radius: 6px;
       cursor: pointer;
-      white-space: nowrap;
+      line-height: 1;
       transition: all .15s;
     }
-    .btn-toolbar-report:hover { border-color: #9CA3AF; color: #fff; background: #374151; }
+    .btn-burger:hover { border-color: #9CA3AF; color: #fff; background: #374151; }
+    .burger-dropdown {
+      display: none;
+      position: absolute;
+      top: calc(100% + 6px);
+      right: 0;
+      min-width: 180px;
+      background: #1F2933;
+      border: 1.5px solid #374151;
+      border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.45);
+      z-index: 900;
+      overflow: hidden;
+    }
+    .burger-dropdown.open { display: block; }
+    .burger-dropdown-item {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      width: 100%;
+      padding: 11px 16px;
+      background: transparent;
+      border: none;
+      color: #D1D5DB;
+      font-size: .875rem;
+      font-weight: 500;
+      cursor: pointer;
+      text-align: left;
+      transition: background .12s;
+    }
+    .burger-dropdown-item:hover { background: #374151; color: #fff; }
+    .burger-dropdown-divider {
+      height: 1px;
+      background: #374151;
+      margin: 4px 0;
+    }
+    .burger-about-section {
+      padding: 10px 16px;
+      font-size: .78rem;
+      color: #6B7280;
+      line-height: 1.5;
+      border-top: 1px solid #374151;
+    }
+    .burger-about-section strong { color: #9CA3AF; }
 
     main {
       padding: 24px 24px;
@@ -1392,8 +1436,20 @@
     <div id="compile-status-badge" class="compile-status-badge compile-status-idle"
       title="Current compiler state">⚙ IDLE</div>
     <div class="toolbar-sep"></div>
-    <button id="btn-report" class="btn-toolbar-report"
-      title="Generate a printable configuration report (open browser print dialog to save as PDF)">📄 Report</button>
+    <div class="burger-menu-wrap" id="burger-wrap">
+      <button class="btn-burger" id="btn-burger" title="Menu" aria-label="Open menu" aria-expanded="false">☰</button>
+      <div class="burger-dropdown" id="burger-dropdown" role="menu">
+        <button class="burger-dropdown-item" id="btn-report" role="menuitem"
+          title="Generate a printable configuration report (open browser print dialog to save as PDF)">
+          📄 Report
+        </button>
+        <div class="burger-about-section">
+          <strong>MCS Web</strong><br>
+          Version 1.0.0<br>
+          Modbus Consolidator System
+        </div>
+      </div>
+    </div>
   </div>
 </header>
 
@@ -2054,6 +2110,9 @@ const _COMPILE_STATE_LABELS = {
   error:     { icon: '✗',  text: 'ERROR',     cls: 'compile-status-error' },
 };
 
+let _compileSuccessTimer = null;
+const COMPILE_SUCCESS_DISPLAY_MS = 4000;
+
 function setCompileState(state) {
   _appState.compileState = state;
   const badge = document.getElementById('compile-status-badge');
@@ -2061,6 +2120,10 @@ function setCompileState(state) {
   const def = _COMPILE_STATE_LABELS[state] || _COMPILE_STATE_LABELS.idle;
   badge.textContent = `${def.icon} ${def.text}`;
   badge.className = `compile-status-badge ${def.cls}`;
+  clearTimeout(_compileSuccessTimer);
+  if (state === 'success') {
+    _compileSuccessTimer = setTimeout(() => setCompileState('idle'), COMPILE_SUCCESS_DISPLAY_MS);
+  }
 }
 
 function _showGlobalSaveStatus(msg, isError) {
@@ -5163,7 +5226,36 @@ function startStatusPolling() {
 
 document.getElementById('btn-refresh').addEventListener('click', loadModel);
 document.getElementById('btn-global-save').addEventListener('click', globalSave);
-document.getElementById('btn-report').addEventListener('click', generateReport);
+document.getElementById('btn-report').addEventListener('click', () => {
+  document.getElementById('burger-dropdown').classList.remove('open');
+  document.getElementById('btn-burger').setAttribute('aria-expanded', 'false');
+  generateReport();
+});
+
+// ── Burger Menu Toggle ────────────────────────────────────────────────────────
+(function () {
+  const btn = document.getElementById('btn-burger');
+  const dropdown = document.getElementById('burger-dropdown');
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const isOpen = dropdown.classList.toggle('open');
+    btn.setAttribute('aria-expanded', String(isOpen));
+  });
+  document.addEventListener('click', (e) => {
+    if (!document.getElementById('burger-wrap').contains(e.target)) {
+      dropdown.classList.remove('open');
+      btn.setAttribute('aria-expanded', 'false');
+    }
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && dropdown.classList.contains('open')) {
+      dropdown.classList.remove('open');
+      btn.setAttribute('aria-expanded', 'false');
+      btn.focus();
+    }
+  });
+})();
+
 loadModel().then(startStatusPolling);
 </script>
 </body>
