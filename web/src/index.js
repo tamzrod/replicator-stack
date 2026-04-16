@@ -267,6 +267,20 @@ function readModel() {
             }
         }
     }
+    // Migrate devices and groups that pre-date the lifecycle state field.
+    // Existing entries are considered ACTIVE so runtime behaviour is unchanged.
+    for (const device of model.devices) {
+        if (!device.state) {
+            device.state = 'ACTIVE';
+            migrated = true;
+        }
+    }
+    for (const group of model.groups) {
+        if (!group.state) {
+            group.state = 'ACTIVE';
+            migrated = true;
+        }
+    }
     if (migrated) writeModel(model);
     _modelCache = model; // always cache after the first cold read, regardless of migration
     rebuildIndexes(model);
@@ -305,6 +319,7 @@ function getMissingTargetPorts(model) {
     const existingPortNums = new Set((model.memory.ports || []).map(p => Number(p.port)));
     const missing = new Set();
     for (const device of (model.devices || [])) {
+        if (device.state !== 'ACTIVE') continue; // TEMPLATE / VALIDATED are not runtime
         const port = endpointPort(device.target_endpoint);
         if (port != null && !existingPortNums.has(port)) {
             missing.add(port);
@@ -451,8 +466,10 @@ function recompileStatusSlots(model) {
     const devices = model.devices || [];
 
     // Group devices by status_unit_id (skip devices that don't use status memory)
+    // Only ACTIVE devices participate in runtime status slot assignments.
     const groups = {};
     for (const device of devices) {
+        if (device.state !== 'ACTIVE') continue;
         if (device.status_unit_id == null) continue;
         const key = String(device.status_unit_id);
         if (!groups[key]) groups[key] = [];
@@ -496,6 +513,8 @@ function toReplicatorYaml(model, excludedPortNums = new Set()) {
     const lines = ['replicator:', '  units:'];
 
     for (const device of devices) {
+        // Only ACTIVE devices are consumed by the runtime engine.
+        if (device.state !== 'ACTIVE') continue;
         // Skip devices whose target port has been explicitly excluded (user declined creation)
         const targetPort = endpointPort(device.target_endpoint);
         if (targetPort !== null && excludedPortNums.has(targetPort)) continue;
@@ -674,6 +693,7 @@ function toMmaYaml(model) {
     // Status blocks are sized as device_count × STATUS_SLOT_SIZE registers, starting at address 0.
     const statusByPort = {};
     for (const device of (model.devices || [])) {
+        if (device.state !== 'ACTIVE') continue; // TEMPLATE / VALIDATED are not runtime
         if (device.status_unit_id == null) continue;
         const targetPort = endpointPort(device.target_endpoint);
         if (!targetPort) continue;
@@ -901,6 +921,7 @@ app.post('/device', (req, res) => {
             unitId,
             status_slot: device.status_slot != null ? Number(device.status_slot) : 0,
             status_unit_id: device.status_unit_id != null ? Number(device.status_unit_id) : null,
+            state: 'ACTIVE',
             reads: []
         };
         model.devices.push(newDevice);
@@ -1038,6 +1059,7 @@ app.post('/device/:id/duplicate', (req, res) => {
             unitId: newUnitId,
             status_slot: newStatusSlot,
             status_unit_id: statusUnitId,
+            state: 'TEMPLATE',
             reads: newReads,
         };
 
@@ -1743,7 +1765,7 @@ app.post('/group', (req, res) => {
         if (exists) {
             return res.status(409).json({ error: `Group "${group.name.trim()}" already exists` });
         }
-        const newGroup = { id: randomUUID(), name: group.name.trim() };
+        const newGroup = { id: randomUUID(), name: group.name.trim(), state: 'ACTIVE' };
         model.groups.push(newGroup);
         writeModel(model);
         scheduleCompile();
@@ -1779,7 +1801,7 @@ app.put('/group/:id', (req, res) => {
     }
 });
 
-// DELETE /group/:id — remove group; devices in this group become ungrouped
+// DELETE /group/:id — remove group and all devices belonging to it
 app.delete('/group/:id', (req, res) => {
     try {
         const { id } = req.params;
@@ -1789,12 +1811,212 @@ app.delete('/group/:id', (req, res) => {
             return res.status(404).json({ error: `Group "${id}" not found` });
         }
         model.groups.splice(idx, 1);
-        for (const device of model.devices) {
-            if (device.groupId === id) device.groupId = null;
-        }
+        // Delete all devices that belong to this group (do not orphan them)
+        model.devices = (model.devices || []).filter(d => d.groupId !== id);
         writeModel(model);
         scheduleCompile();
         res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /group/:id/duplicate — clone a group and all its devices; sets state TEMPLATE on all
+app.post('/group/:id/duplicate', (req, res) => {
+    try {
+        const { id } = req.params;
+        const model = readModel();
+        const origGroup = findGroup(model, id);
+        if (!origGroup) {
+            return res.status(404).json({ error: `Group "${id}" not found` });
+        }
+
+        // Build a unique name for the duplicated group
+        const existingGroupNames = new Set((model.groups || []).map(g => g.name));
+        const baseName = origGroup.name.replace(/ \(\d+\)$/, '');
+        let newGroupName = `${baseName} (copy)`;
+        let n = 2;
+        while (existingGroupNames.has(newGroupName)) {
+            newGroupName = `${baseName} (copy ${n})`;
+            n++;
+        }
+
+        const newGroupId = randomUUID();
+        const newGroup = { id: newGroupId, name: newGroupName, state: 'TEMPLATE' };
+        model.groups.push(newGroup);
+
+        // Clone all devices that belong to this group
+        const existingDeviceNames = new Set((model.devices || []).map(d => d.name || ''));
+        const usedSourceUnitIds = new Set((model.devices || []).map(d => d.source_unit_id));
+        const usedUnitIds = new Set((model.devices || []).map(d => d.unitId));
+        const newDeviceIds = [];
+
+        for (const orig of (model.devices || []).filter(d => d.groupId === id)) {
+            // Unique name
+            const origBase = (orig.name || '').replace(/_(\d+)$/, '');
+            let newName = orig.name || '';
+            let ni = 1;
+            while (existingDeviceNames.has(newName)) {
+                newName = `${origBase}_${ni}`;
+                ni++;
+            }
+            existingDeviceNames.add(newName);
+
+            // Next free source_unit_id
+            let newSourceUnitId = (Number(orig.source_unit_id) || 0) + 1;
+            while (usedSourceUnitIds.has(newSourceUnitId)) newSourceUnitId++;
+            usedSourceUnitIds.add(newSourceUnitId);
+
+            // Next free unitId
+            let newUnitId = (Number(orig.unitId) || 0) + 1;
+            while (usedUnitIds.has(newUnitId)) newUnitId++;
+            usedUnitIds.add(newUnitId);
+
+            const generatedId = `device_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
+            const newDevice = {
+                id: generatedId,
+                name: newName,
+                groupId: newGroupId,
+                source_endpoint: orig.source_endpoint,
+                source_unit_id: newSourceUnitId,
+                target_endpoint: orig.target_endpoint,
+                unitId: newUnitId,
+                status_slot: orig.status_slot != null ? Number(orig.status_slot) : 0,
+                status_unit_id: orig.status_unit_id != null ? Number(orig.status_unit_id) : null,
+                state: 'TEMPLATE',
+                reads: JSON.parse(JSON.stringify(orig.reads || [])),
+            };
+            model.devices.push(newDevice);
+            newDeviceIds.push(generatedId);
+        }
+
+        writeModel(model);
+        scheduleCompile();
+        res.status(201).json({ ok: true, group: newGroup, deviceIds: newDeviceIds });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ── Helper: validate a device object's lifecycle fields ─────────────────────
+function validateDeviceLifecycle(device) {
+    const errors = [];
+    if (!device.source_endpoint || !isValidEndpoint(device.source_endpoint)) {
+        errors.push('source_endpoint must be a valid host:port (e.g. 192.168.1.1:502)');
+    }
+    if (!device.target_endpoint || !isValidEndpoint(device.target_endpoint)) {
+        errors.push('target_endpoint must be a valid host:port (e.g. mma:502)');
+    }
+    if (device.unitId == null || !Number.isFinite(Number(device.unitId)) || Number(device.unitId) < 0) {
+        errors.push('unitId must be a non-negative integer');
+    }
+    return errors;
+}
+
+// POST /device/:id/validate — validate device fields; sets state VALIDATED on success
+app.post('/device/:id/validate', (req, res) => {
+    try {
+        const { id } = req.params;
+        const model = readModel();
+        const device = findDevice(model, id);
+        if (!device) {
+            return res.status(404).json({ error: `Device ${id} not found` });
+        }
+        const errors = validateDeviceLifecycle(device);
+        if (errors.length > 0) {
+            return res.status(422).json({ ok: false, errors });
+        }
+        device.state = 'VALIDATED';
+        writeModel(model);
+        res.json({ ok: true, state: device.state });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /device/:id/activate — promote device from VALIDATED → ACTIVE
+app.post('/device/:id/activate', (req, res) => {
+    try {
+        const { id } = req.params;
+        const model = readModel();
+        const device = findDevice(model, id);
+        if (!device) {
+            return res.status(404).json({ error: `Device ${id} not found` });
+        }
+        if (device.state === 'TEMPLATE') {
+            return res.status(422).json({ error: 'Device must be validated before activation. Run validate first.' });
+        }
+        if (device.state === 'ACTIVE') {
+            return res.json({ ok: true, state: device.state });
+        }
+        // state === 'VALIDATED'
+        device.state = 'ACTIVE';
+        writeModel(model);
+        scheduleCompile();
+        res.json({ ok: true, state: device.state });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /group/:id/validate — validate all devices in a group; sets VALIDATED on success
+app.post('/group/:id/validate', (req, res) => {
+    try {
+        const { id } = req.params;
+        const model = readModel();
+        const group = findGroup(model, id);
+        if (!group) {
+            return res.status(404).json({ error: `Group "${id}" not found` });
+        }
+        const groupDevices = (model.devices || []).filter(d => d.groupId === id);
+        const allErrors = [];
+        for (const device of groupDevices) {
+            const errors = validateDeviceLifecycle(device);
+            if (errors.length > 0) {
+                allErrors.push({ deviceId: device.id, name: device.name, errors });
+            }
+        }
+        if (allErrors.length > 0) {
+            return res.status(422).json({ ok: false, errors: allErrors });
+        }
+        for (const device of groupDevices) {
+            device.state = 'VALIDATED';
+        }
+        writeModel(model);
+        res.json({ ok: true, validated: groupDevices.length });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /group/:id/activate — promote all VALIDATED devices in a group to ACTIVE
+app.post('/group/:id/activate', (req, res) => {
+    try {
+        const { id } = req.params;
+        const model = readModel();
+        const group = findGroup(model, id);
+        if (!group) {
+            return res.status(404).json({ error: `Group "${id}" not found` });
+        }
+        const groupDevices = (model.devices || []).filter(d => d.groupId === id);
+        const templateDevices = groupDevices.filter(d => d.state === 'TEMPLATE');
+        if (templateDevices.length > 0) {
+            return res.status(422).json({
+                error: `${templateDevices.length} device(s) are still in TEMPLATE state. Run validate first.`,
+                templateDeviceIds: templateDevices.map(d => d.id),
+            });
+        }
+        let activated = 0;
+        for (const device of groupDevices) {
+            if (device.state === 'VALIDATED') {
+                device.state = 'ACTIVE';
+                activated++;
+            }
+        }
+        group.state = 'ACTIVE';
+        writeModel(model);
+        scheduleCompile();
+        res.json({ ok: true, activated });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -2057,6 +2279,7 @@ function rehydrateFromYaml(model) {
     const required = {};
 
     for (const device of (model.devices || [])) {
+        if (device.state !== 'ACTIVE') continue; // TEMPLATE / VALIDATED are not runtime
         const unitId = Number(device.unitId);
         if (!Number.isFinite(unitId) || unitId < 0) continue;
 
@@ -2174,6 +2397,7 @@ function resolveIdentityConflicts(model) {
     const statusProcessedByPort = new Map(); // portNum → Map<old_suid, new_suid | null>
 
     for (const device of (model.devices || [])) {
+        if (device.state !== 'ACTIVE') continue; // TEMPLATE / VALIDATED are not runtime
         if (device.status_unit_id == null) continue;
         const targetPort = endpointPort(device.target_endpoint);
         if (targetPort == null) continue;
@@ -2371,8 +2595,9 @@ function compileAndWrite(model, excludedPortNums = new Set(), opts = {}) {
             if (excludedPortNums.has(portNum)) return false;
             if ((p.units || []).length > 0) return false; // has manually configured units
             if ((p.blocks || []).length > 0) return false;
-            // Port is non-empty if any non-excluded device uses it for status memory
+            // Port is non-empty if any non-excluded ACTIVE device uses it for status memory
             const hasStatusContent = (model.devices || []).some(d =>
+                d.state === 'ACTIVE' &&
                 d.status_unit_id != null &&
                 endpointPort(d.target_endpoint) === portNum &&
                 !excludedPortNums.has(portNum)
@@ -2450,9 +2675,10 @@ app.post('/compile', (req, res) => {
             });
         }
 
-        // Count routes for non-excluded devices only.
+        // Count routes for non-excluded ACTIVE devices only.
         let routeCount = 0;
         for (const device of (model.devices || [])) {
+            if (device.state !== 'ACTIVE') continue; // TEMPLATE / VALIDATED are not runtime
             const targetPort = endpointPort(device.target_endpoint);
             if (targetPort !== null && excludedPortNums.has(targetPort)) continue;
             routeCount += (device.reads || []).length;
@@ -2717,7 +2943,7 @@ function modbusReadHoldingRegisters(host, port, unitId, startAddr, count, timeou
 app.get('/devices/status', async (req, res) => {
     try {
         const model = readModel();
-        const devices = model.devices || [];
+        const devices = (model.devices || []).filter(d => d.state === 'ACTIVE'); // only runtime devices
         const result = {};
 
         // Group devices by (host, port, status_unit_id) so we can batch-read.
@@ -2984,6 +3210,7 @@ app.get('/runtime/logs/:service', (req, res) => {
 function countRoutes(model, excludedPortNums) {
     let count = 0;
     for (const device of (model.devices || [])) {
+        if (device.state !== 'ACTIVE') continue; // TEMPLATE / VALIDATED are not runtime
         const targetPort = endpointPort(device.target_endpoint);
         if (targetPort !== null && excludedPortNums.has(targetPort)) continue;
         count += (device.reads || []).length;

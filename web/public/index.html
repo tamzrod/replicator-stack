@@ -356,6 +356,30 @@
     .tree-btn-grp-del:hover { background: #FEF3C7; }
     .tree-empty { padding: 16px 14px; font-size: .78rem; color: #9CA3AF; font-style: italic; }
 
+    /* ── Lifecycle State Badges ─────────────────────────────────────── */
+    .state-badge {
+      display: inline-block; font-size: .58rem; font-weight: 700; padding: 1px 5px;
+      border-radius: 8px; margin-left: 5px; vertical-align: middle; flex-shrink: 0;
+      letter-spacing: .02em; text-transform: uppercase;
+    }
+    .state-badge-template {
+      background: #E5E7EB; color: #6B7280; border: 1px solid #D1D5DB;
+    }
+    .state-badge-validated {
+      background: #F0FDF4; color: #15803D; border: 1px solid #86EFAC;
+    }
+    .state-badge-active {
+      background: #22C55E; color: #fff; border: 1px solid #16A34A;
+    }
+
+    /* ── Group Context Menu ─────────────────────────────────────────── */
+    #group-context-menu {
+      position: fixed; display: none; z-index: 9999;
+      background: #fff; border: 1px solid #E5E7EB; border-radius: 6px;
+      box-shadow: 0 4px 16px rgba(0,0,0,.12); min-width: 180px; padding: 4px 0;
+    }
+    #group-context-menu.visible { display: block; }
+
     /* ── Device Context Menu ────────────────────────────────────────── */
     #device-context-menu {
       position: fixed; display: none; z-index: 9999;
@@ -1787,10 +1811,32 @@
   </div>
 </dialog>
 
+<!-- ── Group Context Menu ─────────────────────────────────────────── -->
+<div id="group-context-menu" role="menu" aria-label="Group actions">
+  <div class="ctx-menu-item" id="ctx-duplicate-group" role="menuitem">
+    <span class="ctx-icon">⎘</span> Duplicate Group
+  </div>
+  <div class="ctx-menu-item" id="ctx-validate-group" role="menuitem">
+    <span class="ctx-icon">✔</span> Validate Group
+  </div>
+  <div class="ctx-menu-item" id="ctx-activate-group" role="menuitem">
+    <span class="ctx-icon">▶</span> Activate Group
+  </div>
+  <div class="ctx-menu-item ctx-menu-item-danger" id="ctx-delete-group" role="menuitem">
+    <span class="ctx-icon">🗑</span> Delete Group &amp; Devices
+  </div>
+</div>
+
 <!-- ── Device Context Menu ────────────────────────────────────────── -->
 <div id="device-context-menu" role="menu" aria-label="Device actions">
   <div class="ctx-menu-item" id="ctx-duplicate-device" role="menuitem">
     <span class="ctx-icon">⎘</span> Duplicate
+  </div>
+  <div class="ctx-menu-item" id="ctx-validate-device" role="menuitem">
+    <span class="ctx-icon">✔</span> Validate
+  </div>
+  <div class="ctx-menu-item" id="ctx-activate-device" role="menuitem">
+    <span class="ctx-icon">▶</span> Activate
   </div>
   <div class="ctx-menu-item ctx-menu-item-danger" id="ctx-delete-device" role="menuitem">
     <span class="ctx-icon">🗑</span> Delete
@@ -3027,16 +3073,54 @@ function _hideDeviceContextMenu() {
 }
 
 document.getElementById('tree-panel').addEventListener('contextmenu', e => {
+  // Device right-click
   const deviceRow = e.target.closest('.tree-device[data-device-id]');
-  if (!deviceRow) return;
-  e.preventDefault();
-  _showDeviceContextMenu(deviceRow.dataset.deviceId, e.clientX, e.clientY);
+  if (deviceRow) {
+    e.preventDefault();
+    _hideGroupContextMenu();
+    _showDeviceContextMenu(deviceRow.dataset.deviceId, e.clientX, e.clientY);
+    return;
+  }
+  // Group header right-click
+  const groupHeader = e.target.closest('.tree-group-header[data-group-id]');
+  if (groupHeader) {
+    e.preventDefault();
+    _hideDeviceContextMenu();
+    _showGroupContextMenu(groupHeader.dataset.groupId, e.clientX, e.clientY);
+    return;
+  }
 });
 
 document.getElementById('ctx-duplicate-device').addEventListener('click', async () => {
   const id = _ctxMenuDeviceId;
   _hideDeviceContextMenu();
   if (id) await duplicateDevice(id);
+});
+
+document.getElementById('ctx-validate-device').addEventListener('click', async () => {
+  const id = _ctxMenuDeviceId;
+  _hideDeviceContextMenu();
+  if (!id) return;
+  const { ok, data } = await api('POST', `/device/${encodeURIComponent(id)}/validate`);
+  if (ok) {
+    await _bus.emit(EV.MODEL_MUTATED);
+  } else {
+    const msgs = Array.isArray(data.errors) ? data.errors.join('\n') : (data.error || 'Unknown error');
+    alert(`Validation failed:\n${msgs}`);
+  }
+});
+
+document.getElementById('ctx-activate-device').addEventListener('click', async () => {
+  const id = _ctxMenuDeviceId;
+  _hideDeviceContextMenu();
+  if (!id) return;
+  const { ok, data } = await api('POST', `/device/${encodeURIComponent(id)}/activate`);
+  if (ok) {
+    setDirty(true);
+    await _bus.emit(EV.MODEL_MUTATED);
+  } else {
+    alert(`Activate failed: ${data.error || 'Unknown error'}`);
+  }
 });
 
 document.getElementById('ctx-delete-device').addEventListener('click', async () => {
@@ -3052,13 +3136,97 @@ document.addEventListener('click', e => {
   }
 });
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') _hideDeviceContextMenu();
+  if (e.key === 'Escape') { _hideDeviceContextMenu(); _hideGroupContextMenu(); }
 });
 
 
 
 let _selectedDeviceId = null;
 const _collapsedGroups = new Set();
+
+// ── Lifecycle State Badge Helper ─────────────────────────────────────────────
+
+function _stateBadgeHtml(state) {
+  if (!state || state === 'ACTIVE') return '';
+  if (state === 'TEMPLATE') return '<span class="state-badge state-badge-template">Draft</span>';
+  if (state === 'VALIDATED') return '<span class="state-badge state-badge-validated">Validated</span>';
+  return '';
+}
+
+// ── Group Context Menu ───────────────────────────────────────────────────────
+
+let _ctxMenuGroupId = null;
+
+function _showGroupContextMenu(groupId, x, y) {
+  _ctxMenuGroupId = groupId;
+  const menu = document.getElementById('group-context-menu');
+  menu.style.left = `${x}px`;
+  menu.style.top  = `${y}px`;
+  menu.classList.add('visible');
+  const rect = menu.getBoundingClientRect();
+  if (rect.right  > window.innerWidth)  menu.style.left = `${Math.max(0, x - rect.width)}px`;
+  if (rect.bottom > window.innerHeight) menu.style.top  = `${Math.max(0, y - rect.height)}px`;
+}
+
+function _hideGroupContextMenu() {
+  document.getElementById('group-context-menu').classList.remove('visible');
+  _ctxMenuGroupId = null;
+}
+
+document.addEventListener('click', e => {
+  if (!document.getElementById('group-context-menu').contains(e.target)) {
+    _hideGroupContextMenu();
+  }
+});
+
+document.getElementById('ctx-duplicate-group').addEventListener('click', async () => {
+  const id = _ctxMenuGroupId;
+  _hideGroupContextMenu();
+  if (!id) return;
+  const { ok, data } = await api('POST', `/group/${encodeURIComponent(id)}/duplicate`);
+  if (ok) {
+    setDirty(true);
+    await _bus.emit(EV.MODEL_MUTATED);
+  } else {
+    alert(`Duplicate group failed: ${data.error || 'Unknown error'}`);
+  }
+});
+
+document.getElementById('ctx-validate-group').addEventListener('click', async () => {
+  const id = _ctxMenuGroupId;
+  _hideGroupContextMenu();
+  if (!id) return;
+  const { ok, data } = await api('POST', `/group/${encodeURIComponent(id)}/validate`);
+  if (ok) {
+    await _bus.emit(EV.MODEL_MUTATED);
+    alert(`Group validated: ${data.validated} device(s) marked Validated.`);
+  } else {
+    let msg = data.error || 'Validation failed';
+    if (Array.isArray(data.errors)) {
+      msg = data.errors.map(e => `${e.name || e.deviceId}: ${e.errors.join(', ')}`).join('\n');
+    }
+    alert(`Validation errors:\n${msg}`);
+  }
+});
+
+document.getElementById('ctx-activate-group').addEventListener('click', async () => {
+  const id = _ctxMenuGroupId;
+  _hideGroupContextMenu();
+  if (!id) return;
+  const { ok, data } = await api('POST', `/group/${encodeURIComponent(id)}/activate`);
+  if (ok) {
+    setDirty(true);
+    await _bus.emit(EV.MODEL_MUTATED);
+  } else {
+    alert(`Activate group failed: ${data.error || 'Unknown error'}`);
+  }
+});
+
+document.getElementById('ctx-delete-group').addEventListener('click', async () => {
+  const id = _ctxMenuGroupId;
+  _hideGroupContextMenu();
+  if (id) await deleteGroup(id);
+});
 
 function buildTreeGroups(data) {
   const groups = (data && data.groups) || [];
@@ -3075,11 +3243,11 @@ function buildTreeGroups(data) {
   const result = [];
   // Named groups (sorted by name)
   for (const g of [...groups].sort((a, b) => a.name.localeCompare(b.name))) {
-    result.push({ id: g.id, name: g.name, devices: grouped[g.id] || [], isUngrouped: false });
+    result.push({ id: g.id, name: g.name, state: g.state || 'ACTIVE', devices: grouped[g.id] || [], isUngrouped: false });
   }
   // Ungrouped
   if (grouped['__ungrouped__'] && grouped['__ungrouped__'].length > 0) {
-    result.push({ id: '__ungrouped__', name: 'Ungrouped', devices: grouped['__ungrouped__'], isUngrouped: true });
+    result.push({ id: '__ungrouped__', name: 'Ungrouped', state: 'ACTIVE', devices: grouped['__ungrouped__'], isUngrouped: true });
   }
   return result;
 }
@@ -3103,16 +3271,17 @@ function renderTree(data) {
   for (const group of treeGroups) {
     const collapsed = _collapsedGroups.has(group.id);
     const toggle = collapsed ? '▶' : '▼';
+    const grpStateBadge = group.isUngrouped ? '' : _stateBadgeHtml(group.state);
     const grpActions = group.isUngrouped ? '' :
       `<span class="tree-group-actions">
         <button class="tree-btn tree-btn-grp-edit" data-edit-group="${escapeHtml(group.id)}" title="Rename group">✎</button>
-        <button class="tree-btn tree-btn-grp-del" data-del-group="${escapeHtml(group.id)}" title="Remove group — devices move to Ungrouped">✕</button>
       </span>`;
 
     html += `<div class="tree-group">
-      <div class="tree-group-header" data-toggle-group="${escapeHtml(group.id)}">
+      <div class="tree-group-header" data-toggle-group="${escapeHtml(group.id)}" data-group-id="${escapeHtml(group.id)}">
         <span class="tree-toggle">${toggle}</span>
         <span class="tree-group-name">${escapeHtml(group.name)}</span>
+        ${grpStateBadge}
         ${grpActions}
       </div>`;
 
@@ -3133,6 +3302,7 @@ function renderTree(data) {
         html += `<div class="tree-device${sel}" data-device-id="${escapeHtml(d.id)}">
           <span class="device-status-dot ${dotClass}" title="${dotTitle}"></span>
           <span class="tree-device-name">${label}</span>
+          ${_stateBadgeHtml(d.state)}
         </div>`;
       }
     }
@@ -3146,11 +3316,7 @@ function renderTree(data) {
 }
 
 document.getElementById('tree-panel').addEventListener('click', async e => {
-  // Delete group
-  const delGroup = e.target.closest('[data-del-group]');
-  if (delGroup) { e.stopPropagation(); await deleteGroup(delGroup.dataset.delGroup); return; }
-
-  // Edit group
+  // Edit group (rename button in group header)
   const editGroup = e.target.closest('[data-edit-group]');
   if (editGroup) { e.stopPropagation(); openEditGroup(editGroup.dataset.editGroup); return; }
 
@@ -3307,7 +3473,9 @@ async function deleteGroup(groupId) {
   const model = _currentModel || {};
   const group = (model.groups || []).find(g => g.id === groupId);
   const name = group ? group.name : groupId;
-  if (!confirm(`Remove group "${name}"? Devices in this group will become Ungrouped.`)) return;
+  const deviceCount = (model.devices || []).filter(d => d.groupId === groupId).length;
+  const deviceMsg = deviceCount > 0 ? ` and ${deviceCount} device(s)` : '';
+  if (!confirm(`Delete group "${name}"${deviceMsg}?\n\nThis will permanently remove the group and all its devices.`)) return;
   const { ok, data } = await api('DELETE', `/group/${encodeURIComponent(groupId)}`);
   if (!ok) { alert(`Error: ${data.error || 'Unknown error'}`); return; }
   setDirty(true);
