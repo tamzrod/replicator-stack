@@ -80,6 +80,7 @@ const _idx = {
     devicesByUnitId:       new Map(),
     devicesByStatusUnitId: new Map(),
     devicesByStatusSlot:   new Map(),
+    devicesByTarget:       new Map(), // device.target_endpoint (string) → device object
     portsById:             new Map(),
     portsByNumber:         new Map(),
 };
@@ -89,6 +90,7 @@ function rebuildIndexes(model) {
     _idx.devicesByUnitId.clear();
     _idx.devicesByStatusUnitId.clear();
     _idx.devicesByStatusSlot.clear();
+    _idx.devicesByTarget.clear();
     _idx.portsById.clear();
     _idx.portsByNumber.clear();
 
@@ -113,6 +115,10 @@ function rebuildIndexes(model) {
                 _idx.devicesByStatusSlot.set(slot, []);
             }
             _idx.devicesByStatusSlot.get(slot).push(device);
+        }
+
+        if (device.target_endpoint) {
+            _idx.devicesByTarget.set(device.target_endpoint.trim(), device);
         }
     }
 
@@ -889,6 +895,12 @@ app.post('/device', (req, res) => {
             }
         }
 
+        const targetEndpointTrimmed = device.target_endpoint.trim();
+        const conflicting = _idx.devicesByTarget.get(targetEndpointTrimmed);
+        if (conflicting) {
+            return res.status(409).json({ error: `target_endpoint "${targetEndpointTrimmed}" is already used by device "${conflicting.name || conflicting.id}"` });
+        }
+
         const generatedId = `device_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
 
         const newDevice = {
@@ -937,7 +949,12 @@ app.put('/device/:id', (req, res) => {
             if (!isValidEndpoint(device.target_endpoint)) {
                 return res.status(400).json({ error: 'device.target_endpoint must be a valid endpoint (e.g. mma2:501)' });
             }
-            existing.target_endpoint = device.target_endpoint.trim();
+            const targetEndpointTrimmed = device.target_endpoint.trim();
+            const conflicting = _idx.devicesByTarget.get(targetEndpointTrimmed);
+            if (conflicting && conflicting.id !== id) {
+                return res.status(409).json({ error: `target_endpoint "${targetEndpointTrimmed}" is already used by device "${conflicting.name || conflicting.id}"` });
+            }
+            existing.target_endpoint = targetEndpointTrimmed;
         }
         if (device.unitId !== undefined) {
             const unitId = Number(device.unitId);
@@ -1024,6 +1041,16 @@ app.post('/device/:id/duplicate', (req, res) => {
         let newStatusSlot = Number(orig.status_slot ?? -1) + 1;
         while (usedSlots.has(newStatusSlot)) newStatusSlot++;
 
+        // Find the next free target_endpoint by incrementing the port number.
+        // target_endpoint must be unique across all devices.
+        const origTarget = orig.target_endpoint || '';
+        const targetColonIdx = origTarget.lastIndexOf(':');
+        const targetHost = targetColonIdx !== -1 ? origTarget.slice(0, targetColonIdx) : origTarget;
+        const origPort = targetColonIdx !== -1 ? Number(origTarget.slice(targetColonIdx + 1)) : 502;
+        let newTargetPort = (Number.isFinite(origPort) ? origPort : 502) + 1;
+        while (_idx.devicesByTarget.has(`${targetHost}:${newTargetPort}`)) newTargetPort++;
+        const newTargetEndpoint = `${targetHost}:${newTargetPort}`;
+
         // Deep-copy reads so the new device shares no references with the original.
         const newReads = JSON.parse(JSON.stringify(orig.reads || []));
 
@@ -1034,7 +1061,7 @@ app.post('/device/:id/duplicate', (req, res) => {
             groupId: orig.groupId || null,
             source_endpoint: orig.source_endpoint,
             source_unit_id: newSourceUnitId,
-            target_endpoint: orig.target_endpoint,
+            target_endpoint: newTargetEndpoint,
             unitId: newUnitId,
             status_slot: newStatusSlot,
             status_unit_id: statusUnitId,
@@ -1128,7 +1155,12 @@ app.post('/config/save', (req, res) => {
             }
             if (sourceConfig.status_slot !== undefined) existing.status_slot = Number(sourceConfig.status_slot);
 
-            existing.target_endpoint = targetConfig.target_endpoint.trim();
+            const targetEndpointTrimmed = targetConfig.target_endpoint.trim();
+            const conflicting = _idx.devicesByTarget.get(targetEndpointTrimmed);
+            if (conflicting && conflicting.id !== deviceId) {
+                return res.status(409).json({ error: `target_endpoint "${targetEndpointTrimmed}" is already used by device "${conflicting.name || conflicting.id}"` });
+            }
+            existing.target_endpoint = targetEndpointTrimmed;
             existing.unitId = targetUnitId;
             if (targetConfig.status_unit_id !== undefined) {
                 existing.status_unit_id = targetConfig.status_unit_id != null ? Number(targetConfig.status_unit_id) : null;
@@ -1584,7 +1616,7 @@ app.post('/memory/port/:portId/units/populate', (req, res) => {
 // ---------------------------------------------------------------------------
 
 // GET /memory/reconcile — compare replicator device configs vs memory registry
-// Returns { missing, orphaned, valid } lists.  Read-only; never mutates model.
+// Returns { missing, orphaned, valid, area_mismatch } lists.  Read-only; never mutates model.
 app.get('/memory/reconcile', (req, res) => {
     try {
         const model = readModel();
@@ -1604,6 +1636,7 @@ app.get('/memory/reconcile', (req, res) => {
 
         const missing = [];
         const valid = [];
+        const area_mismatch = [];
         // Track units that are accounted for by a device
         const accountedUnits = new Set(); // key: `${portId}:${unit.id}`
 
@@ -1630,19 +1663,47 @@ app.get('/memory/reconcile', (req, res) => {
                 });
             } else {
                 accountedUnits.add(`${portEntry.portId}:${unit.id}`);
-                valid.push({
-                    device: {
-                        id: device.id,
-                        name: device.name,
-                        unitId: device.unitId,
-                        target_endpoint: device.target_endpoint,
-                        status_slot: device.status_slot,
-                        status_unit_id: device.status_unit_id,
-                    },
-                    unit: { id: unit.id, unit_id: unit.unit_id, areas: unit.areas || [] },
-                    portId: portEntry.portId,
-                    portNum,
-                });
+
+                // Determine the area types required by this device's reads.
+                const requiredAreas = new Set();
+                for (const read of (device.reads || [])) {
+                    requiredAreas.add(read.source_area || 'holding_registers');
+                }
+
+                // Determine the area types configured in the unit.
+                const configuredAreas = new Set((unit.areas || []).map(a => a.type));
+
+                // Find area types required by the device but absent from the unit.
+                const missingAreas = [...requiredAreas].filter(a => !configuredAreas.has(a));
+
+                const deviceSummary = {
+                    id: device.id,
+                    name: device.name,
+                    unitId: device.unitId,
+                    target_endpoint: device.target_endpoint,
+                    status_slot: device.status_slot,
+                    status_unit_id: device.status_unit_id,
+                };
+                const unitSummary = { id: unit.id, unit_id: unit.unit_id, areas: unit.areas || [] };
+
+                if (missingAreas.length > 0) {
+                    area_mismatch.push({
+                        device: deviceSummary,
+                        unit: unitSummary,
+                        portId: portEntry.portId,
+                        portNum,
+                        missingAreas,
+                        configuredAreas: [...configuredAreas],
+                        requiredAreas: [...requiredAreas],
+                    });
+                } else {
+                    valid.push({
+                        device: deviceSummary,
+                        unit: unitSummary,
+                        portId: portEntry.portId,
+                        portNum,
+                    });
+                }
             }
         }
 
@@ -1661,7 +1722,7 @@ app.get('/memory/reconcile', (req, res) => {
             }
         }
 
-        res.json({ missing, orphaned, valid });
+        res.json({ missing, orphaned, valid, area_mismatch });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
