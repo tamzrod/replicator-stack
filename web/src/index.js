@@ -2228,17 +2228,19 @@ function rehydrateFromYaml(model) {
         const port = _idx.portsById.get(req.portId) || null;
         if (!port) continue;
 
-        const merged = mergeRanges(req.ranges);
-        for (const m of merged) {
-            port.blocks.push({
-                id: randomUUID(),
-                unit_id: req.unitId,
-                area: req.area,
-                address: m.start,
-                count: m.end - m.start + 1,
-            });
-            blocksCreated++;
-        }
+        // Unified allocation: one contiguous block spanning min start → max end,
+        // regardless of gaps between individual read ranges.
+        if (req.ranges.length === 0) continue;
+        const minStart = Math.min(...req.ranges.map(r => r.start));
+        const maxEnd   = Math.max(...req.ranges.map(r => r.end));
+        port.blocks.push({
+            id: randomUUID(),
+            unit_id: req.unitId,
+            area: req.area,
+            address: minStart,
+            count: maxEnd - minStart + 1,
+        });
+        blocksCreated++;
     }
 
     // Detect whether any blocks changed
