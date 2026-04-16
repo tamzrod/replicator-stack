@@ -942,7 +942,9 @@ app.get('/model', (req, res) => {
 //
 // Response shape:
 //   { model, canonicalVersion, config: { replicator: string|null, mma: string|null } }
-app.get('/model/snapshot', (req, res) => {
+// Rate-limited (same policy as /validate) because each response includes two
+// file system reads for the compiled YAML files.
+app.get('/model/snapshot', rateLimit, (req, res) => {
     try {
         const model = readModel();
         const replicatorYaml = fs.existsSync(REPLICATOR_CONFIG_PATH)

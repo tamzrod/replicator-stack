@@ -1835,7 +1835,7 @@ function refreshConfigViewerFromCanonical() {
 // config  — { replicator: string|null, mma: string|null }
 // version — the canonical version stamp for traceability (may be null)
 function _applyCanonicalConfigToViewer(config, version) {
-  console.debug('[canonical:%s] renderConfigViewer', version);
+  console.debug('[canonical:%s] _applyCanonicalConfigToViewer', version);
   const statusEl = document.getElementById('cv-status');
   const now = new Date().toLocaleTimeString();
   const vLabel = version != null ? ` [v${version}]` : '';
@@ -1863,6 +1863,8 @@ async function refreshConfigViewerIfActive() {
 // YAML held in _canonicalConfig.  No view may derive its own version of this
 // data — all views must read from _currentModel (or _canonicalConfig for the
 // Config Viewer) and re-render whenever loadModel() updates these variables.
+// CONTRACT: only loadModel() may reassign _currentModel.  Reassignment anywhere
+// else violates the single-source-of-truth guarantee and will cause views to diverge.
 let _currentModel = null;
 
 // Opaque version stamp that advances every time the server successfully writes
@@ -1874,6 +1876,9 @@ let _canonicalVersion = null;
 // Last compiled YAML content received from the server as part of the snapshot.
 // The Config Viewer reads exclusively from this object — it never fetches
 // /config independently unless the user presses the manual Refresh button.
+// Declared as const to prevent accidental reference reassignment; the .replicator
+// and .mma properties are intentionally mutable and are updated on every
+// loadModel() call so the object always reflects the latest canonical YAML.
 const _canonicalConfig = { replicator: null, mma: null };
 
 // Device status from MMA status blocks: deviceId → { health_code, device_name }
@@ -2041,6 +2046,10 @@ function _snapshotMemory(model) {
     }).join(';');
     // Include a compact block fingerprint: unit_id:area:address:count per block.
     // New UUIDs are assigned on every compile so we key on content, not id.
+    // Assumption: rehydrateFromYaml() produces at most one block per
+    // (unit_id, area) combination per port (unified min→max range), so this
+    // four-field tuple is sufficient to uniquely identify each auto-derived block.
+    // Blocks are sorted so insertion-order differences don't trigger false positives.
     const blocks = (p.blocks || []).map(b =>
       `${b.unit_id}:${b.area}:${b.address}:${b.count}`
     ).sort().join(',');
