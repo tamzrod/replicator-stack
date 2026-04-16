@@ -4139,16 +4139,20 @@ document.getElementById('mem-reconcile-btn').addEventListener('click', async () 
     return;
   }
 
-  const { missing, orphaned, valid } = data;
-  const total = missing.length + orphaned.length + valid.length;
-  banner.textContent = `✓ Scan complete — ${total} device/unit pair(s) analyzed: ${missing.length} missing, ${orphaned.length} orphaned, ${valid.length} valid.`;
-  banner.className = 'banner show ok';
+  const { missing, orphaned, valid, area_mismatch } = data;
+  const areaMismatch = area_mismatch || [];
+  const total = missing.length + orphaned.length + valid.length + areaMismatch.length;
+  const issues = missing.length + areaMismatch.length;
+  const bannerClass = issues > 0 ? 'banner show err' : 'banner show ok';
+  banner.textContent = `✓ Scan complete — ${total} device/unit pair(s) analyzed: ${missing.length} missing, ${areaMismatch.length} area mismatch, ${orphaned.length} orphaned, ${valid.length} valid.`;
+  banner.className = bannerClass;
 
-  results.innerHTML = renderReconcileResults(missing, orphaned, valid);
+  results.innerHTML = renderReconcileResults(missing, orphaned, valid, areaMismatch);
   _attachReconcileHandlers(results);
 });
 
-function renderReconcileResults(missing, orphaned, valid) {
+function renderReconcileResults(missing, orphaned, valid, area_mismatch) {
+  const areaMismatch = area_mismatch || [];
   const missingHtml = missing.length === 0
     ? '<div class="mem-recon-empty">None — all devices have a memory allocation.</div>'
     : missing.map(entry => {
@@ -4182,6 +4186,44 @@ function renderReconcileResults(missing, orphaned, valid) {
               data-unit-id="${escapeHtml(String(dev.unitId))}">
               + Create Allocation
             </button>
+          </div>
+        </div>`;
+      }).join('');
+
+  const areaMismatchHtml = areaMismatch.length === 0
+    ? '<div class="mem-recon-empty">None — all units cover their device\'s required areas.</div>'
+    : areaMismatch.map(entry => {
+        const dev = entry.device;
+        const unit = entry.unit;
+        return `<div class="mem-recon-row missing">
+          <span class="mem-recon-badge missing">AREA MISMATCH</span>
+          <div class="mem-recon-field">
+            <label>Device</label>
+            <span>${escapeHtml(dev.name || dev.id)}</span>
+          </div>
+          <div class="mem-recon-field">
+            <label>Unit ID</label>
+            <span>${escapeHtml(String(dev.unitId))}</span>
+          </div>
+          <div class="mem-recon-field">
+            <label>Port</label>
+            <span>${escapeHtml(String(entry.portNum))}</span>
+          </div>
+          <div class="mem-recon-field">
+            <label>Status Slot</label>
+            <span>${escapeHtml(String(dev.status_slot ?? 0))}</span>
+          </div>
+          <div class="mem-recon-field">
+            <label>Required Areas</label>
+            <span>${escapeHtml(entry.requiredAreas.join(', ') || '—')}</span>
+          </div>
+          <div class="mem-recon-field">
+            <label>Configured Areas</label>
+            <span>${escapeHtml(entry.configuredAreas.join(', ') || '—')}</span>
+          </div>
+          <div class="mem-recon-field">
+            <label>Missing Areas</label>
+            <span>${escapeHtml(entry.missingAreas.join(', '))}</span>
           </div>
         </div>`;
       }).join('');
@@ -4251,6 +4293,10 @@ function renderReconcileResults(missing, orphaned, valid) {
     <div class="mem-recon-section">
       <div class="mem-recon-section-title missing">⚠ Missing Memory — ${missing.length} device(s) need allocation</div>
       ${missingHtml}
+    </div>
+    <div class="mem-recon-section">
+      <div class="mem-recon-section-title missing">⚠ Area Mismatch — ${areaMismatch.length} unit(s) missing required area types</div>
+      ${areaMismatchHtml}
     </div>
     <div class="mem-recon-section">
       <div class="mem-recon-section-title orphaned">✗ Unused Memory — ${orphaned.length} orphaned unit(s)</div>
