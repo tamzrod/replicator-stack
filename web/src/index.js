@@ -11,6 +11,7 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 
 const DATA_DIR = process.env.DATA_DIR || '/app/data';
 const TARGET_HOST = process.env.TARGET_HOST || 'mma';
+const APP_VERSION = process.env.APP_VERSION || 'dev';
 const MODEL_PATH = path.join(DATA_DIR, 'model.json');
 const REPLICATOR_CONFIG_PATH = path.join(DATA_DIR, 'replicator/config.yaml');
 const MMA_CONFIG_PATH = path.join(DATA_DIR, 'mma/config.yaml');
@@ -843,6 +844,11 @@ function validateReplicatorConfig(yaml) {
 // ---------------------------------------------------------------------------
 // Routes
 // ---------------------------------------------------------------------------
+
+// GET /version — return application version
+app.get('/version', (req, res) => {
+    res.json({ version: APP_VERSION });
+});
 
 // GET /model — return full model
 app.get('/model', (req, res) => {
