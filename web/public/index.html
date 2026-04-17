@@ -1270,10 +1270,6 @@
     .btn-rt-stop:not(:disabled):hover { background: #DC2626; }
     .btn-rt-restart { background: #F59E0B; color: #fff; font-size: .8rem; padding: 7px 14px; }
     .btn-rt-restart:not(:disabled):hover { background: #D97706; }
-    .btn-rt-safe-stop  { background: #0D9488; color: #fff; font-size: .8rem; padding: 7px 14px; }
-    .btn-rt-safe-stop:not(:disabled):hover { background: #0F766E; }
-    .btn-rt-safe-restart { background: #0891B2; color: #fff; font-size: .8rem; padding: 7px 14px; }
-    .btn-rt-safe-restart:not(:disabled):hover { background: #0E7490; }
 
     .rt-global-card {
       background: #fff;
@@ -1652,11 +1648,9 @@
         <span class="rt-status-label" id="rt-mma-label">Loading…</span>
       </div>
       <div class="rt-actions">
-        <button class="btn-rt-start" data-rt-service="mma" data-rt-action="start">▶ Start</button>
-        <button class="btn-rt-stop"  data-rt-service="mma" data-rt-action="stop">■ Stop</button>
-        <button class="btn-rt-restart" data-rt-service="mma" data-rt-action="restart">↺ Restart</button>
-        <button class="btn-rt-safe-stop"    data-rt-service="mma" data-rt-action="stop"    data-rt-timeout="30" title="Send SIGTERM and wait up to 30 s for MMA to close all Modbus TCP connections before stopping">⏹ Safe Stop</button>
-        <button class="btn-rt-safe-restart" data-rt-service="mma" data-rt-action="restart" data-rt-timeout="30" title="Send SIGTERM and wait up to 30 s for MMA to close all Modbus TCP connections before restarting">↺ Safe Restart</button>
+        <button class="btn-rt-start"   data-rt-service="mma" data-rt-action="start">▶ Start</button>
+        <button class="btn-rt-stop"    data-rt-service="mma" data-rt-action="stop"    data-rt-timeout="30" title="Send SIGTERM and wait up to 30 s for MMA to close all Modbus TCP connections before stopping">■ Stop</button>
+        <button class="btn-rt-restart" data-rt-service="mma" data-rt-action="restart" data-rt-timeout="30" title="Send SIGTERM and wait up to 30 s for MMA to close all Modbus TCP connections before restarting">↺ Restart</button>
       </div>
     </div>
   </div>
@@ -5087,7 +5081,7 @@ function renderServiceStatus(service, status) {
   label.textContent = displayText;
 }
 
-// Service control buttons (start / stop / restart / safe-stop / safe-restart)
+// Service control buttons (start / stop / restart)
 document.getElementById('runtime-tab-container').addEventListener('click', async e => {
   const btn = e.target.closest('[data-rt-service][data-rt-action]');
   if (!btn) return;
