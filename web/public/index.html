@@ -1450,6 +1450,7 @@
   <div class="header-brand">
     <h1>⚡ MCS Web</h1>
     <span>Modbus Consolidator System</span>
+    <span id="hdr-version" style="font-size:.72rem;opacity:.65;margin-left:4px"></span>
   </div>
   <div class="header-toolbar">
     <span id="global-save-status" class="global-save-status"></span>
@@ -1470,6 +1471,7 @@
         <div class="burger-about-section">
           <strong>MCS Web</strong><br>
           Version <span id="app-version">…</span><br>
+          <span id="app-build-hash" style="font-size:.75em;opacity:.7"></span>
           Modbus Consolidator System<br>
           <span style="opacity:.6">— tamzrod</span>
         </div>
@@ -5431,13 +5433,25 @@ loadModel().then(startStatusPolling);
 fetch('/version')
   .then(r => r.json())
   .then(data => {
-    const el = document.getElementById('app-version');
-    if (el) el.textContent = data.version || 'dev';
+    const ver = data.version || 'dev';
+    const hash = data.buildHash ? data.buildHash.slice(-8) : null;
+    const verLabel = hash ? `${ver} · ${hash}` : ver;
+
+    const elVer = document.getElementById('app-version');
+    if (elVer) elVer.textContent = ver;
+
+    const elHash = document.getElementById('app-build-hash');
+    if (elHash && hash) elHash.textContent = `Build: ${hash}`;
+
+    const elHdr = document.getElementById('hdr-version');
+    if (elHdr) elHdr.textContent = verLabel;
   })
   .catch(err => {
     console.warn('Could not fetch app version:', err);
-    const el = document.getElementById('app-version');
-    if (el) el.textContent = 'dev';
+    const elVer = document.getElementById('app-version');
+    if (elVer) elVer.textContent = 'dev';
+    const elHdr = document.getElementById('hdr-version');
+    if (elHdr) elHdr.textContent = 'dev';
   });
 </script>
 </body>

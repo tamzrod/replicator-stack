@@ -13,6 +13,7 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 const DATA_DIR = process.env.DATA_DIR || '/app/data';
 const TARGET_HOST = process.env.TARGET_HOST || 'mma';
 let APP_VERSION = process.env.APP_VERSION || 'dev';
+let APP_BUILD_HASH = process.env.APP_BUILD_HASH || null; // last 8 chars of image digest
 const MODEL_PATH = path.join(DATA_DIR, 'model.json');
 const REPLICATOR_CONFIG_PATH = path.join(DATA_DIR, 'replicator/config.yaml');
 const MMA_CONFIG_PATH = path.join(DATA_DIR, 'mma/config.yaml');
@@ -866,9 +867,9 @@ function validateReplicatorConfig(yaml) {
 // Routes
 // ---------------------------------------------------------------------------
 
-// GET /version — return application version
+// GET /version — return application version and build hash
 app.get('/version', (req, res) => {
-    res.json({ version: APP_VERSION });
+    res.json({ version: APP_VERSION, buildHash: APP_BUILD_HASH });
 });
 
 // GET /model — return full model
@@ -3327,19 +3328,32 @@ app.post('/runtime/apply-restart', async (req, res) => {
 // ---------------------------------------------------------------------------
 
 /**
- * Discover the running image tag via the Docker socket and update APP_VERSION.
- * Falls back to the current value (env var or 'dev') if discovery fails.
+ * Discover the running image tag and build hash via the Docker socket.
+ * - APP_VERSION: populated from image tag (e.g. "v0.6" from "rodtamin/mcs-web:v0.6")
+ * - APP_BUILD_HASH: last 8 hex chars of the image digest sha256 (e.g. "a1b2c3d4")
+ * Falls back to the current values (env vars or defaults) if discovery fails.
  */
 async function discoverVersion() {
     try {
         const id = os.hostname();
         const result = await dockerApi('GET', `/containers/${id}/json`);
-        if (result.status === 200 && result.body?.Config?.Image) {
-            const image = result.body.Config.Image; // e.g. "rodtamin/mcs-web:v1.2.3"
-            const tag = image.includes(':') ? image.split(':').pop() : null;
-            if (tag) {
-                APP_VERSION = tag;
-                console.log(`[version] Discovered version from image tag: ${APP_VERSION}`);
+        if (result.status === 200 && result.body) {
+            const cfg = result.body;
+            // Image tag — e.g. "rodtamin/mcs-web:v0.6" → "v0.6"
+            if (cfg.Config?.Image) {
+                const image = cfg.Config.Image;
+                const tag = image.includes(':') ? image.split(':').pop() : null;
+                if (tag) {
+                    APP_VERSION = tag;
+                    console.log(`[version] Discovered version from image tag: ${APP_VERSION}`);
+                }
+            }
+            // Image digest — e.g. "sha256:abcdef1234567890..." → last 8 hex chars "34567890"
+            const imageId = cfg.Image || cfg.ImageID || '';
+            const hexPart = imageId.startsWith('sha256:') ? imageId.slice(7) : imageId;
+            if (hexPart.length >= 8) {
+                APP_BUILD_HASH = hexPart.slice(-8);
+                console.log(`[version] Discovered build hash from image digest: ${APP_BUILD_HASH}`);
             }
         }
     } catch (err) {
