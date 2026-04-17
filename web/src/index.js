@@ -569,14 +569,17 @@ function getCanonicalStatusUnitId(model, targetEndpoint) {
  * Highest count wins; lowest suid breaks ties.  Returns fallback when counts is empty.
  *
  * @param {Map<number,number>} counts
- * @param {number} fallback
- * @returns {number}
+ * @param {number|null} fallback
+ * @returns {number|null}
  */
 function pickCanonicalSuid(counts, fallback) {
+    // bestCount starts at -1 so the first entry always sets canonical unconditionally.
+    // Tie-breaking (suid < canonical) is only evaluated from the second entry onward,
+    // at which point canonical is always a number — no null guard needed.
     let canonical = null;
     let bestCount = -1;
     for (const [suid, count] of counts) {
-        if (count > bestCount || (count === bestCount && (canonical === null || suid < canonical))) {
+        if (count > bestCount || (count === bestCount && suid < canonical)) {
             canonical = suid;
             bestCount = count;
         }
@@ -3297,7 +3300,9 @@ function computeIntegrity(model) {
         counts.set(suid, (counts.get(suid) || 0) + 1);
     }
     for (const [epKey, counts] of epStatusUidMap) {
-        epCanonicalUid.set(epKey, pickCanonicalSuid(counts, DEFAULT_STATUS_UNIT_ID));
+        // epStatusUidMap only contains endpoints with at least one assigned suid,
+        // so counts.size >= 1 here — the null fallback is never reached.
+        epCanonicalUid.set(epKey, pickCanonicalSuid(counts, null));
     }
 
     const issues = [];
