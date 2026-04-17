@@ -538,12 +538,13 @@ function generateUniqueReadId(reads) {
 }
 
 /**
- * Recompile status slot assignments for all devices.
+ * Assign status slots to devices that do not yet have one.
  *
- * Devices sharing the same status_unit_id are sorted deterministically by
- * device.id and assigned sequential slots (0, 1, 2, …).  Any existing
- * status_slot values are overwritten.  Devices without a status_unit_id are
- * left unchanged.
+ * Devices that already have a status_slot set (including those edited by the
+ * user) are left untouched.  Only devices whose status_slot is null or
+ * undefined receive a new slot — the next integer not already used by another
+ * device in the same status_unit_id group.  Devices without a status_unit_id
+ * are skipped entirely.
  *
  * @param {object} model
  * @returns {{ modified: boolean }}
@@ -562,13 +563,21 @@ function recompileStatusSlots(model) {
 
     let modified = false;
     for (const groupDevices of Object.values(groups)) {
-        // Sort deterministically by device ID so every compile produces the same mapping
-        groupDevices.sort((a, b) => String(a.id).localeCompare(String(b.id)));
-        for (let i = 0; i < groupDevices.length; i++) {
-            if (groupDevices[i].status_slot !== i) {
-                groupDevices[i].status_slot = i;
-                modified = true;
-            }
+        // Collect slots already claimed by devices that have one assigned.
+        const usedSlots = new Set(
+            groupDevices
+                .filter(d => d.status_slot != null)
+                .map(d => Number(d.status_slot))
+        );
+
+        // Only assign a slot to devices that don't have one yet.
+        for (const device of groupDevices) {
+            if (device.status_slot != null) continue;
+            let next = 0;
+            while (usedSlots.has(next)) next++;
+            device.status_slot = next;
+            usedSlots.add(next);
+            modified = true;
         }
     }
     return { modified };
