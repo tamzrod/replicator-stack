@@ -4254,24 +4254,26 @@ document.getElementById('mem-reconcile-btn').addEventListener('click', async () 
     return;
   }
 
-  const { missing, orphaned, valid, area_mismatch, status_missing, status_size_mismatch } = data;
+  const { missing, orphaned, valid, area_mismatch, status_missing, status_size_mismatch, status_slot_size } = data;
   const areaMismatch = area_mismatch || [];
   const statusMissing = status_missing || [];
   const statusSizeMismatch = status_size_mismatch || [];
+  const statusSlotSize = status_slot_size || 30;
   const total = missing.length + orphaned.length + valid.length + areaMismatch.length;
   const issues = missing.length + areaMismatch.length + statusMissing.length + statusSizeMismatch.length;
   const bannerClass = issues > 0 ? 'banner show err' : 'banner show ok';
   banner.textContent = `✓ Scan complete — ${total} device/unit pair(s) analyzed: ${missing.length} missing, ${areaMismatch.length} area mismatch, ${orphaned.length} orphaned, ${valid.length} valid. Status memory: ${statusMissing.length} missing, ${statusSizeMismatch.length} size mismatch.`;
   banner.className = bannerClass;
 
-  results.innerHTML = renderReconcileResults(missing, orphaned, valid, areaMismatch, statusMissing, statusSizeMismatch);
+  results.innerHTML = renderReconcileResults(missing, orphaned, valid, areaMismatch, statusMissing, statusSizeMismatch, statusSlotSize);
   _attachReconcileHandlers(results);
 });
 
-function renderReconcileResults(missing, orphaned, valid, area_mismatch, status_missing, status_size_mismatch) {
+function renderReconcileResults(missing, orphaned, valid, area_mismatch, status_missing, status_size_mismatch, statusSlotSize) {
   const areaMismatch = area_mismatch || [];
   const statusMissing = status_missing || [];
   const statusSizeMismatch = status_size_mismatch || [];
+  const slotSize = statusSlotSize || 30;
   const missingHtml = missing.length === 0
     ? '<div class="mem-recon-empty">None — all devices have a memory allocation.</div>'
     : missing.map(entry => {
@@ -4449,7 +4451,7 @@ function renderReconcileResults(missing, orphaned, valid, area_mismatch, status_
           </div>
           <div class="mem-recon-field">
             <label>Required Registers</label>
-            <span>holding_registers start=0 count=${escapeHtml(String(entry.requiredCount))} (${escapeHtml(String(entry.deviceCount))} device(s) × ${30})</span>
+            <span>holding_registers start=0 count=${escapeHtml(String(entry.requiredCount))} (${escapeHtml(String(entry.deviceCount))} device(s) × ${slotSize})</span>
           </div>
           <div class="mem-recon-actions">
             <button class="btn-mem mem-recon-fix-status-btn"
@@ -4490,7 +4492,7 @@ function renderReconcileResults(missing, orphaned, valid, area_mismatch, status_
           </div>
           <div class="mem-recon-field">
             <label>Required</label>
-            <span>holding_registers start=0 count=${escapeHtml(String(entry.requiredCount))} (${escapeHtml(String(entry.deviceCount))} device(s) × ${30})</span>
+            <span>holding_registers start=0 count=${escapeHtml(String(entry.requiredCount))} (${escapeHtml(String(entry.deviceCount))} device(s) × ${slotSize})</span>
           </div>
           <div class="mem-recon-actions">
             <button class="btn-mem mem-recon-fix-status-btn"

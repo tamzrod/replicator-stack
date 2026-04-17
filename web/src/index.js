@@ -2013,7 +2013,7 @@ app.get('/memory/reconcile', (req, res) => {
             }
         }
 
-        res.json({ missing, orphaned, valid, area_mismatch, status_missing, status_size_mismatch });
+        res.json({ missing, orphaned, valid, area_mismatch, status_missing, status_size_mismatch, status_slot_size: STATUS_SLOT_SIZE });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
