@@ -3651,7 +3651,11 @@ function renderMemoryTab(data) {
 }
 
 function renderUnit(portId, unit) {
-  const areas = unit.areas || [];
+  // Sort areas by canonical type order so same-type entries are grouped together
+  // and the display matches the MMA config output (one entry per area type).
+  const AREA_TYPE_ORDER = Object.keys(AREA_TYPE_LABELS);
+  const areas = [...(unit.areas || [])].sort((a, b) =>
+    AREA_TYPE_ORDER.indexOf(a.type) - AREA_TYPE_ORDER.indexOf(b.type));
   const unitIdEsc = escapeHtml(String(unit.unit_id));
   const unitDbIdEsc = escapeHtml(unit.id);
 
