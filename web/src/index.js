@@ -3304,6 +3304,7 @@ async function discoverVersion() {
                         const repoDigest = imgResult.body.RepoDigests[0];
                         const atIdx = repoDigest.indexOf('@');
                         const digestPart = atIdx !== -1 ? repoDigest.slice(atIdx + 1) : repoDigest;
+                        // 'sha256:' (7) + at least 6 hex chars = 13 minimum meaningful digest
                         if (digestPart.startsWith('sha256:') && digestPart.length > 13) {
                             DOCKER_DIGEST = digestPart;
                             console.log(`[version] Discovered digest: ${DOCKER_DIGEST.slice(0, 19)}…`);
