@@ -3122,6 +3122,92 @@ app.get('/validate', rateLimit, (req, res) => {
     }
 });
 
+// GET /yaml-integrity — check replicator YAML integrity across all devices.
+// Verifies status_slot assignment and uniqueness, required fields, and which
+// devices would be included in the compiled replicator YAML.
+// Returns { issues: [], devices: [] } — read-only, never mutates model.
+app.get('/yaml-integrity', (req, res) => {
+    try {
+        const model = readModel();
+        const devices = model.devices || [];
+
+        const issues = [];
+        const deviceResults = [];
+
+        // Build a map of status_slot → [device ids] to detect duplicates.
+        const slotMap = new Map();
+        for (const device of devices) {
+            const slot = device.status_slot;
+            if (slot == null) continue;
+            const key = Number(slot);
+            if (!slotMap.has(key)) slotMap.set(key, []);
+            slotMap.get(key).push(device.id);
+        }
+
+        for (const device of devices) {
+            const deviceIssues = [];
+
+            // Check status_slot is assigned.
+            if (device.status_slot == null) {
+                deviceIssues.push({ severity: 'error', message: 'status_slot not assigned — save config to fix' });
+            } else {
+                const slot = Number(device.status_slot);
+                const sharing = slotMap.get(slot) || [];
+                if (sharing.length > 1) {
+                    const others = sharing.filter(id => id !== device.id).join(', ');
+                    deviceIssues.push({ severity: 'error', message: `status_slot ${slot} is duplicated with: ${others}` });
+                }
+            }
+
+            // Check required source fields.
+            if (!device.source_endpoint) {
+                deviceIssues.push({ severity: 'error', message: 'source_endpoint is missing' });
+            }
+            if (device.source_unit_id == null) {
+                deviceIssues.push({ severity: 'error', message: 'source_unit_id is missing' });
+            }
+
+            // Check required target fields.
+            if (!device.target_endpoint) {
+                deviceIssues.push({ severity: 'error', message: 'target_endpoint is missing' });
+            }
+            if (device.unitId == null) {
+                deviceIssues.push({ severity: 'error', message: 'target unit_id (unitId) is missing' });
+            }
+
+            // Check device would be included in compiled YAML (needs at least one read).
+            const reads = device.reads || [];
+            const includedInYaml = reads.length > 0;
+            if (!includedInYaml) {
+                deviceIssues.push({ severity: 'warning', message: 'no reads configured — device excluded from replicator YAML' });
+            }
+
+            const result = {
+                id: device.id,
+                name: device.name || device.id,
+                status_slot: device.status_slot != null ? Number(device.status_slot) : null,
+                status_unit_id: device.status_unit_id != null ? Number(device.status_unit_id) : null,
+                includedInYaml,
+                issues: deviceIssues,
+            };
+            deviceResults.push(result);
+
+            for (const issue of deviceIssues) {
+                issues.push({ deviceId: device.id, deviceName: device.name || device.id, ...issue });
+            }
+        }
+
+        res.json({
+            ok: issues.filter(i => i.severity === 'error').length === 0,
+            issues,
+            devices: deviceResults,
+            status_slot_size: STATUS_SLOT_SIZE,
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // ---------------------------------------------------------------------------
 // Device status reading (Modbus TCP → MMA status blocks)
 // ---------------------------------------------------------------------------
