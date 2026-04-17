@@ -28,6 +28,9 @@ const AUTH_PATH = path.join(DATA_DIR, 'auth.json');
 // ---------------------------------------------------------------------------
 const DEFAULT_USERNAME = 'admin';
 const DEFAULT_PASSWORD = 'admin';
+// N=16384 (2^14): OWASP-recommended minimum for interactive logins with r=8, p=1.
+// Memory cost = 128 * N * r = 16 MB — stays safely under Node.js's 32 MB default maxmem.
+// Do not increase N above 32768 without also raising maxmem, as it will exceed the limit.
 const SCRYPT_PARAMS = { N: 16384, r: 8, p: 1 };
 const HASH_LEN = 64;
 const SALT_BYTES = 16;
