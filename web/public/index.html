@@ -1826,33 +1826,33 @@
       <div class="row">
         <div class="field">
           <label>Name</label>
-          <input id="ad-name" type="text" placeholder="My Device" />
+          <input id="ad-name" type="text" placeholder="My Device" title="Display name for this device" />
         </div>
       </div>
       <div class="row">
         <div class="field">
-          <label>Source Endpoint <span style="color:#6B7280;font-size:.75rem;font-weight:400">(host:port)</span></label>
-          <input id="ad-src-endpoint" type="text" placeholder="192.168.1.100:502" required />
+          <label>Source Endpoint</label>
+          <input id="ad-src-endpoint" type="text" placeholder="192.168.1.100:502" title="Source device address in host:port format, e.g. 192.168.1.100:502" required />
         </div>
         <div class="field">
           <label>Source Unit ID <span style="color:#ef4444;font-weight:600">*</span></label>
-          <input id="ad-unit" type="number" value="0" min="0" required />
+          <input id="ad-unit" type="number" value="0" min="0" title="Modbus unit ID of the source device" required />
         </div>
       </div>
       <div class="row">
         <div class="field">
-          <label>Target Endpoint <span style="color:#6B7280;font-size:.75rem;font-weight:400">(host:port)</span></label>
-          <input id="ad-tgt-endpoint" type="text" placeholder="mma:502" required />
+          <label>Target Endpoint</label>
+          <input id="ad-tgt-endpoint" type="text" placeholder="mma:502" title="MMA server address in host:port format, e.g. mma:502" required />
         </div>
         <div class="field">
           <label>MMA Unit ID <span style="color:#6B7280;font-size:.75rem;font-weight:400">(memory unit)</span></label>
-          <input id="ad-mma-unit" type="number" value="0" min="0" required />
+          <input id="ad-mma-unit" type="number" value="0" min="0" title="MMA memory unit ID" required />
         </div>
       </div>
       <div class="row">
         <div class="field">
           <label>Group <span style="color:#9CA3AF;font-weight:400">(optional)</span></label>
-          <select id="ad-group">
+          <select id="ad-group" title="Assign device to a group for organization">
             <option value="">— Ungrouped —</option>
           </select>
         </div>
@@ -2376,21 +2376,21 @@ function renderDeviceWorkspace() {
     </div>
     <form id="ws-config-form">
       <div class="info-grid">
-        <div class="info-field"><label>Device ID</label><div class="info-val">${escapeHtml(device.id)}</div></div>
+        <div class="info-field"><label>Device ID</label><div class="info-val" title="Unique system-generated device identifier">${escapeHtml(device.id)}</div></div>
         <div class="info-field">
           <label>Name</label>
-          <input class="info-edit-input" type="text" id="ws-ed-name" value="${escapeHtml(device.name || '')}" placeholder="My Device" />
+          <input class="info-edit-input" type="text" id="ws-ed-name" value="${escapeHtml(device.name || '')}" placeholder="My Device" title="Display name for this device" />
         </div>
         <div class="info-field">
-          <label>Source Endpoint <span style="color:#9CA3AF;font-weight:400">(host:port)</span></label>
+          <label>Source Endpoint</label>
           <input class="info-edit-input" type="text" id="ws-ed-src-endpoint" value="${escapeHtml(device.source_endpoint || '')}"
-            placeholder="e.g. 10.5.1.29:502 or mydevice:502" required />
+            placeholder="e.g. 10.5.1.29:502 or mydevice:502" title="Source device address in host:port format, e.g. 10.5.1.29:502" required />
         </div>
         <div class="info-field">
           <label>Source Unit ID <span style="color:#ef4444;font-weight:600">*</span></label>
-          <input class="info-edit-input" type="number" id="ws-ed-src-unit" value="${escapeHtml(String(device.source_unit_id ?? ''))}" placeholder="e.g. 1" min="0" required />
+          <input class="info-edit-input" type="number" id="ws-ed-src-unit" value="${escapeHtml(String(device.source_unit_id ?? ''))}" placeholder="e.g. 1" min="0" title="Modbus unit ID of the source device" required />
         </div>
-        <div class="info-field"><label>Group</label><div class="info-val">${escapeHtml(grpName)}</div></div>
+        <div class="info-field"><label>Group</label><div class="info-val" title="Device group">${escapeHtml(grpName)}</div></div>
       </div>
     </form>
   </div>`;
@@ -2461,21 +2461,21 @@ function renderDeviceWorkspace() {
             <label>Read ID <span style="color:#9CA3AF;font-weight:400">(auto)</span></label>
             <div class="info-val" id="wr-id-display" style="font-family:monospace;font-size:.85rem"></div>
           </div>
-          <div class="field"><label>Name</label><input id="wr-name" type="text" placeholder="My Read" /></div>
+          <div class="field"><label>Name</label><input id="wr-name" type="text" placeholder="My Read" title="Display name for this register read" /></div>
         </div>
         <div class="row">
           <div class="field">
             <label>Source Area</label>
-            <select id="wr-src-area">
+            <select id="wr-src-area" title="Modbus register area type">
               <option value="holding_registers">holding_registers</option>
               <option value="coils">coils</option>
               <option value="input_registers">input_registers</option>
               <option value="discrete_inputs">discrete_inputs</option>
             </select>
           </div>
-          <div class="field"><label>Source Address</label><input id="wr-src-addr" type="number" value="0" required /></div>
-          <div class="field"><label>Count</label><input id="wr-count" type="number" value="1" min="1" required /></div>
-          <div class="field"><label>Poll Interval (ms)</label><input id="wr-poll" type="number" value="2000" min="100" required /></div>
+          <div class="field"><label>Source Address</label><input id="wr-src-addr" type="number" value="0" title="Starting register address (0-based)" required /></div>
+          <div class="field"><label>Count</label><input id="wr-count" type="number" value="1" min="1" title="Number of registers to read" required /></div>
+          <div class="field"><label>Poll Interval (ms)</label><input id="wr-poll" type="number" value="2000" min="100" title="How often to poll the device in milliseconds" required /></div>
         </div>
         <div id="ws-read-banner" class="banner"></div>
         <div style="display:flex;gap:8px">
@@ -2497,13 +2497,13 @@ function renderDeviceWorkspace() {
     </div>
     <div class="info-grid">
       <div class="info-field">
-        <label>Target Endpoint <span style="color:#9CA3AF;font-weight:400">(host:port)</span></label>
+        <label>Target Endpoint</label>
         <input class="info-edit-input" type="text" id="ws-tgt-endpoint" value="${escapeHtml(device.target_endpoint || '')}"
-          form="ws-config-form" placeholder="e.g. mma2:501" required />
+          form="ws-config-form" placeholder="e.g. mma2:501" title="MMA server address in host:port format, e.g. mma:502" required />
       </div>
       <div class="info-field">
         <label>Unit ID <span style="color:#9CA3AF;font-weight:400">(MMA unit)</span></label>
-        <input class="info-edit-input" type="number" id="ws-tgt-unit" value="${escapeHtml(String(device.unitId ?? ''))}" form="ws-config-form" min="0" required />
+        <input class="info-edit-input" type="number" id="ws-tgt-unit" value="${escapeHtml(String(device.unitId ?? ''))}" form="ws-config-form" min="0" title="MMA memory unit ID" required />
       </div>
     </div>
   </div>`;
