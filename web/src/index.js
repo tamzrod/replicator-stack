@@ -1944,7 +1944,146 @@ app.get('/memory/reconcile', (req, res) => {
             }
         }
 
-        res.json({ missing, orphaned, valid, area_mismatch });
+        // -------------------------------------------------------------------
+        // Status memory checks
+        // For each unique (targetPort, status_unit_id) group, verify that
+        // the port has a unit with the right holding_registers allocation:
+        //   start = 0, count = deviceCount * STATUS_SLOT_SIZE
+        // -------------------------------------------------------------------
+        // Build a map: `${portNum}:${status_unit_id}` → { portNum, statusUnitId, devices[] }
+        const statusGroups = new Map();
+        for (const device of devices) {
+            if (device.status_unit_id == null) continue;
+            const portNum = endpointPort(device.target_endpoint);
+            if (portNum == null) continue;
+            const suid = Number(device.status_unit_id);
+            const key = `${portNum}:${suid}`;
+            if (!statusGroups.has(key)) {
+                statusGroups.set(key, { portNum, statusUnitId: suid, devices: [] });
+            }
+            statusGroups.get(key).devices.push({
+                id: device.id,
+                name: device.name,
+                status_slot: device.status_slot,
+                unitId: device.unitId,
+            });
+        }
+
+        const status_missing = [];
+        const status_size_mismatch = [];
+
+        for (const { portNum, statusUnitId, devices: groupDevices } of statusGroups.values()) {
+            const deviceCount = groupDevices.length;
+            const requiredCount = deviceCount * STATUS_SLOT_SIZE;
+
+            const portEntry = portMap.get(portNum);
+            const unit = portEntry && portEntry.units.get(statusUnitId);
+
+            if (!unit) {
+                // Port or unit is absent — status memory needs to be created.
+                status_missing.push({
+                    statusUnitId,
+                    portNum,
+                    portId: portEntry ? portEntry.portId : null,
+                    deviceCount,
+                    requiredCount,
+                    devices: groupDevices,
+                });
+            } else {
+                // Unit exists — check that it has a holding_registers area at start=0
+                // with count >= requiredCount.
+                const hrAreas = (unit.areas || []).filter(a => a.type === 'holding_registers');
+                const hrArea = hrAreas[0] || null;
+                const configuredStart = hrArea != null ? Number(hrArea.start) : null;
+                const configuredCount = hrArea != null ? Number(hrArea.count) : null;
+                const sizeOk = hrArea != null && configuredStart === 0 && configuredCount >= requiredCount;
+                if (!sizeOk) {
+                    status_size_mismatch.push({
+                        statusUnitId,
+                        portNum,
+                        portId: portEntry.portId,
+                        unitDbId: unit.id,
+                        deviceCount,
+                        requiredCount,
+                        configuredStart,
+                        configuredCount,
+                        devices: groupDevices,
+                    });
+                }
+            }
+        }
+
+        res.json({ missing, orphaned, valid, area_mismatch, status_missing, status_size_mismatch });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /memory/reconcile/fix-status — create or correct a status memory unit.
+// For the given (status_unit_id, port_num) group this endpoint finds or creates
+// the target memory port + unit and sets its holding_registers area to
+// start=0, count=deviceCount*STATUS_SLOT_SIZE.
+// Body: { status_unit_id, port_num }
+app.post('/memory/reconcile/fix-status', (req, res) => {
+    try {
+        const { status_unit_id, port_num } = req.body;
+        const statusUnitId = Number(status_unit_id);
+        const portNum = Number(port_num);
+        if (!Number.isFinite(statusUnitId) || statusUnitId < 0) {
+            return res.status(400).json({ error: 'status_unit_id is required and must be a non-negative integer' });
+        }
+        if (!Number.isFinite(portNum) || portNum < 1) {
+            return res.status(400).json({ error: 'port_num is required and must be a positive integer' });
+        }
+
+        const model = readModel();
+        const devices = model.devices || [];
+
+        // Count devices in this (port, status_unit_id) group.
+        const deviceCount = devices.filter(d =>
+            d.status_unit_id != null &&
+            Number(d.status_unit_id) === statusUnitId &&
+            endpointPort(d.target_endpoint) === portNum
+        ).length;
+
+        if (deviceCount === 0) {
+            return res.status(404).json({ error: `No devices found with status_unit_id ${statusUnitId} targeting port ${portNum}` });
+        }
+
+        const requiredCount = deviceCount * STATUS_SLOT_SIZE;
+
+        // Find or create the memory port.
+        let port = _idx.portsByNumber.get(portNum) || null;
+        if (!port) {
+            port = { id: randomUUID(), port: portNum, blocks: [], units: [] };
+            model.memory.ports.push(port);
+            _idx.portsByNumber.set(portNum, port);
+            _idx.portsById.set(port.id, port);
+        }
+        if (!port.units) port.units = [];
+
+        // Find or create the status unit.
+        let unit = port.units.find(u => Number(u.unit_id) === statusUnitId);
+        if (!unit) {
+            unit = { id: randomUUID(), unit_id: statusUnitId, areas: [] };
+            port.units.push(unit);
+        }
+        if (!unit.areas) unit.areas = [];
+
+        // Remove any existing holding_registers areas for this unit.
+        unit.areas = unit.areas.filter(a => a.type !== 'holding_registers');
+
+        // Add the correctly-sized holding_registers area.
+        unit.areas.push({
+            id: randomUUID(),
+            type: 'holding_registers',
+            start: 0,
+            count: requiredCount,
+        });
+
+        writeModel(model);
+        scheduleCompile();
+        res.json({ ok: true, requiredCount });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
