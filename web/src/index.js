@@ -540,16 +540,19 @@ function generateUniqueReadId(reads) {
 }
 
 /**
- * Return the smallest slot index not currently assigned to any device.
- * Scans the global device pool — slots are zero-based and unique across all devices.
+ * Return the smallest slot index not currently used by any device sharing the
+ * same target_endpoint.  Slots are zero-based and unique within a target
+ * endpoint group.  Devices on different endpoints may share the same slot number.
  *
  * @param {object} model
+ * @param {string} targetEndpoint  — normalised target_endpoint of the new device
  * @returns {number}
  */
-function assignNextSlot(model) {
+function assignNextSlot(model, targetEndpoint) {
+    const epKey = (targetEndpoint || '').trim().toLowerCase();
     const usedSlots = new Set(
         (model.devices || [])
-            .filter(d => d.status_slot != null)
+            .filter(d => d.status_slot != null && (d.target_endpoint || '').trim().toLowerCase() === epKey)
             .map(d => Number(d.status_slot))
             .filter(n => Number.isFinite(n))
     );
@@ -559,16 +562,17 @@ function assignNextSlot(model) {
 }
 
 /**
- * Validate and fill status slot assignments across all devices.
+ * Validate and fill status slot assignments, scoped per target_endpoint.
  *
- * Slots are zero-based integers that are globally unique across the entire
- * device list.  Devices that already have a status_slot are left untouched.
- * Devices that are missing a slot receive the lowest available index (gap-
- * filling: deleted device slots become available for reuse).
+ * Slots are zero-based integers that are unique within the group of devices
+ * sharing the same target_endpoint (host + port).  Devices on different
+ * endpoints are independent — they may share the same slot number without
+ * conflict.
  *
  * Rules:
  *   - Assign missing slots only — no reindexing or reshuffling of existing ones.
  *   - Fill gaps using lowest available slots (deterministic, stable allocation).
+ *   - Each endpoint group is processed independently.
  *
  * @param {object} model
  * @returns {{ modified: boolean }}
@@ -576,23 +580,33 @@ function assignNextSlot(model) {
 function recompileStatusSlots(model) {
     const devices = model.devices || [];
 
-    // Collect all slots already assigned across the entire device pool.
-    const usedSlots = new Set(
-        devices
-            .filter(d => d.status_slot != null)
-            .map(d => Number(d.status_slot))
-            .filter(n => Number.isFinite(n))
-    );
+    // Group devices by target_endpoint so slot uniqueness is enforced per endpoint.
+    const epGroups = new Map(); // endpointKey → device[]
+    for (const device of devices) {
+        const key = (device.target_endpoint || '').trim().toLowerCase() || '__null__';
+        if (!epGroups.has(key)) epGroups.set(key, []);
+        epGroups.get(key).push(device);
+    }
 
     let modified = false;
-    for (const device of devices) {
-        if (device.status_slot != null) continue;
-        // Find the lowest available slot (gap-filling).
-        let next = 0;
-        while (usedSlots.has(next)) next++;
-        device.status_slot = next;
-        usedSlots.add(next);
-        modified = true;
+    for (const grpDevices of epGroups.values()) {
+        // Collect slots already assigned within this endpoint group.
+        const usedSlots = new Set(
+            grpDevices
+                .filter(d => d.status_slot != null)
+                .map(d => Number(d.status_slot))
+                .filter(n => Number.isFinite(n))
+        );
+
+        for (const device of grpDevices) {
+            if (device.status_slot != null) continue;
+            // Find the lowest available slot within this endpoint group (gap-filling).
+            let next = 0;
+            while (usedSlots.has(next)) next++;
+            device.status_slot = next;
+            usedSlots.add(next);
+            modified = true;
+        }
     }
     return { modified };
 }
@@ -1057,7 +1071,7 @@ app.post('/device', (req, res) => {
 
         const generatedId = `device_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
 
-        // status_slot is system-assigned — the lowest available global slot index.
+        // status_slot is system-assigned — the lowest available slot within the same target_endpoint group.
         // status_unit_id is system-managed (not user-editable) and defaults to null for
         // all new devices.  The memory reconciliation flow assigns status_unit_id when
         // status memory is provisioned for this device.
@@ -1069,7 +1083,7 @@ app.post('/device', (req, res) => {
             source_unit_id: sourceUnitId,
             target_endpoint: device.target_endpoint.trim(),
             unitId,
-            status_slot: assignNextSlot(model),
+            status_slot: assignNextSlot(model, device.target_endpoint.trim()),
             status_unit_id: null,
             reads: []
         };
@@ -1191,9 +1205,9 @@ app.post('/device/:id/duplicate', (req, res) => {
         let newUnitId = (Number(orig.unitId) || 0) + 1;
         while (_idx.devicesByUnitId.has(newUnitId)) newUnitId++;
 
-        // status_slot is system-assigned — allocate the next available global slot.
+        // status_slot is system-assigned — allocate the next available slot within the new endpoint group.
         // status_unit_id is system-managed; new device starts without one.
-        const newStatusSlot = assignNextSlot(model);
+        const newStatusSlot = assignNextSlot(model, newTargetEndpoint);
 
         // Find the next free target_endpoint by incrementing the port number.
         // newUnitId is already globally unique so (origPort+1, newUnitId) is
@@ -3117,6 +3131,211 @@ app.get('/validate', rateLimit, (req, res) => {
         }
 
         res.json(result);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /yaml-integrity — check replicator YAML integrity across all devices.
+// Verifies status_slot assignment and uniqueness per target_endpoint group,
+// status_unit_id assignment and consistency within the same target_endpoint,
+// required fields, and which devices would be included in the compiled YAML.
+// Returns { ok, issues, devices, status_slot_size } — read-only, never mutates model.
+app.get('/yaml-integrity', (req, res) => {
+    try {
+        const model = readModel();
+        const devices = model.devices || [];
+
+        // Build per-endpoint slot map: endpointKey → Map<slot, [deviceIds]>
+        // Used to detect duplicate status_slots within the same target_endpoint group.
+        const epSlotMap = new Map(); // endpointKey → Map<slot, deviceId[]>
+        for (const device of devices) {
+            const slot = device.status_slot;
+            if (slot == null) continue;
+            const epKey = (device.target_endpoint || '').trim().toLowerCase() || '__null__';
+            if (!epSlotMap.has(epKey)) epSlotMap.set(epKey, new Map());
+            const slotMap = epSlotMap.get(epKey);
+            const slotNum = Number(slot);
+            if (!slotMap.has(slotNum)) slotMap.set(slotNum, []);
+            slotMap.get(slotNum).push(device.id);
+        }
+
+        // Build per-endpoint status_unit_id maps for consistency checks.
+        // All devices sharing the same target_endpoint must have the same status_unit_id.
+        // Canonical = highest count wins; lowest value breaks ties — same rule as the fix endpoint.
+        const epStatusUidMap = new Map(); // endpointKey → Map<suid, count>
+        const epCanonicalUid = new Map(); // endpointKey → canonical suid
+        for (const device of devices) {
+            if (device.status_unit_id == null) continue;
+            const epKey = (device.target_endpoint || '').trim().toLowerCase() || '__null__';
+            if (!epStatusUidMap.has(epKey)) epStatusUidMap.set(epKey, new Map());
+            const counts = epStatusUidMap.get(epKey);
+            const suid = Number(device.status_unit_id);
+            counts.set(suid, (counts.get(suid) || 0) + 1);
+        }
+        for (const [epKey, counts] of epStatusUidMap) {
+            let canonical = null;
+            let bestCount = -1;
+            for (const [suid, count] of counts) {
+                if (count > bestCount || (count === bestCount && suid < canonical)) {
+                    canonical = suid;
+                    bestCount = count;
+                }
+            }
+            epCanonicalUid.set(epKey, canonical);
+        }
+
+        const issues = [];
+        const deviceResults = [];
+
+        for (const device of devices) {
+            const deviceIssues = [];
+
+            // Check status_slot is assigned and unique within the same target_endpoint group.
+            if (device.status_slot == null) {
+                deviceIssues.push({ severity: 'error', message: 'status_slot not assigned — save config to fix' });
+            } else {
+                const epKey = (device.target_endpoint || '').trim().toLowerCase() || '__null__';
+                const slotMap = epSlotMap.get(epKey) || new Map();
+                const slot = Number(device.status_slot);
+                const sharing = slotMap.get(slot) || [];
+                if (sharing.length > 1) {
+                    const others = sharing.filter(id => id !== device.id).join(', ');
+                    deviceIssues.push({ severity: 'error', message: `status_slot ${slot} is duplicated within endpoint "${device.target_endpoint}" — also used by: ${others}` });
+                }
+            }
+
+            // Check status_unit_id is assigned and matches all devices on the same target_endpoint.
+            if (device.status_unit_id == null) {
+                deviceIssues.push({ severity: 'error', message: 'status_unit_id not assigned — run Memory Consistency check to fix' });
+            } else {
+                const epKey = (device.target_endpoint || '').trim().toLowerCase() || '__null__';
+                const counts = epStatusUidMap.get(epKey) || new Map();
+                if (counts.size > 1) {
+                    const canonical = epCanonicalUid.get(epKey);
+                    const actual = Number(device.status_unit_id);
+                    if (actual !== canonical) {
+                        const allUids = [...counts.keys()].join(', ');
+                        deviceIssues.push({ severity: 'error', message: `status_unit_id ${actual} differs from other devices on endpoint "${device.target_endpoint}" — found [${allUids}], expected all to match` });
+                    }
+                }
+            }
+
+            // Check required source fields.
+            if (!device.source_endpoint) {
+                deviceIssues.push({ severity: 'error', message: 'source_endpoint is missing' });
+            }
+            if (device.source_unit_id == null) {
+                deviceIssues.push({ severity: 'error', message: 'source_unit_id is missing' });
+            }
+
+            // Check required target fields.
+            if (!device.target_endpoint) {
+                deviceIssues.push({ severity: 'error', message: 'target_endpoint is missing' });
+            }
+            if (device.unitId == null) {
+                deviceIssues.push({ severity: 'error', message: 'target unit_id (unitId) is missing' });
+            }
+
+            // Check device would be included in compiled YAML (needs at least one read).
+            const reads = device.reads || [];
+            const includedInYaml = reads.length > 0;
+            if (!includedInYaml) {
+                deviceIssues.push({ severity: 'warning', message: 'no reads configured — device excluded from replicator YAML' });
+            }
+
+            const result = {
+                id: device.id,
+                name: device.name || device.id,
+                status_slot: device.status_slot != null ? Number(device.status_slot) : null,
+                status_unit_id: device.status_unit_id != null ? Number(device.status_unit_id) : null,
+                target_port: endpointPort(device.target_endpoint),
+                includedInYaml,
+                issues: deviceIssues,
+            };
+            deviceResults.push(result);
+
+            for (const issue of deviceIssues) {
+                issues.push({ deviceId: device.id, deviceName: device.name || device.id, ...issue });
+            }
+        }
+
+        res.json({
+            ok: issues.filter(i => i.severity === 'error').length === 0,
+            issues,
+            devices: deviceResults,
+            status_slot_size: STATUS_SLOT_SIZE,
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /yaml-integrity/fix — auto-fix status_slot and status_unit_id inconsistencies.
+// Fixes:
+//   1. Missing or duplicate status_slots — recompileStatusSlots() fills gaps per endpoint group.
+//   2. Devices sharing the same target_endpoint with differing status_unit_id — normalise
+//      to the value used by the majority (or the lowest when tied) so all share one status unit.
+// Does NOT assign status_unit_id to devices that have null — use the Memory Consistency
+// tool to establish the initial status_unit_id for an endpoint group.
+// Returns { fixed, changes: string[] }
+app.post('/yaml-integrity/fix', (req, res) => {
+    try {
+        const model = readModel();
+        const devices = model.devices || [];
+        const changes = [];
+
+        // ── 1. Fix status_slot ────────────────────────────────────────────────
+        const { modified: slotsModified } = recompileStatusSlots(model);
+        if (slotsModified) {
+            changes.push('Re-assigned missing or duplicate status_slot values (per target endpoint)');
+        }
+
+        // ── 2. Fix status_unit_id per-endpoint inconsistency ─────────────────
+        // Group devices by target_endpoint, collect their status_unit_id values.
+        const epGroups = new Map(); // endpointKey → { endpoint, counts: Map<suid, count>, devices: device[] }
+        for (const device of devices) {
+            if (device.status_unit_id == null) continue;
+            const epKey = (device.target_endpoint || '').trim().toLowerCase() || '__null__';
+            if (!epGroups.has(epKey)) epGroups.set(epKey, { endpoint: device.target_endpoint, counts: new Map(), devices: [] });
+            const grp = epGroups.get(epKey);
+            const suid = Number(device.status_unit_id);
+            grp.counts.set(suid, (grp.counts.get(suid) || 0) + 1);
+            grp.devices.push(device);
+        }
+
+        for (const { endpoint, counts, devices: grpDevices } of epGroups.values()) {
+            if (counts.size <= 1) continue; // already consistent
+
+            // Choose the canonical value: highest count wins; lowest value breaks ties.
+            let canonical = null;
+            let bestCount = -1;
+            for (const [suid, count] of counts) {
+                if (count > bestCount || (count === bestCount && suid < canonical)) {
+                    canonical = suid;
+                    bestCount = count;
+                }
+            }
+
+            let reassigned = 0;
+            for (const device of grpDevices) {
+                if (Number(device.status_unit_id) !== canonical) {
+                    device.status_unit_id = canonical;
+                    reassigned++;
+                }
+            }
+            if (reassigned > 0) {
+                changes.push(`Endpoint "${endpoint}": normalised ${reassigned} device(s) to status_unit_id ${canonical}`);
+            }
+        }
+
+        const fixed = changes.length > 0;
+        if (fixed) {
+            writeModel(model);
+            scheduleCompile();
+        }
+
+        res.json({ fixed, changes });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

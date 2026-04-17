@@ -256,6 +256,7 @@
     .banner.show { display: block; }
     .banner.ok  { background: #DCFCE7; color: #166534; }
     .banner.err { background: #FEF2F2; color: #991B1B; }
+    .banner.warn { background: #FFFBEB; color: #92400E; }
 
     .model-header {
       display: flex;
@@ -1146,6 +1147,7 @@
     .mem-recon-row.missing { border-color: #FDE68A; background: #FFFBEB; }
     .mem-recon-row.orphaned { border-color: #FECACA; background: #FFF5F5; }
     .mem-recon-row.valid { border-color: #BBF7D0; background: #F0FDF4; }
+    .mem-recon-row.warning { border-color: #FCD34D; background: #FFFBEB; }
     .mem-recon-field {
       display: flex;
       flex-direction: column;
@@ -1518,6 +1520,19 @@
       </div>
       <small id="adv-endpoint-hint" style="color:#6B7280;font-size:.75rem;display:block;margin-top:8px"></small>
     </div>
+  </div>
+
+  <!-- ── YAML Integrity Check ───────────────────────────────────────────── -->
+  <div class="card" id="yaml-integrity-card">
+    <div class="ws-card-header">
+      <h2>🔍 YAML Integrity Check</h2>
+      <div style="display:flex;gap:8px">
+        <button class="btn-refresh" id="btn-yaml-integrity" style="font-size:.8rem;padding:7px 14px">🔍 Check YAML Integrity</button>
+        <button class="btn-primary" id="btn-yaml-integrity-fix" style="font-size:.8rem;padding:7px 14px;display:none">🔧 Rectify Issues</button>
+      </div>
+    </div>
+    <div id="yaml-integrity-banner" class="banner"></div>
+    <div id="yaml-integrity-results"></div>
   </div>
 
 
@@ -4586,6 +4601,174 @@ function _attachReconcileHandlers(container) {
       }
     });
   });
+}
+
+}
+
+// ── YAML Integrity Check ──────────────────────────────────────────────────────
+
+async function runYamlIntegrityCheck() {
+  const btn = document.getElementById('btn-yaml-integrity');
+  const fixBtn = document.getElementById('btn-yaml-integrity-fix');
+  const banner = document.getElementById('yaml-integrity-banner');
+  const results = document.getElementById('yaml-integrity-results');
+
+  btn.disabled = true;
+  btn.textContent = '⏳ Checking…';
+  banner.className = 'banner';
+  results.innerHTML = '';
+  fixBtn.style.display = 'none';
+
+  const { ok: reqOk, data } = await api('GET', '/yaml-integrity');
+
+  btn.disabled = false;
+  btn.textContent = '🔍 Check YAML Integrity';
+
+  if (!reqOk) {
+    banner.textContent = `✗ Check failed: ${data.error || 'Unknown error'}`;
+    banner.className = 'banner show err';
+    return;
+  }
+
+  const { ok, issues, devices } = data;
+  const errorCount = issues.filter(i => i.severity === 'error').length;
+  const warnCount  = issues.filter(i => i.severity === 'warning').length;
+  const includedCount = devices.filter(d => d.includedInYaml).length;
+
+  // Determine which errors are auto-fixable (slot and status_unit_id consistency issues).
+  const fixableErrors = issues.filter(i =>
+    i.severity === 'error' &&
+    (i.message.includes('status_slot') || (i.message.includes('status_unit_id') && i.message.includes('differs')))
+  );
+
+  if (errorCount > 0) {
+    banner.textContent = `✗ ${errorCount} error(s), ${warnCount} warning(s) — ${includedCount}/${devices.length} device(s) included in YAML`;
+    banner.className = 'banner show err';
+  } else if (warnCount > 0) {
+    banner.textContent = `⚠ ${warnCount} warning(s) — ${includedCount}/${devices.length} device(s) included in YAML`;
+    banner.className = 'banner show warn';
+  } else {
+    banner.textContent = `✓ All ${devices.length} device(s) passed — ${includedCount} included in replicator YAML`;
+    banner.className = 'banner show ok';
+  }
+
+  fixBtn.style.display = fixableErrors.length > 0 ? '' : 'none';
+  results.innerHTML = renderYamlIntegrityResults(devices);
+}
+
+document.getElementById('btn-yaml-integrity').addEventListener('click', runYamlIntegrityCheck);
+
+document.getElementById('btn-yaml-integrity-fix').addEventListener('click', async () => {
+  const fixBtn = document.getElementById('btn-yaml-integrity-fix');
+  const banner = document.getElementById('yaml-integrity-banner');
+
+  // Build a summary of what will be fixed for the confirm prompt.
+  const { ok: preOk, data: preData } = await api('GET', '/yaml-integrity');
+  if (!preOk) {
+    banner.textContent = `✗ Could not fetch current issues: ${preData.error || 'Unknown error'}`;
+    banner.className = 'banner show err';
+    return;
+  }
+
+  const fixableIssues = (preData.issues || []).filter(i =>
+    i.severity === 'error' &&
+    (i.message.includes('status_slot') || (i.message.includes('status_unit_id') && i.message.includes('differs')))
+  );
+
+  if (fixableIssues.length === 0) {
+    await runYamlIntegrityCheck();
+    return;
+  }
+
+  const summaryLines = fixableIssues.map(i => `• [${i.deviceName}] ${i.message}`).join('\n');
+  const confirmed = window.confirm(
+    `The following ${fixableIssues.length} issue(s) will be auto-rectified:\n\n${summaryLines}\n\nProceed?`
+  );
+  if (!confirmed) return;
+
+  fixBtn.disabled = true;
+  fixBtn.textContent = '⏳ Fixing…';
+
+  const { ok: fixOk, data: fixData } = await api('POST', '/yaml-integrity/fix', {});
+
+  fixBtn.disabled = false;
+  fixBtn.textContent = '🔧 Rectify Issues';
+
+  if (!fixOk) {
+    banner.textContent = `✗ Fix failed: ${fixData.error || 'Unknown error'}`;
+    banner.className = 'banner show err';
+    return;
+  }
+
+  if (fixData.fixed) {
+    banner.textContent = `✓ Rectified: ${fixData.changes.join('; ')}`;
+    banner.className = 'banner show ok';
+    await _bus.emit(EV.MODEL_MUTATED);
+  } else {
+    banner.textContent = '✓ No changes needed — model is already consistent';
+    banner.className = 'banner show ok';
+  }
+
+  // Re-run the check to reflect the updated state.
+  await runYamlIntegrityCheck();
+});
+
+function renderYamlIntegrityResults(devices) {
+  if (!devices || devices.length === 0) {
+    return '<div class="mem-recon-empty">No devices configured.</div>';
+  }
+  return devices.map(dev => {
+    const errors   = dev.issues.filter(i => i.severity === 'error');
+    const warnings = dev.issues.filter(i => i.severity === 'warning');
+    const hasIssues = errors.length > 0 || warnings.length > 0;
+    const rowClass = errors.length > 0 ? 'missing' : warnings.length > 0 ? 'warning' : 'valid';
+    const badge = errors.length > 0
+      ? `<span class="mem-recon-badge missing">ERROR</span>`
+      : warnings.length > 0
+        ? `<span class="mem-recon-badge missing" style="background:#F59E0B">WARNING</span>`
+        : `<span class="mem-recon-badge valid">OK</span>`;
+    const slotDisplay = dev.status_slot != null ? dev.status_slot : '—';
+    const slotColor   = dev.status_slot == null ? '#EF4444' : 'inherit';
+    const suidDisplay = dev.status_unit_id != null ? dev.status_unit_id : '—';
+    const suidIssue   = errors.some(i => i.message.includes('status_unit_id'));
+    const suidColor   = suidIssue ? '#EF4444' : 'inherit';
+    const portDisplay = dev.target_port != null ? dev.target_port : '—';
+    const yamlDisplay = dev.includedInYaml
+      ? `<span style="color:#10B981">✓ included</span>`
+      : `<span style="color:#9CA3AF">excluded (no reads)</span>`;
+    const issuesList = hasIssues
+      ? `<div class="mem-recon-field" style="grid-column:1/-1">
+          <label>Issues</label>
+          <ul style="margin:0;padding-left:1.2em">
+            ${dev.issues.map(i => `<li style="color:${i.severity === 'error' ? '#EF4444' : '#F59E0B'}">${escapeHtml(i.message)}</li>`).join('')}
+          </ul>
+        </div>`
+      : '';
+    return `<div class="mem-recon-row ${rowClass}">
+      ${badge}
+      <div class="mem-recon-field">
+        <label>Device</label>
+        <span>${escapeHtml(dev.name)}</span>
+      </div>
+      <div class="mem-recon-field">
+        <label>Status Slot</label>
+        <span style="font-family:monospace;color:${slotColor}">${escapeHtml(String(slotDisplay))}</span>
+      </div>
+      <div class="mem-recon-field">
+        <label>Status Unit ID</label>
+        <span style="font-family:monospace;color:${suidColor}">${escapeHtml(String(suidDisplay))}</span>
+      </div>
+      <div class="mem-recon-field">
+        <label>Target Port</label>
+        <span style="font-family:monospace">${escapeHtml(String(portDisplay))}</span>
+      </div>
+      <div class="mem-recon-field">
+        <label>YAML</label>
+        <span>${yamlDisplay}</span>
+      </div>
+      ${issuesList}
+    </div>`;
+  }).join('');
 }
 
 // Raw config snapshots (strings)
