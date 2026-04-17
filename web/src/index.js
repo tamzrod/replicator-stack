@@ -3145,13 +3145,29 @@ app.get('/yaml-integrity', (req, res) => {
         // Build a map of portNum → Set<status_unit_id> for devices on that port.
         // Used to detect devices whose status_unit_id differs from the group on the same port.
         // portNum → { expected: number|null, ids: Set<number> }
+        // Build a map of portNum → canonical status_unit_id for consistency checks.
+        // Canonical = highest count wins; lowest value breaks ties — same rule as the fix endpoint.
         const portStatusUidMap = new Map(); // portNum → Set of status_unit_id values seen
+        const portCanonicalUid = new Map(); // portNum → canonical status_unit_id
         for (const device of devices) {
             if (device.status_unit_id == null) continue;
             const portNum = endpointPort(device.target_endpoint);
             if (portNum == null) continue;
-            if (!portStatusUidMap.has(portNum)) portStatusUidMap.set(portNum, new Set());
-            portStatusUidMap.get(portNum).add(Number(device.status_unit_id));
+            if (!portStatusUidMap.has(portNum)) portStatusUidMap.set(portNum, new Map());
+            const counts = portStatusUidMap.get(portNum);
+            const suid = Number(device.status_unit_id);
+            counts.set(suid, (counts.get(suid) || 0) + 1);
+        }
+        for (const [portNum, counts] of portStatusUidMap) {
+            let canonical = null;
+            let bestCount = -1;
+            for (const [suid, count] of counts) {
+                if (count > bestCount || (count === bestCount && suid < canonical)) {
+                    canonical = suid;
+                    bestCount = count;
+                }
+            }
+            portCanonicalUid.set(portNum, canonical);
         }
 
         const issues = [];
@@ -3176,15 +3192,15 @@ app.get('/yaml-integrity', (req, res) => {
             if (device.status_unit_id == null) {
                 deviceIssues.push({ severity: 'error', message: 'status_unit_id not assigned — run Memory Consistency check to fix' });
             } else {
-                // Check status_unit_id is consistent with other devices on the same port.
+                // Check status_unit_id matches the canonical value for this port.
                 const portNum = endpointPort(device.target_endpoint);
                 if (portNum != null) {
-                    const portUids = portStatusUidMap.get(portNum) || new Set();
-                    if (portUids.size > 1) {
-                        const expected = Math.min(...portUids);
+                    const counts = portStatusUidMap.get(portNum) || new Map();
+                    if (counts.size > 1) {
+                        const canonical = portCanonicalUid.get(portNum);
                         const actual = Number(device.status_unit_id);
-                        if (actual !== expected) {
-                            const allUids = [...portUids].join(', ');
+                        if (actual !== canonical) {
+                            const allUids = [...counts.keys()].join(', ');
                             deviceIssues.push({ severity: 'error', message: `status_unit_id ${actual} differs from other devices on port ${portNum} — found [${allUids}], expected all to match` });
                         }
                     }

@@ -1147,6 +1147,7 @@
     .mem-recon-row.missing { border-color: #FDE68A; background: #FFFBEB; }
     .mem-recon-row.orphaned { border-color: #FECACA; background: #FFF5F5; }
     .mem-recon-row.valid { border-color: #BBF7D0; background: #F0FDF4; }
+    .mem-recon-row.warning { border-color: #FCD34D; background: #FFFBEB; }
     .mem-recon-field {
       display: flex;
       flex-direction: column;
@@ -4637,7 +4638,7 @@ async function runYamlIntegrityCheck() {
   // Determine which errors are auto-fixable (slot and status_unit_id consistency issues).
   const fixableErrors = issues.filter(i =>
     i.severity === 'error' &&
-    (i.message.includes('status_slot') || i.message.includes('status_unit_id') && i.message.includes('differs'))
+    (i.message.includes('status_slot') || (i.message.includes('status_unit_id') && i.message.includes('differs')))
   );
 
   if (errorCount > 0) {
@@ -4720,7 +4721,7 @@ function renderYamlIntegrityResults(devices) {
     const errors   = dev.issues.filter(i => i.severity === 'error');
     const warnings = dev.issues.filter(i => i.severity === 'warning');
     const hasIssues = errors.length > 0 || warnings.length > 0;
-    const rowClass = errors.length > 0 ? 'missing' : warnings.length > 0 ? 'missing' : 'valid';
+    const rowClass = errors.length > 0 ? 'missing' : warnings.length > 0 ? 'warning' : 'valid';
     const badge = errors.length > 0
       ? `<span class="mem-recon-badge missing">ERROR</span>`
       : warnings.length > 0
