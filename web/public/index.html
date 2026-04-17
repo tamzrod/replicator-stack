@@ -4508,7 +4508,7 @@ function _attachReconcileHandlers(container) {
       btn.disabled = true;
       btn.textContent = '…';
 
-      const { ok, data } = await api('POST', '/memory/reconcile/create', { device_id: deviceId });
+      const { ok, data } = await api('POST', '/memory/reconcile/fix-areas', { device_id: deviceId });
 
       if (ok) {
         _appendMmaLog(`[memory reconcile] Fixed areas for device "${deviceName}" (unit_id: ${unitId})`);

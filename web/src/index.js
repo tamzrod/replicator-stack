@@ -1953,6 +1953,42 @@ app.post('/memory/reconcile/create', (req, res) => {
     }
 });
 
+// POST /memory/reconcile/fix-areas — fix area ranges for an area-mismatch unit.
+// Clears the unit's areas so ensureTargetMemory re-derives them from all device reads,
+// correcting any start/count range mismatches.
+// Body: { device_id }
+app.post('/memory/reconcile/fix-areas', (req, res) => {
+    try {
+        const { device_id } = req.body;
+        if (!device_id) {
+            return res.status(400).json({ error: 'device_id is required' });
+        }
+        const model = readModel();
+        const device = findDevice(model, device_id);
+        if (!device) {
+            return res.status(404).json({ error: `Device ${device_id} not found` });
+        }
+        const portNum = endpointPort(device.target_endpoint);
+        const unitId = Number(device.unitId);
+        if (portNum == null || !Number.isFinite(unitId) || unitId < 0) {
+            return res.status(400).json({ error: 'Device has invalid target_endpoint or unitId' });
+        }
+        // Clear the unit's areas so ensureTargetMemory re-derives them from reads,
+        // fixing incorrect start/count ranges.
+        const port = _idx.portsByNumber.get(portNum);
+        if (port) {
+            const unit = (port.units || []).find(u => Number(u.unit_id) === unitId);
+            if (unit) unit.areas = [];
+        }
+        ensureTargetMemory(model, device);
+        writeModel(model);
+        scheduleCompile();
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // POST /read — add read to device, validate no overlap in same area
 app.post('/read', (req, res) => {
     try {
