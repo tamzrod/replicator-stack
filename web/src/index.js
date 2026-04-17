@@ -540,16 +540,18 @@ function generateUniqueReadId(reads) {
 }
 
 /**
- * Return the smallest slot index not currently assigned to any device.
- * Scans the global device pool — slots are zero-based and unique across all devices.
+ * Return the smallest slot index not currently used by any device targeting
+ * the same port.  Slots are zero-based and unique within a (target port) group.
+ * Devices on different ports may share the same slot number.
  *
  * @param {object} model
+ * @param {number|null} targetPort  — port number extracted from the new device's target_endpoint
  * @returns {number}
  */
-function assignNextSlot(model) {
+function assignNextSlot(model, targetPort) {
     const usedSlots = new Set(
         (model.devices || [])
-            .filter(d => d.status_slot != null)
+            .filter(d => d.status_slot != null && endpointPort(d.target_endpoint) === targetPort)
             .map(d => Number(d.status_slot))
             .filter(n => Number.isFinite(n))
     );
@@ -559,16 +561,16 @@ function assignNextSlot(model) {
 }
 
 /**
- * Validate and fill status slot assignments across all devices.
+ * Validate and fill status slot assignments, scoped per target port.
  *
- * Slots are zero-based integers that are globally unique across the entire
- * device list.  Devices that already have a status_slot are left untouched.
- * Devices that are missing a slot receive the lowest available index (gap-
- * filling: deleted device slots become available for reuse).
+ * Slots are zero-based integers that are unique within the group of devices
+ * targeting the same MMA port.  Devices on different ports are independent —
+ * they may share the same slot number without conflict.
  *
  * Rules:
  *   - Assign missing slots only — no reindexing or reshuffling of existing ones.
  *   - Fill gaps using lowest available slots (deterministic, stable allocation).
+ *   - Each port group is processed independently.
  *
  * @param {object} model
  * @returns {{ modified: boolean }}
@@ -576,23 +578,34 @@ function assignNextSlot(model) {
 function recompileStatusSlots(model) {
     const devices = model.devices || [];
 
-    // Collect all slots already assigned across the entire device pool.
-    const usedSlots = new Set(
-        devices
-            .filter(d => d.status_slot != null)
-            .map(d => Number(d.status_slot))
-            .filter(n => Number.isFinite(n))
-    );
+    // Group devices by target port so that slot uniqueness is enforced per port.
+    const portGroups = new Map(); // portKey → device[]
+    for (const device of devices) {
+        const portNum = endpointPort(device.target_endpoint);
+        const key = portNum != null ? portNum : '__null__';
+        if (!portGroups.has(key)) portGroups.set(key, []);
+        portGroups.get(key).push(device);
+    }
 
     let modified = false;
-    for (const device of devices) {
-        if (device.status_slot != null) continue;
-        // Find the lowest available slot (gap-filling).
-        let next = 0;
-        while (usedSlots.has(next)) next++;
-        device.status_slot = next;
-        usedSlots.add(next);
-        modified = true;
+    for (const grpDevices of portGroups.values()) {
+        // Collect slots already assigned within this port group.
+        const usedSlots = new Set(
+            grpDevices
+                .filter(d => d.status_slot != null)
+                .map(d => Number(d.status_slot))
+                .filter(n => Number.isFinite(n))
+        );
+
+        for (const device of grpDevices) {
+            if (device.status_slot != null) continue;
+            // Find the lowest available slot within this port group (gap-filling).
+            let next = 0;
+            while (usedSlots.has(next)) next++;
+            device.status_slot = next;
+            usedSlots.add(next);
+            modified = true;
+        }
     }
     return { modified };
 }
