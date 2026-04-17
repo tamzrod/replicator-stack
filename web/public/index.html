@@ -4310,6 +4310,16 @@ function renderReconcileResults(missing, orphaned, valid, area_mismatch) {
     : areaMismatch.map(entry => {
         const dev = entry.device;
         const unit = entry.unit;
+        const rangeIssues = entry.rangeIssues || [];
+        const rangeHtml = rangeIssues.length === 0 ? '' : rangeIssues.map(ri => {
+          const areaRange = ri.areaStart != null
+            ? `${ri.areaStart}–${ri.areaEnd} (count ${ri.areaCount})`
+            : '—';
+          return `<div class="mem-recon-field" style="grid-column:1/-1">
+            <label>Range Mismatch (${escapeHtml(ri.areaType)})</label>
+            <span>Read &ldquo;${escapeHtml(ri.readName)}&rdquo; needs ${ri.readStart}–${ri.readEnd}; unit covers ${escapeHtml(areaRange)}</span>
+          </div>`;
+        }).join('');
         return `<div class="mem-recon-row missing">
           <span class="mem-recon-badge missing">AREA MISMATCH</span>
           <div class="mem-recon-field">
@@ -4336,10 +4346,11 @@ function renderReconcileResults(missing, orphaned, valid, area_mismatch) {
             <label>Configured Areas</label>
             <span>${escapeHtml(entry.configuredAreas.join(', ') || '—')}</span>
           </div>
-          <div class="mem-recon-field">
+          ${entry.missingAreas.length > 0 ? `<div class="mem-recon-field">
             <label>Missing Areas</label>
             <span>${escapeHtml(entry.missingAreas.join(', '))}</span>
-          </div>
+          </div>` : ''}
+          ${rangeHtml}
           <div class="mem-recon-actions">
             <button class="btn-mem mem-recon-fix-areas-btn"
               data-device-id="${escapeHtml(dev.id)}"
@@ -4418,7 +4429,7 @@ function renderReconcileResults(missing, orphaned, valid, area_mismatch) {
       ${missingHtml}
     </div>
     <div class="mem-recon-section">
-      <div class="mem-recon-section-title missing">⚠ Area Mismatch — ${areaMismatch.length} unit(s) missing required area types</div>
+      <div class="mem-recon-section-title missing">⚠ Area Mismatch — ${areaMismatch.length} unit(s) missing required area types or address coverage</div>
       ${areaMismatchHtml}
     </div>
     <div class="mem-recon-section">
