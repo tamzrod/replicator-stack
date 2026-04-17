@@ -94,6 +94,8 @@ const _idx = {
     devicesByStatusUnitId: new Map(),
     devicesByStatusSlot:   new Map(),
     devicesByTarget:       new Map(), // "device.target_endpoint|device.unitId" (composite key) → device object
+                                       // unitId is a system-managed value that should be unique across all devices;
+                                       // enforced at creation/duplicate time via devicesByUnitId lookups.
     portsById:             new Map(),
     portsByNumber:         new Map(),
 };
@@ -1056,7 +1058,9 @@ app.post('/device', (req, res) => {
         const generatedId = `device_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
 
         // status_slot is system-assigned — the lowest available global slot index.
-        // status_unit_id is system-managed and not accepted from the request body.
+        // status_unit_id is system-managed (not user-editable) and defaults to null for
+        // all new devices.  The memory reconciliation flow assigns status_unit_id when
+        // status memory is provisioned for this device.
         const newDevice = {
             id: generatedId,
             name: device.name || '',
@@ -1217,6 +1221,9 @@ app.post('/device/:id/duplicate', (req, res) => {
             source_unit_id: newSourceUnitId,
             target_endpoint: newTargetEndpoint,
             unitId: newUnitId,
+            // status_slot: system-assigned global slot (lowest available).
+            // status_unit_id: null for all duplicates — system-managed; the memory
+            // reconciliation flow assigns it when status memory is provisioned.
             status_slot: newStatusSlot,
             status_unit_id: null,
             reads: newReads,
