@@ -1201,6 +1201,81 @@
       font-style: italic;
     }
 
+    /* ── Status Tab ──────────────────────────────────────────────────── */
+    #status-tab-container {
+      display: none;
+      max-width: 960px;
+      margin: 32px auto;
+      padding: 0 16px;
+      flex-direction: column;
+      gap: 20px;
+    }
+    #status-tab-container.active { display: flex; }
+    .st-card {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.07);
+      overflow: hidden;
+    }
+    .st-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 20px;
+      border-bottom: 1px solid #E5E7EB;
+      background: #F9FAFB;
+    }
+    .st-card-header h2 { font-size: .95rem; font-weight: 700; color: #0B3C5D; margin: 0; }
+    .st-card-body { overflow-x: auto; }
+    .st-empty {
+      padding: 32px 20px;
+      text-align: center;
+      color: #9CA3AF;
+      font-size: .85rem;
+      font-style: italic;
+    }
+    .st-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .82rem;
+    }
+    .st-table th {
+      text-align: left;
+      padding: 8px 12px;
+      background: #F3F4F6;
+      border-bottom: 1px solid #E5E7EB;
+      font-weight: 600;
+      font-size: .73rem;
+      color: #6B7280;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      white-space: nowrap;
+    }
+    .st-table td {
+      padding: 9px 12px;
+      border-bottom: 1px solid #F3F4F6;
+      vertical-align: middle;
+      white-space: nowrap;
+    }
+    .st-table tr:last-child td { border-bottom: none; }
+    .st-table tr:hover td { background: #F9FAFB; }
+    .st-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: .72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .st-badge-unknown  { background: #F3F4F6; color: #6B7280; }
+    .st-badge-ok       { background: #DCFCE7; color: #166534; }
+    .st-badge-error    { background: #FEE2E2; color: #991B1B; }
+    .st-badge-stale    { background: #FEF3C7; color: #92400E; }
+    .st-badge-disabled { background: #F3F4F6; color: #374151; }
+    .st-muted { color: #9CA3AF; font-style: italic; }
+    .st-device-id { color: #9CA3AF; font-size: .7rem; }
+
     /* ── Runtime Tab ──────────────────────────────────────────────────── */
     #runtime-tab-container {
       display: none;
@@ -1475,6 +1550,7 @@
   <button class="tab-btn active" data-tab="model">Model</button>
   <button class="tab-btn" data-tab="memory">🧠 Memory</button>
   <button class="tab-btn" data-tab="runtime">⚙ Runtime</button>
+  <button class="tab-btn" data-tab="status">📊 Status</button>
   <button class="tab-btn" data-tab="config-viewer">🔍 Config Viewer</button>
   <button class="btn-refresh btn-tab-bar-refresh" id="btn-refresh">↻ Refresh</button>
 </div>
@@ -1709,6 +1785,19 @@
   </div>
 
 </div><!-- #runtime-tab-container -->
+
+<!-- ── Status Tab ─────────────────────────────────────────────────── -->
+<div id="status-tab-container">
+  <div class="st-card">
+    <div class="st-card-header">
+      <h2>📊 Device Status</h2>
+      <span style="font-size:.75rem;color:#6B7280">Live — updates every 5 s while this tab is active</span>
+    </div>
+    <div class="st-card-body">
+      <div id="status-table-wrap"><div class="st-empty">Open this tab to start polling.</div></div>
+    </div>
+  </div>
+</div><!-- #status-tab-container -->
 
 <!-- ── Add / Edit Group Dialog ───────────────────────────────────── -->
 <dialog id="group-dialog">
@@ -5013,24 +5102,35 @@ document.getElementById('tab-bar').addEventListener('click', e => {
   const cvContainer = document.getElementById('config-viewer-container');
   const memContainer = document.getElementById('memory-tab-container');
   const rtContainer = document.getElementById('runtime-tab-container');
+  const stContainer = document.getElementById('status-tab-container');
 
   appContainer.style.display = 'none';
   cvContainer.classList.remove('active');
   memContainer.classList.remove('active');
   rtContainer.classList.remove('active');
+  stContainer.classList.remove('active');
 
   if (tab === 'model') {
     appContainer.style.display = '';
+    stopStatusPolling();
     stopLogStream();
   } else if (tab === 'memory') {
     memContainer.classList.add('active');
+    stopStatusPolling();
     stopLogStream();
   } else if (tab === 'runtime') {
     rtContainer.classList.add('active');
+    stopStatusPolling();
     loadRuntimeStatus();
     startRuntimeLogs();
+  } else if (tab === 'status') {
+    stContainer.classList.add('active');
+    stopLogStream();
+    renderStatusTab();
+    startStatusPolling();
   } else if (tab === 'config-viewer') {
     cvContainer.classList.add('active');
+    stopStatusPolling();
     // Use the already-fetched canonical config snapshot when available so the
     // Config Viewer always shows data that matches the current Memory Tab and
     // Device View state.  Fall back to an explicit API fetch only when the
@@ -5692,12 +5792,148 @@ ${noConfig}
   }
 }
 
+// ── Status Tab ────────────────────────────────────────────────────────────────
+
+// Modbus standard exception codes (spec: Modbus Application Protocol V1.1b3 §7)
+const MODBUS_EXCEPTION_CODES = Object.freeze({
+  0:  'OK',
+  1:  'ILLEGAL FUNCTION',
+  2:  'ILLEGAL DATA ADDRESS',
+  3:  'ILLEGAL DATA VALUE',
+  4:  'SERVER DEVICE FAILURE',
+  5:  'ACKNOWLEDGE',
+  6:  'SERVER DEVICE BUSY',
+  8:  'MEMORY PARITY ERROR',
+  10: 'GATEWAY PATH UNAVAILABLE',
+  11: 'GATEWAY TARGET FAILED TO RESPOND',
+});
+
+function _modbusErrLabel(code) {
+  const n = Number(code);
+  if (!Number.isFinite(n)) return 'UNKNOWN CODE';
+  return MODBUS_EXCEPTION_CODES[n] !== undefined ? MODBUS_EXCEPTION_CODES[n] : `CODE ${n}`;
+}
+
+function _fmtSecs(s) {
+  if (!s) return '0 s';
+  const d   = Math.floor(s / 86400);
+  const h   = Math.floor((s % 86400) / 3600);
+  const m   = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  const parts = [];
+  if (d)   parts.push(`${d}d`);
+  if (h)   parts.push(`${h}h`);
+  if (m)   parts.push(`${m}m`);
+  if (sec || !parts.length) parts.push(`${sec}s`);
+  return parts.join(' ');
+}
+
+function _fmtNum(n) {
+  return n != null ? Number(n).toLocaleString() : '—';
+}
+
+function renderStatusTab() {
+  const wrap = document.getElementById('status-table-wrap');
+  if (!wrap) return;
+
+  const devices = (_currentModel?.devices || []);
+  if (devices.length === 0) {
+    wrap.innerHTML = '<div class="st-empty">No devices configured.</div>';
+    return;
+  }
+
+  const STATUS_BADGE  = ['st-badge-unknown', 'st-badge-ok', 'st-badge-error', 'st-badge-stale', 'st-badge-disabled'];
+  const STATUS_LABEL  = ['UNKNOWN', 'OK', 'ERROR', 'STALE', 'DISABLED'];
+
+  let rows = '';
+  for (const d of devices) {
+    const s          = _deviceStatus[d.id];
+    const hasStatus  = d.status_unit_id != null;
+
+    // Health badge
+    let healthBadge;
+    if (!hasStatus) {
+      healthBadge = '<span class="st-muted">—</span>';
+    } else if (!s) {
+      healthBadge = '<span class="st-muted">Polling…</span>';
+    } else {
+      const code     = Number(s.health_code) || 0;
+      const cls      = STATUS_BADGE[code] || 'st-badge-unknown';
+      const lbl      = STATUS_LABEL[code] || 'UNKNOWN';
+      healthBadge    = `<span class="st-badge ${cls}">${lbl}</span>`;
+    }
+
+    // Helper — renders a single text cell respecting hasStatus / polling state
+    const cell = (text) => {
+      if (!hasStatus)  return '<span class="st-muted">—</span>';
+      if (!s)          return '<span class="st-muted">Polling…</span>';
+      return escapeHtml(String(text));
+    };
+
+    // Error code decoded as Modbus exception label; raw code shown in tooltip
+    let errCell;
+    if (!hasStatus) {
+      errCell = '<span class="st-muted">—</span>';
+    } else if (!s) {
+      errCell = '<span class="st-muted">Polling…</span>';
+    } else {
+      const raw   = Number(s.last_error_code);
+      const label = _modbusErrLabel(raw);
+      errCell     = raw === 0
+        ? `<span style="color:#166534">${escapeHtml(label)}</span>`
+        : `<span title="Raw code: ${raw}">${escapeHtml(label)}</span>`;
+    }
+
+    // Success rate (derived)
+    let successRate = '—';
+    if (s && hasStatus && s.requests_total > 0) {
+      successRate = ((s.responses_valid_total / s.requests_total) * 100).toFixed(1) + '%';
+    }
+
+    rows += `<tr>
+      <td>
+        ${escapeHtml(d.name || d.id)}
+        <br><span class="st-device-id">${escapeHtml(d.id)}</span>
+      </td>
+      <td>${healthBadge}</td>
+      <td>${errCell}</td>
+      <td>${cell(_fmtSecs(s?.seconds_in_error))}</td>
+      <td>${cell(s?.device_name || '—')}</td>
+      <td>${cell(_fmtNum(s?.requests_total))}</td>
+      <td>${cell(_fmtNum(s?.responses_valid_total))}</td>
+      <td>${cell(_fmtNum(s?.timeouts_total))}</td>
+      <td>${cell(_fmtNum(s?.transport_errors_total))}</td>
+      <td>${cell(s ? `${s.consecutive_fail_current} / ${s.consecutive_fail_max}` : '')}</td>
+      <td>${hasStatus && s && s.requests_total > 0 ? escapeHtml(successRate) : '<span class="st-muted">—</span>'}</td>
+    </tr>`;
+  }
+
+  wrap.innerHTML = `<table class="st-table">
+    <thead>
+      <tr>
+        <th>Device</th>
+        <th>Health</th>
+        <th>Error Code</th>
+        <th>Time in Error</th>
+        <th>Name (Block)</th>
+        <th>Requests</th>
+        <th>Valid</th>
+        <th>Timeouts</th>
+        <th>Transport Err</th>
+        <th>Consec. Fails (cur / max)</th>
+        <th>Success Rate</th>
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
 // ── Init ─────────────────────────────────────────────────────────────────────
 
 // ── Device Status Polling ────────────────────────────────────────────────────
-// Reads health_code (Slot 0) and device_name (Slots 3–10) from MMA status
-// blocks. Only Slot 0 and Slots 3–10 are read — no transport counters, no
-// derived values. Renders are only triggered when data changes.
+// Reads all 30 status block registers per device slot from MMA.
+// Polling only runs while the Status tab is active — started on tab-enter and
+// stopped on tab-leave so no resources are consumed in the background.
 const STATUS_POLL_INTERVAL_MS = 5000;
 let _statusPollTimer = null;
 let _statusPollActive = false;
@@ -5712,6 +5948,10 @@ async function pollDeviceStatus() {
       _deviceStatus = data.status;
       // Patch only the changed status dots — no full tree rebuild.
       _patchStatusDots(prev, _deviceStatus);
+      // Re-render the Status Tab table if it is currently visible.
+      if (document.getElementById('status-tab-container')?.classList.contains('active')) {
+        renderStatusTab();
+      }
     }
   } finally {
     _statusPollActive = false;
@@ -5721,12 +5961,16 @@ async function pollDeviceStatus() {
 function startStatusPolling() {
   // Idempotency guard: once the polling interval is running, calling this
   // function again must be a no-op.  Re-creating the interval would reset the
-  // 5-second timer and cause poll drift in long sessions.  The clearInterval
-  // path is preserved for future use (e.g. stop → restart), but an already-
-  // running interval is never replaced.
+  // 5-second timer and cause poll drift in long sessions.
   if (_statusPollTimer !== null) return;
   pollDeviceStatus().catch(() => {});
   _statusPollTimer = setInterval(() => pollDeviceStatus().catch(() => {}), STATUS_POLL_INTERVAL_MS);
+}
+
+function stopStatusPolling() {
+  if (_statusPollTimer === null) return;
+  clearInterval(_statusPollTimer);
+  _statusPollTimer = null;
 }
 
 document.getElementById('btn-refresh').addEventListener('click', loadModel);
@@ -5761,7 +6005,7 @@ document.getElementById('btn-report').addEventListener('click', () => {
   });
 })();
 
-loadModel().then(startStatusPolling);
+loadModel();
 
 fetch('/version')
   .then(r => r.json())

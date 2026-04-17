@@ -3555,10 +3555,12 @@ function modbusReadHoldingRegisters(host, port, unitId, startAddr, count, timeou
     });
 }
 
-// GET /devices/status — read health_code (Slot 0) and device_name (Slots 3–10)
-//   from each device's status block in MMA.
+// GET /devices/status — read all 30 status block slots for each device.
 //   Reads are batched per (endpoint, status_unit_id) to minimise TCP connections.
-//   Returns { ok: true, status: { [deviceId]: { health_code, device_name } } }
+//   Returns { ok: true, status: { [deviceId]: { health_code, last_error_code,
+//     seconds_in_error, device_name, requests_total, responses_valid_total,
+//     timeouts_total, transport_errors_total, consecutive_fail_current,
+//     consecutive_fail_max } } }
 app.get('/devices/status', async (req, res) => {
     try {
         const model = readModel();
@@ -3582,29 +3584,63 @@ app.get('/devices/status', async (req, res) => {
 
         await Promise.all([...groupMap.values()].map(async ({ host, port, unitId, devices: grpDevs }) => {
             const maxSlot = Math.max(...grpDevs.map(d => Number(d.status_slot) || 0));
-            // Read from address 0 through end of last device's Slot 10 (device_name end).
-            const readCount = maxSlot * STATUS_SLOT_SIZE + 11;
+            // Read all 30 registers of every slot up to and including the last device's slot.
+            const readCount = (maxSlot + 1) * STATUS_SLOT_SIZE;
             const regs = await modbusReadHoldingRegisters(host, port, unitId, 0, readCount);
 
             for (const device of grpDevs) {
                 const base = (Number(device.status_slot) || 0) * STATUS_SLOT_SIZE;
+                // Helper: read one register at slot-relative offset (called only inside the
+                // `if (regs && regs.length > base)` guard, so regs is guaranteed non-null here).
+                const get = (off) => (regs.length > base + off) ? (regs[base + off] || 0) : 0;
+                // Helper: read uint32 (lo word at loOff, hi word at loOff+1).
+                const get32 = (loOff) => get(loOff) + get(loOff + 1) * 65536;
+
                 let health_code = 0;
+                let last_error_code = 0;
+                let seconds_in_error = 0;
                 let device_name = '';
+                let requests_total = 0;
+                let responses_valid_total = 0;
+                let timeouts_total = 0;
+                let transport_errors_total = 0;
+                let consecutive_fail_current = 0;
+                let consecutive_fail_max = 0;
+
                 if (regs && regs.length > base) {
-                    health_code = regs[base] !== undefined ? regs[base] : 0;
-                    // Slots 3–10: 8 registers = 16 ASCII bytes; only read if registers are present
+                    // Slots 0–2: operational truth
+                    health_code      = get(0);
+                    last_error_code  = get(1);
+                    seconds_in_error = get(2);
+
+                    // Slots 3–10: device_name (ASCII, max 16 chars, 8 registers × 2 bytes)
                     const nameStart = base + 3;
-                    const nameEnd = Math.min(base + 11, regs.length);
+                    const nameEnd   = Math.min(base + 11, regs.length);
                     if (nameEnd > nameStart) {
-                        const nameRegs = regs.slice(nameStart, nameEnd);
+                        const nameRegs  = regs.slice(nameStart, nameEnd);
                         const nameBytes = Buffer.alloc(nameRegs.length * 2);
                         for (let i = 0; i < nameRegs.length; i++) {
                             nameBytes.writeUInt16BE(nameRegs[i] || 0, i * 2);
                         }
                         device_name = nameBytes.toString('ascii').replace(/\0.*/, '').trim();
                     }
+
+                    // Slots 20–29: transport lifetime counters
+                    if (regs.length >= base + STATUS_SLOT_SIZE) {
+                        requests_total           = get32(20);
+                        responses_valid_total    = get32(22);
+                        timeouts_total           = get32(24);
+                        transport_errors_total   = get32(26);
+                        consecutive_fail_current = get(28);
+                        consecutive_fail_max     = get(29);
+                    }
                 }
-                result[device.id] = { health_code, device_name };
+
+                result[device.id] = {
+                    health_code, last_error_code, seconds_in_error, device_name,
+                    requests_total, responses_valid_total, timeouts_total,
+                    transport_errors_total, consecutive_fail_current, consecutive_fail_max,
+                };
             }
         }));
 
