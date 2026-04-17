@@ -561,7 +561,18 @@ function getCanonicalStatusUnitId(model, targetEndpoint) {
         const suid = Number(d.status_unit_id);
         counts.set(suid, (counts.get(suid) || 0) + 1);
     }
-    if (counts.size === 0) return DEFAULT_STATUS_UNIT_ID;
+    return pickCanonicalSuid(counts, DEFAULT_STATUS_UNIT_ID);
+}
+
+/**
+ * Choose the canonical status_unit_id from a Map<suid, count>.
+ * Highest count wins; lowest suid breaks ties.  Returns fallback when counts is empty.
+ *
+ * @param {Map<number,number>} counts
+ * @param {number} fallback
+ * @returns {number}
+ */
+function pickCanonicalSuid(counts, fallback) {
     let canonical = null;
     let bestCount = -1;
     for (const [suid, count] of counts) {
@@ -570,7 +581,7 @@ function getCanonicalStatusUnitId(model, targetEndpoint) {
             bestCount = count;
         }
     }
-    return canonical;
+    return canonical !== null ? canonical : fallback;
 }
 
 /**
@@ -2683,17 +2694,8 @@ function rehydrateFromYaml(model) {
     for (const device of (model.devices || [])) {
         if (device.status_unit_id != null) continue;
         const epKey = (device.target_endpoint || '').trim().toLowerCase();
-        const counts = epStatusCounts.get(epKey);
-        let canonical = DEFAULT_STATUS_UNIT_ID;
-        if (counts && counts.size > 0) {
-            let bestCount = -1;
-            for (const [suid, count] of counts) {
-                if (count > bestCount || (count === bestCount && suid < canonical)) {
-                    canonical = suid;
-                    bestCount = count;
-                }
-            }
-        }
+        const counts = epStatusCounts.get(epKey) || new Map();
+        const canonical = pickCanonicalSuid(counts, DEFAULT_STATUS_UNIT_ID);
         device.status_unit_id = canonical;
         // Register the assigned value so subsequent null devices on the same
         // endpoint get the same canonical rather than each defaulting independently.
@@ -3295,15 +3297,7 @@ function computeIntegrity(model) {
         counts.set(suid, (counts.get(suid) || 0) + 1);
     }
     for (const [epKey, counts] of epStatusUidMap) {
-        let canonical = null;
-        let bestCount = -1;
-        for (const [suid, count] of counts) {
-            if (count > bestCount || (count === bestCount && suid < canonical)) {
-                canonical = suid;
-                bestCount = count;
-            }
-        }
-        epCanonicalUid.set(epKey, canonical);
+        epCanonicalUid.set(epKey, pickCanonicalSuid(counts, DEFAULT_STATUS_UNIT_ID));
     }
 
     const issues = [];
@@ -3452,14 +3446,7 @@ app.post('/yaml-integrity/fix', (req, res) => {
             }
 
             // Choose the canonical value: highest count wins; lowest value breaks ties.
-            let canonical = null;
-            let bestCount = -1;
-            for (const [suid, count] of counts) {
-                if (count > bestCount || (count === bestCount && suid < canonical)) {
-                    canonical = suid;
-                    bestCount = count;
-                }
-            }
+            const canonical = pickCanonicalSuid(counts, DEFAULT_STATUS_UNIT_ID);
 
             if (counts.size === 1) {
                 // Consistent among assigned devices — only propagate to null devices.
