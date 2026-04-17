@@ -1848,6 +1848,36 @@ app.get('/memory/reconcile', (req, res) => {
                 // Find area types required by the device but absent from the unit.
                 const missingAreas = [...requiredAreas].filter(a => !configuredAreas.has(a));
 
+                // For area types that are present, check that each read's address range
+                // is actually covered by the unit area (start <= readStart, start+count >= readEnd).
+                const rangeIssues = [];
+                for (const read of (device.reads || [])) {
+                    const areaType = read.source_area || 'holding_registers';
+                    if (!configuredAreas.has(areaType)) continue; // already flagged as missing
+                    const readStart = Number(read.source_address);
+                    const readCount = Number(read.count) || 1;
+                    const readEnd = readStart + readCount - 1;
+                    const matchingAreas = (unit.areas || []).filter(a => a.type === areaType);
+                    const covered = matchingAreas.some(a => {
+                        const aStart = Number(a.start);
+                        const aEnd = aStart + Number(a.count) - 1;
+                        return aStart <= readStart && aEnd >= readEnd;
+                    });
+                    if (!covered) {
+                        const bestArea = matchingAreas[0] || null;
+                        rangeIssues.push({
+                            readId: read.id,
+                            readName: read.name || read.id,
+                            areaType,
+                            readStart,
+                            readEnd,
+                            areaStart: bestArea != null ? Number(bestArea.start) : null,
+                            areaEnd: bestArea != null ? Number(bestArea.start) + Number(bestArea.count) - 1 : null,
+                            areaCount: bestArea != null ? Number(bestArea.count) : null,
+                        });
+                    }
+                }
+
                 const deviceSummary = {
                     id: device.id,
                     name: device.name,
@@ -1858,7 +1888,7 @@ app.get('/memory/reconcile', (req, res) => {
                 };
                 const unitSummary = { id: unit.id, unit_id: unit.unit_id, areas: unit.areas || [] };
 
-                if (missingAreas.length > 0) {
+                if (missingAreas.length > 0 || rangeIssues.length > 0) {
                     area_mismatch.push({
                         device: deviceSummary,
                         unit: unitSummary,
@@ -1867,6 +1897,7 @@ app.get('/memory/reconcile', (req, res) => {
                         missingAreas,
                         configuredAreas: [...configuredAreas],
                         requiredAreas: [...requiredAreas],
+                        rangeIssues,
                     });
                 } else {
                     valid.push({
