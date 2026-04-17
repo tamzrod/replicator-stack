@@ -3123,16 +3123,14 @@ app.get('/validate', rateLimit, (req, res) => {
 });
 
 // GET /yaml-integrity — check replicator YAML integrity across all devices.
-// Verifies status_slot assignment and uniqueness, required fields, and which
-// devices would be included in the compiled replicator YAML.
-// Returns { issues: [], devices: [] } — read-only, never mutates model.
+// Verifies status_slot assignment and uniqueness, status_unit_id assignment and
+// per-port group consistency, required fields, and which devices would be
+// included in the compiled replicator YAML.
+// Returns { ok, issues, devices, status_slot_size } — read-only, never mutates model.
 app.get('/yaml-integrity', (req, res) => {
     try {
         const model = readModel();
         const devices = model.devices || [];
-
-        const issues = [];
-        const deviceResults = [];
 
         // Build a map of status_slot → [device ids] to detect duplicates.
         const slotMap = new Map();
@@ -3143,6 +3141,21 @@ app.get('/yaml-integrity', (req, res) => {
             if (!slotMap.has(key)) slotMap.set(key, []);
             slotMap.get(key).push(device.id);
         }
+
+        // Build a map of portNum → Set<status_unit_id> for devices on that port.
+        // Used to detect devices whose status_unit_id differs from the group on the same port.
+        // portNum → { expected: number|null, ids: Set<number> }
+        const portStatusUidMap = new Map(); // portNum → Set of status_unit_id values seen
+        for (const device of devices) {
+            if (device.status_unit_id == null) continue;
+            const portNum = endpointPort(device.target_endpoint);
+            if (portNum == null) continue;
+            if (!portStatusUidMap.has(portNum)) portStatusUidMap.set(portNum, new Set());
+            portStatusUidMap.get(portNum).add(Number(device.status_unit_id));
+        }
+
+        const issues = [];
+        const deviceResults = [];
 
         for (const device of devices) {
             const deviceIssues = [];
@@ -3156,6 +3169,25 @@ app.get('/yaml-integrity', (req, res) => {
                 if (sharing.length > 1) {
                     const others = sharing.filter(id => id !== device.id).join(', ');
                     deviceIssues.push({ severity: 'error', message: `status_slot ${slot} is duplicated with: ${others}` });
+                }
+            }
+
+            // Check status_unit_id is assigned.
+            if (device.status_unit_id == null) {
+                deviceIssues.push({ severity: 'error', message: 'status_unit_id not assigned — run Memory Consistency check to fix' });
+            } else {
+                // Check status_unit_id is consistent with other devices on the same port.
+                const portNum = endpointPort(device.target_endpoint);
+                if (portNum != null) {
+                    const portUids = portStatusUidMap.get(portNum) || new Set();
+                    if (portUids.size > 1) {
+                        const expected = Math.min(...portUids);
+                        const actual = Number(device.status_unit_id);
+                        if (actual !== expected) {
+                            const allUids = [...portUids].join(', ');
+                            deviceIssues.push({ severity: 'error', message: `status_unit_id ${actual} differs from other devices on port ${portNum} — found [${allUids}], expected all to match` });
+                        }
+                    }
                 }
             }
 
@@ -3187,6 +3219,7 @@ app.get('/yaml-integrity', (req, res) => {
                 name: device.name || device.id,
                 status_slot: device.status_slot != null ? Number(device.status_slot) : null,
                 status_unit_id: device.status_unit_id != null ? Number(device.status_unit_id) : null,
+                target_port: endpointPort(device.target_endpoint),
                 includedInYaml,
                 issues: deviceIssues,
             };

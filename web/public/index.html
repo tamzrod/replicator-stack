@@ -4657,13 +4657,18 @@ function renderYamlIntegrityResults(devices) {
         ? `<span class="mem-recon-badge missing" style="background:#F59E0B">WARNING</span>`
         : `<span class="mem-recon-badge valid">OK</span>`;
     const slotDisplay = dev.status_slot != null ? dev.status_slot : '—';
+    const slotColor   = dev.status_slot == null ? '#EF4444' : 'inherit';
+    const suidDisplay = dev.status_unit_id != null ? dev.status_unit_id : '—';
+    const suidIssue   = errors.some(i => i.message.includes('status_unit_id'));
+    const suidColor   = suidIssue ? '#EF4444' : 'inherit';
+    const portDisplay = dev.target_port != null ? dev.target_port : '—';
     const yamlDisplay = dev.includedInYaml
       ? `<span style="color:#10B981">✓ included</span>`
       : `<span style="color:#9CA3AF">excluded (no reads)</span>`;
     const issuesList = hasIssues
       ? `<div class="mem-recon-field" style="grid-column:1/-1">
           <label>Issues</label>
-          <ul style="margin:0;padding-left:1.2em;color:#EF4444">
+          <ul style="margin:0;padding-left:1.2em">
             ${dev.issues.map(i => `<li style="color:${i.severity === 'error' ? '#EF4444' : '#F59E0B'}">${escapeHtml(i.message)}</li>`).join('')}
           </ul>
         </div>`
@@ -4676,11 +4681,15 @@ function renderYamlIntegrityResults(devices) {
       </div>
       <div class="mem-recon-field">
         <label>Status Slot</label>
-        <span style="font-family:monospace">${escapeHtml(String(slotDisplay))}</span>
+        <span style="font-family:monospace;color:${slotColor}">${escapeHtml(String(slotDisplay))}</span>
       </div>
       <div class="mem-recon-field">
         <label>Status Unit ID</label>
-        <span style="font-family:monospace">${dev.status_unit_id != null ? escapeHtml(String(dev.status_unit_id)) : '—'}</span>
+        <span style="font-family:monospace;color:${suidColor}">${escapeHtml(String(suidDisplay))}</span>
+      </div>
+      <div class="mem-recon-field">
+        <label>Target Port</label>
+        <span style="font-family:monospace">${escapeHtml(String(portDisplay))}</span>
       </div>
       <div class="mem-recon-field">
         <label>YAML</label>
