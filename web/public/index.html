@@ -1752,16 +1752,6 @@
       </div>
       <div class="row">
         <div class="field">
-          <label>Status Slot <span style="color:#9CA3AF;font-weight:400">(default 0)</span></label>
-          <input id="ad-status-slot" type="number" value="0" min="0" />
-        </div>
-        <div class="field">
-          <label>Status Unit ID <span style="color:#9CA3AF;font-weight:400">(optional, MMA unit for status)</span></label>
-          <input id="ad-status-unit" type="number" placeholder="e.g. 100" min="0" />
-        </div>
-      </div>
-      <div class="row">
-        <div class="field">
           <label>Group <span style="color:#9CA3AF;font-weight:400">(optional)</span></label>
           <select id="ad-group">
             <option value="">— Ungrouped —</option>
@@ -2091,7 +2081,6 @@ function _snapshotDevice(deviceMap, deviceId) {
     d.id, d.name || '', d.groupId || '',
     d.source_endpoint || '', d.source_unit_id,
     d.target_endpoint || '', d.unitId,
-    d.status_slot || 0, d.status_unit_id || '',
     reads,
   ].join('|');
 }
@@ -2302,10 +2291,6 @@ function renderDeviceWorkspace() {
           <label>Source Unit ID <span style="color:#ef4444;font-weight:600">*</span></label>
           <input class="info-edit-input" type="number" id="ws-ed-src-unit" value="${escapeHtml(String(device.source_unit_id ?? ''))}" placeholder="e.g. 1" min="0" required />
         </div>
-        <div class="info-field">
-          <label>Status Slot</label>
-          <input class="info-edit-input" type="number" id="ws-ed-status-slot" value="${escapeHtml(String(device.status_slot ?? 0))}" min="0" />
-        </div>
         <div class="info-field"><label>Group</label><div class="info-val">${escapeHtml(grpName)}</div></div>
       </div>
     </form>
@@ -2421,10 +2406,6 @@ function renderDeviceWorkspace() {
         <label>Unit ID <span style="color:#9CA3AF;font-weight:400">(MMA unit)</span></label>
         <input class="info-edit-input" type="number" id="ws-tgt-unit" value="${escapeHtml(String(device.unitId ?? ''))}" form="ws-config-form" min="0" required />
       </div>
-      <div class="info-field">
-        <label>Status Unit ID <span style="color:#9CA3AF;font-weight:400">(optional, MMA unit for status)</span></label>
-        <input class="info-edit-input" type="number" id="ws-tgt-status-unit" value="${escapeHtml(String(device.status_unit_id ?? ''))}" form="ws-config-form" placeholder="e.g. 100" min="0" />
-      </div>
     </div>
   </div>`;
 
@@ -2439,8 +2420,8 @@ function renderDeviceWorkspace() {
     _appState.pendingDeviceId = device.id;
     setDirty(true);
   };
-  ['ws-ed-name','ws-ed-src-endpoint','ws-ed-src-unit','ws-ed-status-slot',
-   'ws-tgt-endpoint','ws-tgt-unit','ws-tgt-status-unit'].forEach(id => {
+  ['ws-ed-name','ws-ed-src-endpoint','ws-ed-src-unit',
+   'ws-tgt-endpoint','ws-tgt-unit'].forEach(id => {
     document.getElementById(id)?.addEventListener('input', _trackDirty);
   });
   // Also track advanced MMA endpoint toggle / inputs
@@ -2678,10 +2659,8 @@ function _capturePendingDeviceFormSilent() {
   const nameEl      = document.getElementById('ws-ed-name');
   const srcEpEl     = document.getElementById('ws-ed-src-endpoint');
   const srcUnitEl   = document.getElementById('ws-ed-src-unit');
-  const slotEl      = document.getElementById('ws-ed-status-slot');
   const tgtEpEl     = document.getElementById('ws-tgt-endpoint');
   const tgtUnitEl   = document.getElementById('ws-tgt-unit');
-  const tgtStEl     = document.getElementById('ws-tgt-status-unit');
   const advToggle   = document.getElementById('adv-override-toggle');
   const advHost     = document.getElementById('adv-mma-host');
   const advPort     = document.getElementById('adv-mma-port');
@@ -2696,12 +2675,10 @@ function _capturePendingDeviceFormSilent() {
       source_endpoint: srcEpEl ? srcEpEl.value.trim() : (device.source_endpoint || ''),
       source_unit_id:  srcUnitVal ? Number(srcUnitVal) : device.source_unit_id,
       groupId:         device.groupId || null,
-      status_slot:     slotEl ? (Number(slotEl.value) || 0) : (device.status_slot || 0),
     },
     targetConfig: {
       target_endpoint: tgtEpEl ? tgtEpEl.value.trim() : (device.target_endpoint || ''),
       unitId:          tgtUnitEl ? Number(tgtUnitEl.value) : device.unitId,
-      status_unit_id:  tgtStEl && tgtStEl.value !== '' ? Number(tgtStEl.value) : null,
     },
     mmaEndpointConfig: (() => {
       if (!advToggle || !advToggle.checked) return null;
@@ -2722,15 +2699,6 @@ function nextMmaUnitIdForEndpoint(targetEndpoint) {
   return Math.max(...devices.map(device => Number(device.unitId) || 0)) + 1;
 }
 
-// Returns the next available status slot for the given status unit ID.
-// Status slots are 0-indexed within a status_unit_id group, so the next
-// available slot equals the current count of devices sharing that unit ID.
-function nextStatusSlotForUnit(statusUnitId) {
-  const uid = Number(statusUnitId);
-  if (!Number.isFinite(uid)) return 0;
-  return (_currentModel?.devices || []).filter(device => device.status_unit_id === uid).length;
-}
-
 function openAddDevice() {
   document.getElementById('add-device-form').reset();
   document.getElementById('ad-src-endpoint').value = '';
@@ -2738,8 +2706,6 @@ function openAddDevice() {
   document.getElementById('ad-tgt-endpoint').value = defaultTarget;
   document.getElementById('ad-unit').value = '1';
   document.getElementById('ad-mma-unit').value = String(nextMmaUnitIdForEndpoint(defaultTarget));
-  document.getElementById('ad-status-unit').value = '100';
-  document.getElementById('ad-status-slot').value = String(nextStatusSlotForUnit(100));
   document.getElementById('add-device-banner').className = 'banner';
 
   document.getElementById('add-device-dialog').showModal();
@@ -2758,10 +2724,6 @@ document.getElementById('add-device-form').addEventListener('submit', async e =>
       source_unit_id: Number(document.getElementById('ad-unit').value),
       target_endpoint: document.getElementById('ad-tgt-endpoint').value.trim(),
       unitId:         Number(document.getElementById('ad-mma-unit').value),
-      status_slot:    Number(document.getElementById('ad-status-slot').value) || 0,
-      status_unit_id: document.getElementById('ad-status-unit').value !== ''
-                        ? Number(document.getElementById('ad-status-unit').value)
-                        : null,
     }
   };
 
@@ -2785,14 +2747,6 @@ document.getElementById('ad-cancel').addEventListener('click', () => {
 document.getElementById('ad-tgt-endpoint').addEventListener('input', () => {
   const endpoint = document.getElementById('ad-tgt-endpoint').value.trim();
   document.getElementById('ad-mma-unit').value = String(nextMmaUnitIdForEndpoint(endpoint));
-});
-
-// Recalculate status slot when status unit ID changes.
-document.getElementById('ad-status-unit').addEventListener('input', () => {
-  const val = document.getElementById('ad-status-unit').value;
-  document.getElementById('ad-status-slot').value = val !== ''
-    ? String(nextStatusSlotForUnit(Number(val)))
-    : '0';
 });
 
 // ── Compile Error Recovery Dialog ────────────────────────────────────────────
@@ -4296,10 +4250,6 @@ function renderReconcileResults(missing, orphaned, valid, area_mismatch, status_
             <label>Target Port</label>
             <span>${escapeHtml(portLabel)}</span>
           </div>
-          <div class="mem-recon-field">
-            <label>Status Slot</label>
-            <span>${escapeHtml(String(dev.status_slot ?? 0))}</span>
-          </div>
           <div class="mem-recon-actions">
             <button class="btn-mem mem-recon-create-btn"
               data-device-id="${escapeHtml(dev.id)}"
@@ -4339,10 +4289,6 @@ function renderReconcileResults(missing, orphaned, valid, area_mismatch, status_
           <div class="mem-recon-field">
             <label>Port</label>
             <span>${escapeHtml(String(entry.portNum))}</span>
-          </div>
-          <div class="mem-recon-field">
-            <label>Status Slot</label>
-            <span>${escapeHtml(String(dev.status_slot ?? 0))}</span>
           </div>
           <div class="mem-recon-field">
             <label>Required Areas</label>
@@ -4421,10 +4367,6 @@ function renderReconcileResults(missing, orphaned, valid, area_mismatch, status_
           <div class="mem-recon-field">
             <label>Areas</label>
             <span>${escapeHtml(String(unit.areas.length))}</span>
-          </div>
-          <div class="mem-recon-field">
-            <label>Status Slot</label>
-            <span>${escapeHtml(String(dev.status_slot ?? 0))}</span>
           </div>
         </div>`;
       }).join('');
@@ -5368,16 +5310,11 @@ async function generateReport() {
                     <tbody>${pollRows}</tbody>
                   </table>`;
 
-              const statusVal = d.status_unit_id != null ? esc(String(d.status_unit_id)) : '—';
-              const slotVal   = d.status_slot    != null ? esc(String(d.status_slot))    : '—';
-
               return `<div class="rpt-device">
                 <div class="rpt-device-name">📟 ${esc(d.name || d.id)}</div>
                 <div class="rpt-device-meta">
                   <span><strong>Endpoint:</strong> <code>${esc(d.source_endpoint || '—')}</code></span>
                   <span><strong>Unit ID:</strong> ${esc(d.source_unit_id ?? '—')}</span>
-                  <span><strong>Status:</strong> ${statusVal}</span>
-                  <span><strong>Slot:</strong> ${slotVal}</span>
                 </div>
                 <div class="rpt-poll-label">Poll Table</div>
                 ${pollTable}
