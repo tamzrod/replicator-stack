@@ -953,7 +953,10 @@ app.get('/model/snapshot', rateLimit, (req, res) => {
         // mutation + snapshot sequence would read stale YAML from disk while
         // the Config Viewer already shows the new Memory-tab state.
         if (_compilePending) {
-            if (_compileTimer) { clearTimeout(_compileTimer); _compileTimer = null; }
+            if (_compileTimer) {
+                clearTimeout(_compileTimer);
+                _compileTimer = null;
+            }
             _compilePending = false;
             autoCompile(readModel());
         }
