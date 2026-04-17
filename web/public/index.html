@@ -5637,6 +5637,58 @@ async function generateReport() {
       }).join('');
     }
 
+    // ── MMA Device Summary — grouped by Group ────────────────────────────
+    function buildMmaDeviceSummary() {
+      if (devices.length === 0) return '<p class="note">No devices configured.</p>';
+
+      // Map groupId → devices list
+      const grouped = {};
+      for (const d of devices) {
+        const key = d.groupId || '__ungrouped__';
+        if (!grouped[key]) grouped[key] = [];
+        grouped[key].push(d);
+      }
+
+      // Build ordered list: named groups (sorted) then ungrouped
+      const summaryGroups = [];
+      for (const g of [...groups].sort((a, b) => a.name.localeCompare(b.name))) {
+        if (grouped[g.id] && grouped[g.id].length > 0) {
+          summaryGroups.push({ name: g.name, devices: grouped[g.id] });
+        }
+      }
+      if (grouped['__ungrouped__'] && grouped['__ungrouped__'].length > 0) {
+        summaryGroups.push({ name: 'Ungrouped', devices: grouped['__ungrouped__'] });
+      }
+
+      if (summaryGroups.length === 0) return '<p class="note">No devices configured.</p>';
+
+      return summaryGroups.map(group => {
+        const rows = group.devices.map(d => `<tr>
+          <td>${esc(d.name || d.id)}</td>
+          <td><code>${esc(d.source_endpoint || '—')}</code></td>
+          <td>${esc(d.source_unit_id ?? '—')}</td>
+          <td><code>${esc(d.target_endpoint || '—')}</code></td>
+          <td>${esc(d.unitId ?? '—')}</td>
+          <td>${(d.reads || []).length}</td>
+        </tr>`).join('');
+
+        return `<div class="rpt-mma-group">
+          <div class="rpt-mma-group-header">Group: ${esc(group.name)}</div>
+          <table>
+            <thead><tr>
+              <th>Device Name</th>
+              <th>Source Endpoint</th>
+              <th>Source Unit ID</th>
+              <th>Target Endpoint</th>
+              <th>Memory Unit ID</th>
+              <th>Reads</th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>`;
+      }).join('');
+    }
+
     // ── Memory View — PORT → UNIT → AREA ─────────────────────────────────
     function buildMemoryView() {
       if (ports.length === 0) return '<p class="note">No memory ports configured.</p>';
@@ -5726,6 +5778,9 @@ async function generateReport() {
   .rpt-device-name { font-weight: 700; font-size: 12px; margin-bottom: 6px; color: #1F2933; }
   .rpt-device-meta { display: flex; gap: 16px; flex-wrap: wrap; font-size: 11px; margin-bottom: 6px; color: #374151; }
   .rpt-poll-label { font-size: 10px; font-weight: 700; color: #6B7280; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; margin-top: 2px; }
+  /* ── MMA Device Summary ── */
+  .rpt-mma-group { margin-bottom: 20px; }
+  .rpt-mma-group-header { font-size: 13px; font-weight: 700; color: #0B3C5D; background: #EFF6FF; border-left: 4px solid #0B3C5D; padding: 6px 10px; margin-bottom: 8px; }
   /* ── Memory View tree ── */
   .rpt-port { margin-bottom: 16px; }
   .rpt-port-name { font-size: 12px; font-weight: 700; color: #0B3C5D; background: #F3F4F6; border-left: 3px solid #6B7280; padding: 5px 8px; margin-bottom: 6px; }
@@ -5764,6 +5819,9 @@ async function generateReport() {
     <div class="value">${devices.reduce((n, d) => n + (d.reads || []).length, 0)}</div>
   </div>
 </div>
+
+<h2>MMA Device Summary</h2>
+${buildMmaDeviceSummary()}
 
 <h2>Replicator View</h2>
 ${buildReplicatorView()}
