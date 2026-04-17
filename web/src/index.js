@@ -30,6 +30,7 @@ const DEFAULT_USERNAME = 'admin';
 const DEFAULT_PASSWORD = 'admin';
 const SCRYPT_PARAMS = { N: 32768, r: 8, p: 1 };
 const HASH_LEN = 64;
+const SALT_BYTES = 16;
 
 const _sessions = new Map(); // token → { username, createdAt }
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -53,6 +54,12 @@ function hashPassword(password, salt) {
     return scryptSync(password, salt, HASH_LEN, SCRYPT_PARAMS).toString('hex');
 }
 
+function verifyPassword(candidate, auth) {
+    const supplied = Buffer.from(hashPassword(candidate, auth.salt), 'hex');
+    const stored   = Buffer.from(auth.hash, 'hex');
+    return supplied.length === stored.length && timingSafeEqual(supplied, stored);
+}
+
 function readAuth() {
     if (fs.existsSync(AUTH_PATH)) {
         try {
@@ -60,7 +67,7 @@ function readAuth() {
             if (raw.username && raw.salt && raw.hash) return raw;
         } catch (_) { /* fall through to default */ }
     }
-    const salt = randomBytes(16).toString('hex');
+    const salt = randomBytes(SALT_BYTES).toString('hex');
     const auth = {
         username: DEFAULT_USERNAME,
         salt,
@@ -81,10 +88,10 @@ function parseCookies(req) {
     const header = req.headers.cookie || '';
     for (const part of header.split(';')) {
         const eqIdx = part.indexOf('=');
-        if (eqIdx < 1) continue;
+        if (eqIdx <= 0) continue;
         const k = part.slice(0, eqIdx).trim();
         const v = part.slice(eqIdx + 1).trim();
-        cookies[k] = decodeURIComponent(v);
+        if (k) cookies[k] = decodeURIComponent(v);
     }
     return cookies;
 }
@@ -1136,7 +1143,7 @@ function validateReplicatorConfig(yaml) {
 // ── Auth routes (public — no requireAuth) ──────────────────────────────────
 
 // GET /auth/status — check session validity and return login state
-app.get('/auth/status', (req, res) => {
+app.get('/auth/status', authRateLimit, (req, res) => {
     const token = parseCookies(req)['mcs_session'];
     if (!token || !_sessions.has(token)) {
         return res.json({ authenticated: false });
@@ -1161,12 +1168,7 @@ app.post('/auth/login', authRateLimit, (req, res) => {
         return res.status(400).json({ error: 'Username and password are required' });
     }
     const auth = readAuth();
-    if (username !== auth.username) {
-        return res.status(401).json({ error: 'Invalid credentials' });
-    }
-    const supplied = Buffer.from(hashPassword(password, auth.salt), 'hex');
-    const stored   = Buffer.from(auth.hash, 'hex');
-    if (supplied.length !== stored.length || !timingSafeEqual(supplied, stored)) {
+    if (username !== auth.username || !verifyPassword(password, auth)) {
         return res.status(401).json({ error: 'Invalid credentials' });
     }
     const token = randomUUID();
@@ -1197,12 +1199,10 @@ app.post('/auth/change-password', authRateLimit, (req, res) => {
         return res.status(400).json({ error: 'New password must be at least 8 characters' });
     }
     const auth = readAuth();
-    const supplied = Buffer.from(hashPassword(currentPassword, auth.salt), 'hex');
-    const stored   = Buffer.from(auth.hash, 'hex');
-    if (supplied.length !== stored.length || !timingSafeEqual(supplied, stored)) {
+    if (!verifyPassword(currentPassword, auth)) {
         return res.status(401).json({ error: 'Current password is incorrect' });
     }
-    const newSalt = randomBytes(16).toString('hex');
+    const newSalt = randomBytes(SALT_BYTES).toString('hex');
     auth.salt = newSalt;
     auth.hash = hashPassword(newPassword, newSalt);
     auth.mustChangePassword = false;
