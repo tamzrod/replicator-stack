@@ -1965,7 +1965,15 @@
   }
 })();
 
+// Persistent cancel guard — prevents Escape from closing the dialog when forced.
+// Registered once; _chpwForced controls whether to suppress the event.
+let _chpwForced = false;
+document.getElementById('change-password-dialog').addEventListener('cancel', (e) => {
+  if (_chpwForced) e.preventDefault();
+});
+
 function showChangePasswordDialog(forced) {
+  _chpwForced = forced;
   const dlg    = document.getElementById('change-password-dialog');
   const notice = document.getElementById('chpw-forced-notice');
   const cancel = document.getElementById('chpw-cancel');
@@ -1977,10 +1985,6 @@ function showChangePasswordDialog(forced) {
   document.getElementById('chpw-current').value = '';
   document.getElementById('chpw-new').value     = '';
   document.getElementById('chpw-confirm').value = '';
-  // When forced the dialog must not be closeable via Escape or backdrop click
-  if (forced) {
-    dlg.addEventListener('cancel', e => e.preventDefault(), { once: false });
-  }
   dlg.showModal();
 }
 

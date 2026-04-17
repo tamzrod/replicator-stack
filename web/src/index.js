@@ -28,10 +28,26 @@ const AUTH_PATH = path.join(DATA_DIR, 'auth.json');
 // ---------------------------------------------------------------------------
 const DEFAULT_USERNAME = 'admin';
 const DEFAULT_PASSWORD = 'admin';
-const SCRYPT_PARAMS = { N: 16384, r: 8, p: 1 };
+const SCRYPT_PARAMS = { N: 32768, r: 8, p: 1 };
 const HASH_LEN = 64;
 
 const _sessions = new Map(); // token → { username, createdAt }
+const SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+// Rate limiter for auth endpoints: max 10 attempts per IP per minute.
+const _authRateLimitStore = new Map();
+function authRateLimit(req, res, next) {
+    const key = req.ip || 'unknown';
+    const now = Date.now();
+    const entry = _authRateLimitStore.get(key) || { count: 0, start: now };
+    if (now - entry.start > 60_000) { entry.count = 0; entry.start = now; }
+    entry.count += 1;
+    _authRateLimitStore.set(key, entry);
+    if (entry.count > 10) {
+        return res.status(429).json({ error: 'Too many attempts — please wait before retrying' });
+    }
+    next();
+}
 
 function hashPassword(password, salt) {
     return scryptSync(password, salt, HASH_LEN, SCRYPT_PARAMS).toString('hex');
@@ -80,7 +96,12 @@ function requireAuth(req, res, next) {
     if (!token || !_sessions.has(token)) {
         return res.status(401).json({ error: 'Not authenticated' });
     }
-    req.authSession = _sessions.get(token);
+    const session = _sessions.get(token);
+    if (Date.now() - session.createdAt > SESSION_TTL_MS) {
+        _sessions.delete(token);
+        return res.status(401).json({ error: 'Session expired' });
+    }
+    req.authSession = session;
     next();
 }
 
@@ -1121,6 +1142,10 @@ app.get('/auth/status', (req, res) => {
         return res.json({ authenticated: false });
     }
     const session = _sessions.get(token);
+    if (Date.now() - session.createdAt > SESSION_TTL_MS) {
+        _sessions.delete(token);
+        return res.json({ authenticated: false });
+    }
     const auth = readAuth();
     res.json({
         authenticated: true,
@@ -1130,7 +1155,7 @@ app.get('/auth/status', (req, res) => {
 });
 
 // POST /auth/login — validate credentials and issue a session cookie
-app.post('/auth/login', (req, res) => {
+app.post('/auth/login', authRateLimit, (req, res) => {
     const { username, password } = req.body || {};
     if (!username || !password) {
         return res.status(400).json({ error: 'Username and password are required' });
@@ -1159,7 +1184,7 @@ app.post('/auth/logout', (req, res) => {
 });
 
 // POST /auth/change-password — change the current user's password
-app.post('/auth/change-password', (req, res) => {
+app.post('/auth/change-password', authRateLimit, (req, res) => {
     const token = parseCookies(req)['mcs_session'];
     if (!token || !_sessions.has(token)) {
         return res.status(401).json({ error: 'Not authenticated' });
