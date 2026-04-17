@@ -570,8 +570,9 @@ function assignNextSlot(model, targetEndpoint) {
  * conflict.
  *
  * Rules:
- *   - Assign missing slots only — no reindexing or reshuffling of existing ones.
- *   - Fill gaps using lowest available slots (deterministic, stable allocation).
+ *   - Clear any duplicate slots within an endpoint group before reassigning.
+ *   - Assign missing (null) or cleared duplicate slots using the lowest available
+ *     slot (gap-filling, deterministic, stable allocation).
  *   - Each endpoint group is processed independently.
  *
  * @param {object} model
@@ -590,13 +591,27 @@ function recompileStatusSlots(model) {
 
     let modified = false;
     for (const grpDevices of epGroups.values()) {
-        // Collect slots already assigned within this endpoint group.
-        const usedSlots = new Set(
-            grpDevices
-                .filter(d => d.status_slot != null)
-                .map(d => Number(d.status_slot))
-                .filter(n => Number.isFinite(n))
-        );
+        // Detect duplicate slots: slot → first device that owns it (keeps it), rest are cleared.
+        const slotOwner = new Map(); // slot → first device seen with that slot
+        for (const device of grpDevices) {
+            if (device.status_slot == null) continue;
+            const slot = Number(device.status_slot);
+            if (!Number.isFinite(slot)) {
+                device.status_slot = null;
+                modified = true;
+                continue;
+            }
+            if (slotOwner.has(slot)) {
+                // Duplicate — clear it so it gets reassigned below.
+                device.status_slot = null;
+                modified = true;
+            } else {
+                slotOwner.set(slot, device);
+            }
+        }
+
+        // Collect slots that are still validly assigned (non-duplicate, non-null).
+        const usedSlots = new Set(slotOwner.keys());
 
         for (const device of grpDevices) {
             if (device.status_slot != null) continue;
@@ -3303,11 +3318,11 @@ app.get('/yaml-integrity', (req, res) => {
 
 // POST /yaml-integrity/fix — auto-fix status_slot and status_unit_id inconsistencies.
 // Fixes:
-//   1. Missing or duplicate status_slots — recompileStatusSlots() fills gaps per endpoint group.
-//   2. Devices sharing the same target_endpoint with differing status_unit_id — normalise
-//      to the value used by the majority (or the lowest when tied) so all share one status unit.
-// Does NOT assign status_unit_id to devices that have null — use the Memory Consistency
-// tool to establish the initial status_unit_id for an endpoint group.
+//   1. Missing or duplicate status_slots — recompileStatusSlots() clears duplicates and fills
+//      gaps per endpoint group so every device gets a unique slot.
+//   2. Devices sharing the same target_endpoint with differing or null status_unit_id —
+//      propagates / normalises to the value used by the majority (or the lowest when tied)
+//      so all devices on the same endpoint share one status_unit_id.
 // Returns { fixed, changes: string[] }
 app.post('/yaml-integrity/fix', (req, res) => {
     try {
@@ -3322,20 +3337,21 @@ app.post('/yaml-integrity/fix', (req, res) => {
         }
 
         // ── 2. Fix status_unit_id per-endpoint inconsistency ─────────────────
-        // Group devices by target_endpoint, collect their status_unit_id values.
+        // Group ALL devices by target_endpoint (including those with null status_unit_id).
         const epGroups = new Map(); // endpointKey → { endpoint, counts: Map<suid, count>, devices: device[] }
         for (const device of devices) {
-            if (device.status_unit_id == null) continue;
             const epKey = (device.target_endpoint || '').trim().toLowerCase() || '__null__';
             if (!epGroups.has(epKey)) epGroups.set(epKey, { endpoint: device.target_endpoint, counts: new Map(), devices: [] });
             const grp = epGroups.get(epKey);
-            const suid = Number(device.status_unit_id);
-            grp.counts.set(suid, (grp.counts.get(suid) || 0) + 1);
+            if (device.status_unit_id != null) {
+                const suid = Number(device.status_unit_id);
+                grp.counts.set(suid, (grp.counts.get(suid) || 0) + 1);
+            }
             grp.devices.push(device);
         }
 
         for (const { endpoint, counts, devices: grpDevices } of epGroups.values()) {
-            if (counts.size <= 1) continue; // already consistent
+            if (counts.size === 0) continue; // no devices with status_unit_id in this group
 
             // Choose the canonical value: highest count wins; lowest value breaks ties.
             let canonical = null;
@@ -3347,15 +3363,30 @@ app.post('/yaml-integrity/fix', (req, res) => {
                 }
             }
 
-            let reassigned = 0;
-            for (const device of grpDevices) {
-                if (Number(device.status_unit_id) !== canonical) {
-                    device.status_unit_id = canonical;
-                    reassigned++;
+            if (counts.size === 1) {
+                // Consistent among assigned devices — only propagate to null devices.
+                let propagated = 0;
+                for (const device of grpDevices) {
+                    if (device.status_unit_id == null) {
+                        device.status_unit_id = canonical;
+                        propagated++;
+                    }
                 }
-            }
-            if (reassigned > 0) {
-                changes.push(`Endpoint "${endpoint}": normalised ${reassigned} device(s) to status_unit_id ${canonical}`);
+                if (propagated > 0) {
+                    changes.push(`Endpoint "${endpoint}": propagated status_unit_id ${canonical} to ${propagated} unassigned device(s)`);
+                }
+            } else {
+                // Inconsistent — normalise all devices (including null ones) to canonical.
+                let reassigned = 0;
+                for (const device of grpDevices) {
+                    if (device.status_unit_id == null || Number(device.status_unit_id) !== canonical) {
+                        device.status_unit_id = canonical;
+                        reassigned++;
+                    }
+                }
+                if (reassigned > 0) {
+                    changes.push(`Endpoint "${endpoint}": normalised ${reassigned} device(s) to status_unit_id ${canonical}`);
+                }
             }
         }
 
