@@ -1195,8 +1195,9 @@ app.post('/device/:id/duplicate', (req, res) => {
         while (usedSlots.has(newStatusSlot)) newStatusSlot++;
 
         // Find the next free target_endpoint by incrementing the port number.
-        // A (target_endpoint, unitId) pair must be unique across all devices. Because newUnitId
-        // is already globally unique, (origPort, newUnitId) is always conflict-free; however
+        // A (target_endpoint, status_unit_id, status_slot) tuple must be unique across all
+        // devices. Because newStatusSlot is already unique within its status_unit_id group,
+        // (origPort+1, statusUnitId, newStatusSlot) is always conflict-free; however
         // we still start from origPort+1 by convention so the clone gets its own port.
         // The while-loop guard is kept for defensive correctness even though it will never
         // iterate in practice.
