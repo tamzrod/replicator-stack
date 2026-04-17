@@ -428,18 +428,22 @@ function ensureTargetMemory(model, device) {
     }
 
     // Add areas for types that are now required but not yet present.
+    // Use the single widest range (min start → max end) so the model always
+    // holds exactly one area per type per unit — matching what compileMma2Config
+    // emits in the YAML and preventing the Memory tab from showing a different
+    // number of entries than the generated config.
     const existingAreaTypes = new Set(unit.areas.map(a => a.type));
     for (const [areaType, ranges] of Object.entries(readsByArea)) {
         if (existingAreaTypes.has(areaType)) continue; // already present — preserve user's start/count
-        for (const m of mergeRanges(ranges)) {
-            unit.areas.push({
-                id: randomUUID(),
-                type: areaType,
-                start: m.start,
-                count: m.end - m.start + 1,
-            });
-            console.log(`[ensureTargetMemory] Added area ${areaType} start=${m.start} count=${m.end - m.start + 1} to unit_id ${unitId}`);
-        }
+        const minStart = Math.min(...ranges.map(r => r.start));
+        const maxEnd   = Math.max(...ranges.map(r => r.end));
+        unit.areas.push({
+            id: randomUUID(),
+            type: areaType,
+            start: minStart,
+            count: maxEnd - minStart + 1,
+        });
+        console.log(`[ensureTargetMemory] Added area ${areaType} start=${minStart} count=${maxEnd - minStart + 1} to unit_id ${unitId}`);
     }
 }
 
@@ -1756,13 +1760,23 @@ app.post('/memory/port/:portId/units/populate', (req, res) => {
         let added = 0;
         for (const [uid, areas] of derivedByUnitId) {
             if (existingByUnitId.has(uid)) {
-                // Merge areas into existing unit (add derived areas not already present)
+                // Merge areas into existing unit.  Check uniqueness by type only — if a
+                // derived area has the same type as an existing one but a different range,
+                // widen the existing area to cover both.  This keeps the model at most one
+                // area per type per unit, matching the YAML compiler (compileMma2Config)
+                // and preventing the Memory tab from showing a different layout than the
+                // generated config.
                 const existing = existingByUnitId.get(uid);
                 for (const area of areas) {
-                    const alreadyHas = (existing.areas || []).some(
-                        a => a.type === area.type && a.start === area.start && a.count === area.count
-                    );
-                    if (!alreadyHas) {
+                    const existingArea = (existing.areas || []).find(a => a.type === area.type);
+                    if (existingArea) {
+                        const newEnd = Math.max(
+                            existingArea.start + existingArea.count - 1,
+                            area.start + area.count - 1
+                        );
+                        existingArea.start = Math.min(existingArea.start, area.start);
+                        existingArea.count = newEnd - existingArea.start + 1;
+                    } else {
                         existing.areas.push(area);
                         added++;
                     }
