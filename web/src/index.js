@@ -13,7 +13,7 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 const DATA_DIR = process.env.DATA_DIR || '/app/data';
 const TARGET_HOST = process.env.TARGET_HOST || 'mma';
 let APP_VERSION = process.env.APP_VERSION || 'dev';
-const DOCKER_DIGEST = process.env.DOCKER_DIGEST || null;
+let DOCKER_DIGEST = process.env.DOCKER_DIGEST || null;
 const GIT_SHA = process.env.GIT_SHA || null;
 const MODEL_PATH = path.join(DATA_DIR, 'model.json');
 const REPLICATOR_CONFIG_PATH = path.join(DATA_DIR, 'replicator/config.yaml');
@@ -3294,6 +3294,25 @@ async function discoverVersion() {
             if (tag) {
                 APP_VERSION = tag;
                 console.log(`[version] Discovered version from image tag: ${APP_VERSION}`);
+            }
+            // Discover digest from image metadata if not already set via env var
+            if (!DOCKER_DIGEST) {
+                try {
+                    const imgResult = await dockerApi('GET', `/images/${encodeURIComponent(image)}/json`);
+                    if (imgResult.status === 200 && Array.isArray(imgResult.body?.RepoDigests) && imgResult.body.RepoDigests.length > 0) {
+                        // RepoDigests entries are like "repo@sha256:hexhash"
+                        const repoDigest = imgResult.body.RepoDigests[0];
+                        const atIdx = repoDigest.indexOf('@');
+                        const digestPart = atIdx !== -1 ? repoDigest.slice(atIdx + 1) : repoDigest;
+                        // 'sha256:' (7) + at least 6 hex chars = 13 minimum meaningful digest
+                        if (digestPart.startsWith('sha256:') && digestPart.length > 13) {
+                            DOCKER_DIGEST = digestPart;
+                            console.log(`[version] Discovered digest: ${DOCKER_DIGEST.slice(0, 19)}…`);
+                        }
+                    }
+                } catch (imgErr) {
+                    console.warn(`[version] Could not fetch image digest: ${imgErr.message}`);
+                }
             }
         }
     } catch (err) {
