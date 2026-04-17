@@ -33,6 +33,11 @@ services:
   web:
     build:
       context: ./web
+      args:
+        # Baked into image at build time so the server can report them even
+        # when the Docker socket is unavailable.
+        APP_VERSION: ${APP_VERSION:-dev}
+        GIT_SHA: ${GIT_SHA:-}
     image: rodtamin/mcs-web:${APP_VERSION:-dev}
     container_name: mcs-web
     restart: unless-stopped
@@ -41,6 +46,14 @@ services:
     volumes:
       - ./data:/app/data
       - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      # Runtime identity — DOCKER_DIGEST must be injected by the deployment
+      # pipeline after the image is pushed (never hardcoded here).
+      - DOCKER_DIGEST=${DOCKER_DIGEST:-}
+      # Allow runtime override of the version label and git SHA if needed;
+      # the baked-in values from the build args serve as safe defaults.
+      - APP_VERSION=${APP_VERSION:-dev}
+      - GIT_SHA=${GIT_SHA:-}
     depends_on:
       - mma
       - replicator
