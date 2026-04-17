@@ -93,7 +93,7 @@ const _idx = {
     devicesByUnitId:       new Map(),
     devicesByStatusUnitId: new Map(),
     devicesByStatusSlot:   new Map(),
-    devicesByTarget:       new Map(), // device.target_endpoint (string) → device object
+    devicesByTarget:       new Map(), // "device.target_endpoint|device.unitId" (composite key) → device object
     portsById:             new Map(),
     portsByNumber:         new Map(),
 };
@@ -131,7 +131,7 @@ function rebuildIndexes(model) {
         }
 
         if (device.target_endpoint) {
-            _idx.devicesByTarget.set(device.target_endpoint.trim(), device);
+            _idx.devicesByTarget.set(`${device.target_endpoint.trim()}|${device.unitId}`, device);
         }
     }
 
@@ -1033,9 +1033,9 @@ app.post('/device', (req, res) => {
         }
 
         const targetEndpointTrimmed = device.target_endpoint.trim();
-        const conflicting = _idx.devicesByTarget.get(targetEndpointTrimmed);
+        const conflicting = _idx.devicesByTarget.get(`${targetEndpointTrimmed}|${unitId}`);
         if (conflicting) {
-            return res.status(409).json({ error: `target_endpoint "${targetEndpointTrimmed}" is already used by device "${conflicting.name || conflicting.id}"` });
+            return res.status(409).json({ error: `target_endpoint "${targetEndpointTrimmed}" with unit ID ${unitId} is already used by device "${conflicting.name || conflicting.id}"` });
         }
 
         const generatedId = `device_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
@@ -1087,9 +1087,10 @@ app.put('/device/:id', (req, res) => {
                 return res.status(400).json({ error: 'device.target_endpoint must be a valid endpoint (e.g. mma2:501)' });
             }
             const targetEndpointTrimmed = device.target_endpoint.trim();
-            const conflicting = _idx.devicesByTarget.get(targetEndpointTrimmed);
+            const effectiveUnitId = device.unitId !== undefined ? Number(device.unitId) : existing.unitId;
+            const conflicting = _idx.devicesByTarget.get(`${targetEndpointTrimmed}|${effectiveUnitId}`);
             if (conflicting && conflicting.id !== id) {
-                return res.status(409).json({ error: `target_endpoint "${targetEndpointTrimmed}" is already used by device "${conflicting.name || conflicting.id}"` });
+                return res.status(409).json({ error: `target_endpoint "${targetEndpointTrimmed}" with unit ID ${effectiveUnitId} is already used by device "${conflicting.name || conflicting.id}"` });
             }
             existing.target_endpoint = targetEndpointTrimmed;
         }
@@ -1186,7 +1187,9 @@ app.post('/device/:id/duplicate', (req, res) => {
         while (usedSlots.has(newStatusSlot)) newStatusSlot++;
 
         // Find the next free target_endpoint by incrementing the port number.
-        // target_endpoint must be unique across all devices.
+        // A (target_endpoint, unitId) pair must be unique across all devices; since newUnitId
+        // is already globally unique, (origPort, newUnitId) is always free, but we still
+        // increment the port so the clone starts on its own port by convention.
         // Fall back to orig.target_endpoint if it cannot be parsed (isValidEndpoint
         // guarantees host:port for any stored device, but defensive parsing is safer).
         const origTarget = orig.target_endpoint || '';
@@ -1196,7 +1199,7 @@ app.post('/device/:id/duplicate', (req, res) => {
         let newTargetEndpoint = origTarget; // fallback: keep original if unparseable
         if (targetHost && Number.isFinite(parsedOrigPort)) {
             let newTargetPort = parsedOrigPort + 1;
-            while (_idx.devicesByTarget.has(`${targetHost}:${newTargetPort}`)) newTargetPort++;
+            while (_idx.devicesByTarget.has(`${targetHost}:${newTargetPort}|${newUnitId}`)) newTargetPort++;
             newTargetEndpoint = `${targetHost}:${newTargetPort}`;
         }
 
@@ -1305,9 +1308,9 @@ app.post('/config/save', (req, res) => {
             if (sourceConfig.status_slot !== undefined) existing.status_slot = Number(sourceConfig.status_slot);
 
             const targetEndpointTrimmed = targetConfig.target_endpoint.trim();
-            const conflicting = _idx.devicesByTarget.get(targetEndpointTrimmed);
+            const conflicting = _idx.devicesByTarget.get(`${targetEndpointTrimmed}|${targetUnitId}`);
             if (conflicting && conflicting.id !== deviceId) {
-                return res.status(409).json({ error: `target_endpoint "${targetEndpointTrimmed}" is already used by device "${conflicting.name || conflicting.id}"` });
+                return res.status(409).json({ error: `target_endpoint "${targetEndpointTrimmed}" with unit ID ${targetUnitId} is already used by device "${conflicting.name || conflicting.id}"` });
             }
             existing.target_endpoint = targetEndpointTrimmed;
             existing.unitId = targetUnitId;
