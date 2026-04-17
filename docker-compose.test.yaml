@@ -11,6 +11,11 @@ services:
     volumes:
       - ./data/mma:/config
     command: ["/config/config.yaml"]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - replicator-net
 
@@ -22,6 +27,11 @@ services:
       - ./test:/test
     command: >
       sh -c "pip install 'pymodbus==3.6.9' --quiet && python /test/sim.py"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - replicator-net
 
@@ -35,6 +45,11 @@ services:
     volumes:
       - ./data/replicator:/config
     command: ["/config/config.yaml"]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - replicator-net
 
@@ -50,6 +65,11 @@ services:
       - ./test:/test
     command: >
       sh -c "pip install 'pymodbus==3.6.9' --quiet && python /test/verify.py"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - replicator-net
 
