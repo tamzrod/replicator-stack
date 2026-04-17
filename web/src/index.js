@@ -206,6 +206,28 @@ function readModel() {
         }
     }
     let migrated = false;
+    // Normalize duplicate area types within units: merge same-type areas using widest range.
+    // This ensures the model is always consistent with the MMA config compiler's merge behaviour.
+    for (const port of model.memory.ports) {
+        for (const unit of (port.units || [])) {
+            if (!Array.isArray(unit.areas) || unit.areas.length < 2) continue;
+            const byType = new Map();
+            let hasDuplicates = false;
+            for (const area of unit.areas) {
+                if (!byType.has(area.type)) {
+                    byType.set(area.type, { ...area });
+                } else {
+                    const ex = byType.get(area.type);
+                    const newEnd = Math.max(ex.start + ex.count - 1, area.start + area.count - 1);
+                    ex.start = Math.min(ex.start, area.start);
+                    ex.count = newEnd - ex.start + 1;
+                    hasDuplicates = true;
+                    migrated = true;
+                }
+            }
+            if (hasDuplicates) unit.areas = [...byType.values()];
+        }
+    }
     for (const device of model.devices) {
         // Migrate old free-text device.group → device.groupId using group entities
         if (device.group && !device.groupId) {
@@ -1586,6 +1608,19 @@ app.post('/memory/port/:portId/unit/:unitId/area', (req, res) => {
         if (!unit) {
             return res.status(404).json({ error: `Unit ${unitId} not found on port ${portId}` });
         }
+        // If an area of the same type already exists in this unit, merge ranges
+        // (widest range: same algorithm as compileMma2Config) so the model never
+        // holds duplicate area types per unit, keeping the memory tab consistent
+        // with the generated MMA config.
+        const existingArea = (unit.areas || []).find(a => a.type === areaType);
+        if (existingArea) {
+            const newEnd = Math.max(existingArea.start + existingArea.count - 1, start + count - 1);
+            existingArea.start = Math.min(existingArea.start, start);
+            existingArea.count = newEnd - existingArea.start + 1;
+            writeModel(model);
+            scheduleCompile();
+            return res.status(200).json({ ok: true, id: existingArea.id, merged: true });
+        }
         const newArea = { id: randomUUID(), type: areaType, start, count };
         unit.areas.push(newArea);
         writeModel(model);
@@ -1620,6 +1655,20 @@ app.put('/memory/port/:portId/unit/:unitId/area/:areaId', (req, res) => {
         if (area.type !== undefined) {
             if (!VALID_AREA_TYPES.has(area.type)) {
                 return res.status(400).json({ error: `area.type must be one of: ${[...VALID_AREA_TYPES].join(', ')}` });
+            }
+            // If the new type already exists in another area of this unit, merge ranges
+            // (widest range) into that area and remove this one to maintain uniqueness per type.
+            if (area.type !== existing.type) {
+                const duplicate = (unit.areas || []).find(a => a.id !== areaId && a.type === area.type);
+                if (duplicate) {
+                    const newEnd = Math.max(duplicate.start + duplicate.count - 1, existing.start + existing.count - 1);
+                    duplicate.start = Math.min(duplicate.start, existing.start);
+                    duplicate.count = newEnd - duplicate.start + 1;
+                    unit.areas = unit.areas.filter(a => a.id !== areaId);
+                    writeModel(model);
+                    scheduleCompile();
+                    return res.json({ ok: true, id: duplicate.id, merged: true });
+                }
             }
             existing.type = area.type;
         }
