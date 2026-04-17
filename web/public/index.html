@@ -4633,7 +4633,7 @@ document.getElementById('btn-yaml-integrity').addEventListener('click', async ()
     banner.className = 'banner show err';
   } else if (warnCount > 0) {
     banner.textContent = `⚠ ${warnCount} warning(s) — ${includedCount}/${devices.length} device(s) included in YAML`;
-    banner.className = 'banner show err';
+    banner.className = 'banner show warn';
   } else {
     banner.textContent = `✓ All ${devices.length} device(s) passed — ${includedCount} included in replicator YAML`;
     banner.className = 'banner show ok';
@@ -4680,7 +4680,7 @@ function renderYamlIntegrityResults(devices) {
       </div>
       <div class="mem-recon-field">
         <label>Status Unit ID</label>
-        <span style="font-family:monospace">${dev.status_unit_id != null ? escapeHtml(String(dev.status_unit_id)) : '<span style="color:#9CA3AF">—</span>'}</span>
+        <span style="font-family:monospace">${dev.status_unit_id != null ? escapeHtml(String(dev.status_unit_id)) : '—'}</span>
       </div>
       <div class="mem-recon-field">
         <label>YAML</label>
