@@ -27,6 +27,24 @@
     header h1 { font-size: 1.25rem; font-weight: 600; }
     header span { font-size: 0.8rem; color: #93C5D8; }
 
+    /* ── Build Identity Chip ─────────────────────────────────────────── */
+    .build-identity {
+      font-size: .72rem;
+      color: #7A9FB5;
+      font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+      letter-spacing: .03em;
+      user-select: none;
+      white-space: nowrap;
+    }
+    .build-identity-digest {
+      cursor: pointer;
+      border-radius: 3px;
+      padding: 1px 3px;
+      transition: background .15s, color .15s;
+    }
+    .build-identity-digest:hover { background: rgba(255,255,255,.10); color: #B8D9E8; }
+    .build-identity-digest:active { background: rgba(255,255,255,.18); }
+
     .btn-global-save {
       background: transparent;
       border: 1.5px solid #4B5563;
@@ -1426,6 +1444,7 @@
   <div class="header-brand">
     <h1>⚡ MCS Web</h1>
     <span>Modbus Consolidator System</span>
+    <span class="build-identity" id="mcs-identity" aria-label="Build identity"></span>
   </div>
   <div class="header-toolbar">
     <span id="global-save-status" class="global-save-status"></span>
@@ -2144,6 +2163,9 @@ const _appState = {
   compileState: 'idle',     // idle | compiling | success | error
   pendingDeviceId: null,    // ID of device whose form fields are currently dirty
   stagedDeviceForms: {},    // { deviceId: payload } — captured when switching away
+  buildVersion: null,       // populated from /version
+  buildDigest:  null,       // populated from /version
+  buildGitSha:  null,       // populated from /version
 };
 
 let _saveStatusTimer = null;
@@ -5269,6 +5291,19 @@ async function generateReport() {
     const compileStateLabelMap = { idle:'IDLE', compiling:'COMPILING', success:'SUCCESS', error:'ERROR' };
     const compileStateLabel = compileStateLabelMap[_appState.compileState] || String(_appState.compileState || 'UNKNOWN').toUpperCase();
 
+    // ── Build identity for report ────────────────────────────────────────
+    const rptVersion = _appState.buildVersion || 'dev';
+    const rptDigest  = _appState.buildDigest  || null;
+    const rptGitSha  = _appState.buildGitSha  || null;
+    const rptShortDigest = rptDigest ? rptDigest.replace(/^sha256:/, '').slice(0, 8) : null;
+    const rptIdentity = [
+      `MCS`,
+      rptVersion,
+      rptShortDigest ? rptShortDigest : null,
+    ].filter(Boolean).join(' | ');
+    const rptIdentityFull = rptDigest ? `Digest: ${rptDigest}` : '';
+    const rptGitLine = rptGitSha ? `Git SHA: ${esc(rptGitSha)}<br/>` : '';
+
     const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -5319,10 +5354,11 @@ async function generateReport() {
   <div>
     <h1>⚡ MCS Configuration Report</h1>
     <div style="font-size:11px;color:#6B7280;margin-top:3px">Modbus Consolidator System — compiled snapshot</div>
+    <div style="font-size:10px;color:#9CA3AF;margin-top:2px;font-family:'Courier New',monospace">${esc(rptIdentity)}</div>
   </div>
   <div class="meta">
     Generated: ${esc(ts)}<br/>
-    Compile State: <span class="badge badge-${_appState.compileState === 'success' ? 'success' : _appState.compileState === 'error' ? 'error' : 'idle'}">${esc(compileStateLabel)}</span>
+    ${rptGitLine}${rptIdentityFull ? `${esc(rptIdentityFull)}<br/>` : ''}Compile State: <span class="badge badge-${_appState.compileState === 'success' ? 'success' : _appState.compileState === 'error' ? 'error' : 'idle'}">${esc(compileStateLabel)}</span>
   </div>
 </header>
 
@@ -5442,13 +5478,56 @@ loadModel().then(startStatusPolling);
 fetch('/version')
   .then(r => r.json())
   .then(data => {
-    const el = document.getElementById('app-version');
-    if (el) el.textContent = data.version || 'dev';
+    const version = data.version || 'dev';
+    const digest  = data.digest  || null;
+    const gitSha  = data.gitSha  || null;
+    const _esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+    // Store in app state for reuse (e.g. report)
+    _appState.buildVersion = version;
+    _appState.buildDigest  = digest;
+    _appState.buildGitSha  = gitSha;
+
+    // Burger menu version
+    const verEl = document.getElementById('app-version');
+    if (verEl) verEl.textContent = version;
+
+    // Header identity chip: MCS | vX.X | abc1234
+    const identityEl = document.getElementById('mcs-identity');
+    if (identityEl) {
+      const shortDigest = digest ? digest.replace(/^sha256:/, '').slice(0, 8) : null;
+      const versionTitle = gitSha ? `Git SHA: ${gitSha}` : null;
+
+      let html = `MCS\u2002|\u2002`;
+      html += versionTitle
+        ? `<span title="${_esc(versionTitle)}" style="cursor:default">${_esc(version)}</span>`
+        : _esc(version);
+
+      if (shortDigest) {
+        html += `\u2002|\u2002<span class="build-identity-digest" id="mcs-digest-chip"
+          title="${_esc(digest)}"
+          aria-label="Docker image digest — click to copy">${_esc(shortDigest)}</span>`;
+      }
+
+      identityEl.innerHTML = html;
+
+      if (shortDigest) {
+        document.getElementById('mcs-digest-chip').addEventListener('click', () => {
+          navigator.clipboard.writeText(digest).then(() => {
+            const chip = document.getElementById('mcs-digest-chip');
+            if (!chip) return;
+            const prev = chip.textContent;
+            chip.textContent = 'copied!';
+            setTimeout(() => { if (chip) chip.textContent = prev; }, 1500);
+          }).catch(() => {});
+        });
+      }
+    }
   })
   .catch(err => {
     console.warn('Could not fetch app version:', err);
-    const el = document.getElementById('app-version');
-    if (el) el.textContent = 'dev';
+    const verEl = document.getElementById('app-version');
+    if (verEl) verEl.textContent = 'dev';
   });
 </script>
 </body>
