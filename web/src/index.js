@@ -93,7 +93,7 @@ const _idx = {
     devicesByUnitId:       new Map(),
     devicesByStatusUnitId: new Map(),
     devicesByStatusSlot:   new Map(),
-    devicesByTarget:       new Map(), // "device.target_endpoint|device.status_unit_id|device.status_slot" (composite key) → device object
+    devicesByTarget:       new Map(), // "device.target_endpoint|device.unitId" (composite key) → device object
     portsById:             new Map(),
     portsByNumber:         new Map(),
 };
@@ -131,7 +131,7 @@ function rebuildIndexes(model) {
         }
 
         if (device.target_endpoint) {
-            _idx.devicesByTarget.set(`${device.target_endpoint.trim()}|${device.status_unit_id ?? 'null'}|${device.status_slot ?? 0}`, device);
+            _idx.devicesByTarget.set(`${device.target_endpoint.trim()}|${device.unitId}`, device);
         }
     }
 
@@ -538,13 +538,35 @@ function generateUniqueReadId(reads) {
 }
 
 /**
- * Assign status slots to devices that do not yet have one.
+ * Return the smallest slot index not currently assigned to any device.
+ * Scans the global device pool — slots are zero-based and unique across all devices.
  *
- * Devices that already have a status_slot set (including those edited by the
- * user) are left untouched.  Only devices whose status_slot is null or
- * undefined receive a new slot — the next integer not already used by another
- * device in the same status_unit_id group.  Devices without a status_unit_id
- * are skipped entirely.
+ * @param {object} model
+ * @returns {number}
+ */
+function assignNextSlot(model) {
+    const usedSlots = new Set(
+        (model.devices || [])
+            .filter(d => d.status_slot != null)
+            .map(d => Number(d.status_slot))
+            .filter(n => Number.isFinite(n))
+    );
+    let next = 0;
+    while (usedSlots.has(next)) next++;
+    return next;
+}
+
+/**
+ * Validate and fill status slot assignments across all devices.
+ *
+ * Slots are zero-based integers that are globally unique across the entire
+ * device list.  Devices that already have a status_slot are left untouched.
+ * Devices that are missing a slot receive the lowest available index (gap-
+ * filling: deleted device slots become available for reuse).
+ *
+ * Rules:
+ *   - Assign missing slots only — no reindexing or reshuffling of existing ones.
+ *   - Fill gaps using lowest available slots (deterministic, stable allocation).
  *
  * @param {object} model
  * @returns {{ modified: boolean }}
@@ -552,34 +574,23 @@ function generateUniqueReadId(reads) {
 function recompileStatusSlots(model) {
     const devices = model.devices || [];
 
-    // Group devices by status_unit_id (skip devices that don't use status memory)
-    const groups = {};
-    for (const device of devices) {
-        if (device.status_unit_id == null) continue;
-        const key = String(device.status_unit_id);
-        if (!groups[key]) groups[key] = [];
-        groups[key].push(device);
-    }
+    // Collect all slots already assigned across the entire device pool.
+    const usedSlots = new Set(
+        devices
+            .filter(d => d.status_slot != null)
+            .map(d => Number(d.status_slot))
+            .filter(n => Number.isFinite(n))
+    );
 
     let modified = false;
-    for (const groupDevices of Object.values(groups)) {
-        // Collect slots already claimed by devices that have one assigned.
-        const usedSlots = new Set(
-            groupDevices
-                .filter(d => d.status_slot != null)
-                .map(d => Number(d.status_slot))
-                .filter(n => Number.isFinite(n))
-        );
-
-        // Only assign a slot to devices that don't have one yet.
-        for (const device of groupDevices) {
-            if (device.status_slot != null) continue;
-            let next = 0;
-            while (usedSlots.has(next)) next++;
-            device.status_slot = next;
-            usedSlots.add(next);
-            modified = true;
-        }
+    for (const device of devices) {
+        if (device.status_slot != null) continue;
+        // Find the lowest available slot (gap-filling).
+        let next = 0;
+        while (usedSlots.has(next)) next++;
+        device.status_slot = next;
+        usedSlots.add(next);
+        modified = true;
     }
     return { modified };
 }
@@ -1042,16 +1053,10 @@ app.post('/device', (req, res) => {
             }
         }
 
-        const targetEndpointTrimmed = device.target_endpoint.trim();
-        const statusUnitId = device.status_unit_id != null ? Number(device.status_unit_id) : null;
-        const statusSlot = device.status_slot != null ? Number(device.status_slot) : 0;
-        const conflicting = _idx.devicesByTarget.get(`${targetEndpointTrimmed}|${statusUnitId ?? 'null'}|${statusSlot}`);
-        if (conflicting) {
-            return res.status(409).json({ error: `target_endpoint "${targetEndpointTrimmed}" with status unit ID ${statusUnitId ?? 'none'} and status slot ${statusSlot} is already used by device "${conflicting.name || conflicting.id}"` });
-        }
-
         const generatedId = `device_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
 
+        // status_slot is system-assigned — the lowest available global slot index.
+        // status_unit_id is system-managed and not accepted from the request body.
         const newDevice = {
             id: generatedId,
             name: device.name || '',
@@ -1060,8 +1065,8 @@ app.post('/device', (req, res) => {
             source_unit_id: sourceUnitId,
             target_endpoint: device.target_endpoint.trim(),
             unitId,
-            status_slot: device.status_slot != null ? Number(device.status_slot) : 0,
-            status_unit_id: device.status_unit_id != null ? Number(device.status_unit_id) : null,
+            status_slot: assignNextSlot(model),
+            status_unit_id: null,
             reads: []
         };
         model.devices.push(newDevice);
@@ -1107,18 +1112,6 @@ app.put('/device/:id', (req, res) => {
             }
             existing.unitId = unitId;
         }
-        // Check (target_endpoint, status_unit_id, status_slot) uniqueness whenever any of
-        // the three key fields are changing.
-        if (device.target_endpoint !== undefined || device.status_unit_id !== undefined || device.status_slot !== undefined) {
-            const effectiveStatusUnitId = device.status_unit_id !== undefined
-                ? (device.status_unit_id != null ? Number(device.status_unit_id) : null)
-                : existing.status_unit_id;
-            const effectiveStatusSlot = device.status_slot !== undefined ? Number(device.status_slot) : Number(existing.status_slot ?? 0);
-            const conflicting = _idx.devicesByTarget.get(`${existing.target_endpoint}|${effectiveStatusUnitId ?? 'null'}|${effectiveStatusSlot}`);
-            if (conflicting && conflicting.id !== id) {
-                return res.status(409).json({ error: `target_endpoint "${existing.target_endpoint}" with status unit ID ${effectiveStatusUnitId ?? 'none'} and status slot ${effectiveStatusSlot} is already used by device "${conflicting.name || conflicting.id}"` });
-            }
-        }
         if (device.name !== undefined) existing.name = device.name;
         if (device.groupId !== undefined) {
             if (device.groupId && !findGroup(model, device.groupId)) {
@@ -1127,10 +1120,7 @@ app.put('/device/:id', (req, res) => {
             existing.groupId = device.groupId || null;
         }
         if (device.source_unit_id !== undefined) existing.source_unit_id = Number(device.source_unit_id);
-        if (device.status_slot !== undefined) existing.status_slot = Number(device.status_slot);
-        if (device.status_unit_id !== undefined) {
-            existing.status_unit_id = device.status_unit_id != null ? Number(device.status_unit_id) : null;
-        }
+        // status_slot and status_unit_id are system-controlled — ignored if present in body.
         // Ensure memory is allocated whenever target-related fields change (target_endpoint
         // or unitId).  This prevents drift when the user edits a device's destination
         // after initial creation — the old allocation may become orphaned, but the new
@@ -1166,7 +1156,7 @@ app.delete('/device/:id', (req, res) => {
     }
 });
 
-// POST /device/:id/duplicate — duplicate a device with a unique name, source_unit_id, and status_slot
+// POST /device/:id/duplicate — duplicate a device with a unique name and source_unit_id
 app.post('/device/:id/duplicate', (req, res) => {
     try {
         const { id } = req.params;
@@ -1197,22 +1187,13 @@ app.post('/device/:id/duplicate', (req, res) => {
         let newUnitId = (Number(orig.unitId) || 0) + 1;
         while (_idx.devicesByUnitId.has(newUnitId)) newUnitId++;
 
-        // Find the next free status_slot within the same status_unit_id group.
-        const statusUnitId = orig.status_unit_id ?? null;
-        const statusGroup = _idx.devicesByStatusUnitId.get(statusUnitId) || [];
-        const usedSlots = new Set(statusGroup.map(d => d.status_slot));
-        let newStatusSlot = Number(orig.status_slot ?? -1) + 1;
-        while (usedSlots.has(newStatusSlot)) newStatusSlot++;
+        // status_slot is system-assigned — allocate the next available global slot.
+        // status_unit_id is system-managed; new device starts without one.
+        const newStatusSlot = assignNextSlot(model);
 
         // Find the next free target_endpoint by incrementing the port number.
-        // A (target_endpoint, status_unit_id, status_slot) tuple must be unique across all
-        // devices. Because newStatusSlot is already unique within its status_unit_id group,
-        // (origPort+1, statusUnitId, newStatusSlot) is always conflict-free; however
-        // we still start from origPort+1 by convention so the clone gets its own port.
-        // The while-loop guard is kept for defensive correctness even though it will never
-        // iterate in practice.
-        // Fall back to orig.target_endpoint if it cannot be parsed (isValidEndpoint
-        // guarantees host:port for any stored device, but defensive parsing is safer).
+        // newUnitId is already globally unique so (origPort+1, newUnitId) is
+        // guaranteed to be conflict-free; the while loop is a defensive guard.
         const origTarget = orig.target_endpoint || '';
         const targetColonIdx = origTarget.lastIndexOf(':');
         const targetHost = targetColonIdx > 0 ? origTarget.slice(0, targetColonIdx) : null;
@@ -1220,7 +1201,7 @@ app.post('/device/:id/duplicate', (req, res) => {
         let newTargetEndpoint = origTarget; // fallback: keep original if unparseable
         if (targetHost && Number.isFinite(parsedOrigPort)) {
             let newTargetPort = parsedOrigPort + 1;
-            while (_idx.devicesByTarget.has(`${targetHost}:${newTargetPort}|${statusUnitId ?? 'null'}|${newStatusSlot}`)) newTargetPort++;
+            while (_idx.devicesByTarget.has(`${targetHost}:${newTargetPort}|${newUnitId}`)) newTargetPort++;
             newTargetEndpoint = `${targetHost}:${newTargetPort}`;
         }
 
@@ -1237,7 +1218,7 @@ app.post('/device/:id/duplicate', (req, res) => {
             target_endpoint: newTargetEndpoint,
             unitId: newUnitId,
             status_slot: newStatusSlot,
-            status_unit_id: statusUnitId,
+            status_unit_id: null,
             reads: newReads,
         };
 
@@ -1326,26 +1307,21 @@ app.post('/config/save', (req, res) => {
                 }
                 existing.groupId = sourceConfig.groupId || null;
             }
-            if (sourceConfig.status_slot !== undefined) existing.status_slot = Number(sourceConfig.status_slot);
+            // status_slot and status_unit_id are system-controlled — ignored if present in body.
 
-            const targetEndpointTrimmed = targetConfig.target_endpoint.trim();
-            const effectiveStatusUnitId = targetConfig.status_unit_id !== undefined
-                ? (targetConfig.status_unit_id != null ? Number(targetConfig.status_unit_id) : null)
-                : existing.status_unit_id;
-            const conflicting = _idx.devicesByTarget.get(`${targetEndpointTrimmed}|${effectiveStatusUnitId ?? 'null'}|${existing.status_slot ?? 0}`);
-            if (conflicting && conflicting.id !== deviceId) {
-                return res.status(409).json({ error: `target_endpoint "${targetEndpointTrimmed}" with status unit ID ${effectiveStatusUnitId ?? 'none'} and status slot ${existing.status_slot ?? 0} is already used by device "${conflicting.name || conflicting.id}"` });
-            }
-            existing.target_endpoint = targetEndpointTrimmed;
+            existing.target_endpoint = targetConfig.target_endpoint.trim();
             existing.unitId = targetUnitId;
-            if (targetConfig.status_unit_id !== undefined) {
-                existing.status_unit_id = targetConfig.status_unit_id != null ? Number(targetConfig.status_unit_id) : null;
-            }
         }
 
         // Update system MMA endpoint
         if (mmaEndpointConfig !== undefined) {
             model.system = { ...model.system, mma_endpoint: mmaEndpointConfig || null };
+        }
+
+        // Slot commit point: assign any missing slots (gap-filling, no reshuffling).
+        const { modified: slotsModified } = recompileStatusSlots(model);
+        if (slotsModified) {
+            console.log('[config/save] Assigned missing status slots via recompileStatusSlots()');
         }
 
         writeModel(model);
