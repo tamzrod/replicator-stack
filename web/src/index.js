@@ -4,11 +4,12 @@ const http = require('http');
 const net = require('net');
 const os = require('os');
 const path = require('path');
-const { randomUUID } = require('crypto');
+const { randomUUID, scryptSync, randomBytes, timingSafeEqual } = require('crypto');
 
 const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'public')));
+app.use(requireAuth);
 
 const DATA_DIR = process.env.DATA_DIR || '/app/data';
 const TARGET_HOST = process.env.TARGET_HOST || 'mma';
@@ -18,6 +19,70 @@ const GIT_SHA = process.env.GIT_SHA || null;
 const MODEL_PATH = path.join(DATA_DIR, 'model.json');
 const REPLICATOR_CONFIG_PATH = path.join(DATA_DIR, 'replicator/config.yaml');
 const MMA_CONFIG_PATH = path.join(DATA_DIR, 'mma/config.yaml');
+const AUTH_PATH = path.join(DATA_DIR, 'auth.json');
+
+// ---------------------------------------------------------------------------
+// Auth — credentials stored in DATA_DIR/auth.json (hashed with scrypt).
+// Sessions are kept in-memory (token → session); restarting the server
+// invalidates all sessions, which is acceptable for this use case.
+// ---------------------------------------------------------------------------
+const DEFAULT_USERNAME = 'admin';
+const DEFAULT_PASSWORD = 'admin';
+const SCRYPT_PARAMS = { N: 16384, r: 8, p: 1 };
+const HASH_LEN = 64;
+
+const _sessions = new Map(); // token → { username, createdAt }
+
+function hashPassword(password, salt) {
+    return scryptSync(password, salt, HASH_LEN, SCRYPT_PARAMS).toString('hex');
+}
+
+function readAuth() {
+    if (fs.existsSync(AUTH_PATH)) {
+        try {
+            const raw = JSON.parse(fs.readFileSync(AUTH_PATH, 'utf-8'));
+            if (raw.username && raw.salt && raw.hash) return raw;
+        } catch (_) { /* fall through to default */ }
+    }
+    const salt = randomBytes(16).toString('hex');
+    const auth = {
+        username: DEFAULT_USERNAME,
+        salt,
+        hash: hashPassword(DEFAULT_PASSWORD, salt),
+        mustChangePassword: true,
+    };
+    writeAuth(auth);
+    return auth;
+}
+
+function writeAuth(auth) {
+    fs.mkdirSync(path.dirname(AUTH_PATH), { recursive: true });
+    fs.writeFileSync(AUTH_PATH, JSON.stringify(auth, null, 2), 'utf-8');
+}
+
+function parseCookies(req) {
+    const cookies = {};
+    const header = req.headers.cookie || '';
+    for (const part of header.split(';')) {
+        const eqIdx = part.indexOf('=');
+        if (eqIdx < 1) continue;
+        const k = part.slice(0, eqIdx).trim();
+        const v = part.slice(eqIdx + 1).trim();
+        cookies[k] = decodeURIComponent(v);
+    }
+    return cookies;
+}
+
+function requireAuth(req, res, next) {
+    // Auth and version routes are always public
+    if (req.path.startsWith('/auth/') || req.path === '/version') return next();
+    const token = parseCookies(req)['mcs_session'];
+    if (!token || !_sessions.has(token)) {
+        return res.status(401).json({ error: 'Not authenticated' });
+    }
+    req.authSession = _sessions.get(token);
+    next();
+}
 
 const DEFAULT_SYSTEM = {};
 
@@ -1047,7 +1112,80 @@ function validateReplicatorConfig(yaml) {
 // Routes
 // ---------------------------------------------------------------------------
 
-// GET /version — return application identity (version, docker digest, git SHA)
+// ── Auth routes (public — no requireAuth) ──────────────────────────────────
+
+// GET /auth/status — check session validity and return login state
+app.get('/auth/status', (req, res) => {
+    const token = parseCookies(req)['mcs_session'];
+    if (!token || !_sessions.has(token)) {
+        return res.json({ authenticated: false });
+    }
+    const session = _sessions.get(token);
+    const auth = readAuth();
+    res.json({
+        authenticated: true,
+        username: session.username,
+        mustChangePassword: auth.mustChangePassword || false,
+    });
+});
+
+// POST /auth/login — validate credentials and issue a session cookie
+app.post('/auth/login', (req, res) => {
+    const { username, password } = req.body || {};
+    if (!username || !password) {
+        return res.status(400).json({ error: 'Username and password are required' });
+    }
+    const auth = readAuth();
+    if (username !== auth.username) {
+        return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    const supplied = Buffer.from(hashPassword(password, auth.salt), 'hex');
+    const stored   = Buffer.from(auth.hash, 'hex');
+    if (supplied.length !== stored.length || !timingSafeEqual(supplied, stored)) {
+        return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    const token = randomUUID();
+    _sessions.set(token, { username, createdAt: Date.now() });
+    res.setHeader('Set-Cookie', `mcs_session=${token}; Path=/; HttpOnly; SameSite=Strict`);
+    res.json({ ok: true, mustChangePassword: auth.mustChangePassword || false });
+});
+
+// POST /auth/logout — invalidate the current session
+app.post('/auth/logout', (req, res) => {
+    const token = parseCookies(req)['mcs_session'];
+    if (token) _sessions.delete(token);
+    res.setHeader('Set-Cookie', 'mcs_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0');
+    res.json({ ok: true });
+});
+
+// POST /auth/change-password — change the current user's password
+app.post('/auth/change-password', (req, res) => {
+    const token = parseCookies(req)['mcs_session'];
+    if (!token || !_sessions.has(token)) {
+        return res.status(401).json({ error: 'Not authenticated' });
+    }
+    const { currentPassword, newPassword } = req.body || {};
+    if (!currentPassword || !newPassword) {
+        return res.status(400).json({ error: 'currentPassword and newPassword are required' });
+    }
+    if (newPassword.length < 8) {
+        return res.status(400).json({ error: 'New password must be at least 8 characters' });
+    }
+    const auth = readAuth();
+    const supplied = Buffer.from(hashPassword(currentPassword, auth.salt), 'hex');
+    const stored   = Buffer.from(auth.hash, 'hex');
+    if (supplied.length !== stored.length || !timingSafeEqual(supplied, stored)) {
+        return res.status(401).json({ error: 'Current password is incorrect' });
+    }
+    const newSalt = randomBytes(16).toString('hex');
+    auth.salt = newSalt;
+    auth.hash = hashPassword(newPassword, newSalt);
+    auth.mustChangePassword = false;
+    writeAuth(auth);
+    res.json({ ok: true });
+});
+
+
 app.get('/version', (req, res) => {
     res.json({ version: APP_VERSION, digest: DOCKER_DIGEST, gitSha: GIT_SHA });
 });
