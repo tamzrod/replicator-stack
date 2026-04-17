@@ -3206,7 +3206,7 @@ function renderTree(data) {
         const dotClass = statusClasses[healthCode] || 'ds-unknown';
         const dotTitle = statusLabels[healthCode] || 'UNKNOWN';
         const blockName = statusInfo && statusInfo.device_name ? statusInfo.device_name : '';
-        const displayName = blockName || d.name;
+        const displayName = d.name || blockName;
         const label = displayName
           ? `${escapeHtml(displayName)} <span style="color:#9CA3AF;font-size:.72rem">— ${escapeHtml(d.id)}</span>`
           : escapeHtml(d.id);

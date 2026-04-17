@@ -83,7 +83,7 @@ listeners:
 | `id` | `device.id` |
 | `source.endpoint` | `"{device.ipAddress}:{device.port}"` |
 | `source.unit_id` | `device.source_unit_id` |
-| `source.device_name` | `device.id` |
+| `source.device_name` | `device.name` (falls back to `device.id` if name is unset) |
 | `source.status_slot` | `device.status_slot` (default 0, only emitted when `status_unit_id` is set) |
 | `reads[].fc` | Modbus FC from `block.source_area` (see table below) |
 | `reads[].address` | `block.source_address` |
