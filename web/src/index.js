@@ -28,7 +28,7 @@ const AUTH_PATH = path.join(DATA_DIR, 'auth.json');
 // ---------------------------------------------------------------------------
 const DEFAULT_USERNAME = 'admin';
 const DEFAULT_PASSWORD = 'admin';
-const SCRYPT_PARAMS = { N: 32768, r: 8, p: 1 };
+const SCRYPT_PARAMS = { N: 16384, r: 8, p: 1 };
 const HASH_LEN = 64;
 const SALT_BYTES = 16;
 
