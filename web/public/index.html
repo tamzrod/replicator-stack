@@ -1522,13 +1522,13 @@
     </div>
   </div>
 
-  <!-- ── YAML Integrity Check ───────────────────────────────────────────── -->
+  <!-- ── CHECK — Integrity Check ──────────────────────────────────────────── -->
   <div class="card" id="yaml-integrity-card">
     <div class="ws-card-header">
-      <h2>🔍 YAML Integrity Check</h2>
+      <h2>🔍 CHECK — Integrity Check</h2>
       <div style="display:flex;gap:8px">
-        <button class="btn-refresh" id="btn-yaml-integrity" style="font-size:.8rem;padding:7px 14px">🔍 Check YAML Integrity</button>
-        <button class="btn-primary" id="btn-yaml-integrity-fix" style="font-size:.8rem;padding:7px 14px;display:none">🔧 Rectify Issues</button>
+        <button class="btn-refresh" id="btn-yaml-integrity" style="font-size:.8rem;padding:7px 14px">🔍 Run Check</button>
+        <button class="btn-primary" id="btn-yaml-integrity-fix" style="font-size:.8rem;padding:7px 14px;display:none">🔧 Fix Issues</button>
       </div>
     </div>
     <div id="yaml-integrity-banner" class="banner"></div>
@@ -1681,10 +1681,11 @@
 
   <!-- Global Actions -->
   <div class="rt-global-card">
-    <h2>Global Actions</h2>
+    <h2>APPLY — Global Actions</h2>
     <p>
-      <strong>Apply Config</strong> writes the current model to MMA and Replicator config files on disk.
-      <strong>Apply + Restart All</strong> writes configs, safely stops MMA (up to 30 s for graceful shutdown), stops Replicator, then starts both services.
+      <strong>Apply Config</strong> compiles and writes the current model to MMA and Replicator config files on disk.
+      <strong>Apply + Restart All</strong> applies configs, safely stops MMA (up to 30 s for graceful shutdown), stops Replicator, then starts both services.
+      <br/><span style="color:#6B7280;font-size:.8rem">APPLY is only permitted when the integrity CHECK passes. Run <strong>Fix Issues</strong> first if any errors are reported.</span>
     </p>
     <div class="rt-global-actions">
       <button class="btn-apply" id="btn-rt-apply">⚙ Apply Config</button>
@@ -4620,7 +4621,7 @@ async function runYamlIntegrityCheck() {
   const { ok: reqOk, data } = await api('GET', '/yaml-integrity');
 
   btn.disabled = false;
-  btn.textContent = '🔍 Check YAML Integrity';
+  btn.textContent = '🔍 Run Check';
 
   if (!reqOk) {
     banner.textContent = `✗ Check failed: ${data.error || 'Unknown error'}`;
@@ -4690,7 +4691,7 @@ document.getElementById('btn-yaml-integrity-fix').addEventListener('click', asyn
   const { ok: fixOk, data: fixData } = await api('POST', '/yaml-integrity/fix', {});
 
   fixBtn.disabled = false;
-  fixBtn.textContent = '🔧 Rectify Issues';
+  fixBtn.textContent = '🔧 Fix Issues';
 
   if (!fixOk) {
     banner.textContent = `✗ Fix failed: ${fixData.error || 'Unknown error'}`;
@@ -5143,6 +5144,27 @@ async function runtimeApplyFlow(endpoint) {
   applyBtns.forEach(btn => { btn.disabled = true; });
 
   try {
+    // Step 0: CHECK gate — APPLY is only permitted when integrity CHECK passes.
+    _setApplyProgress('Running integrity check (CHECK)…', 3);
+    const { ok: integrityOk, data: integrityData } = await api('GET', '/yaml-integrity');
+    if (!integrityOk) {
+      _clearApplyProgress();
+      resultEl.innerHTML = `<div class="banner show err">✗ CHECK failed: ${escapeHtml(integrityData.error || 'Unknown error')}</div>`;
+      return;
+    }
+    if (!integrityData.ok) {
+      _clearApplyProgress();
+      const errList = (integrityData.issues || [])
+        .filter(i => i.severity === 'error')
+        .map(i => `<li><strong>${escapeHtml(i.deviceName)}</strong>: ${escapeHtml(i.message)}</li>`)
+        .join('');
+      resultEl.innerHTML = `<div class="banner show err">
+        ✗ APPLY blocked — integrity CHECK failed. Run <strong>Fix Issues</strong> to resolve errors first.
+        ${errList ? `<ul style="margin:6px 0 0 16px">${errList}</ul>` : ''}
+      </div>`;
+      return;
+    }
+
     // Step 1: Pre-check missing ports
     _setApplyProgress('Checking configuration…', 5);
     const { ok: precheckOk, data: precheckData } = await api('GET', '/compile/precheck');
@@ -5178,6 +5200,18 @@ async function runtimeApplyFlow(endpoint) {
 
     if (!ok) {
       _clearApplyProgress();
+      if (data.status === 'integrity_failed') {
+        // Server-side CHECK gate triggered (should be rare since client pre-checks, but handle gracefully).
+        const errList = (data.integrity && data.integrity.issues || [])
+          .filter(i => i.severity === 'error')
+          .map(i => `<li><strong>${escapeHtml(i.deviceName)}</strong>: ${escapeHtml(i.message)}</li>`)
+          .join('');
+        resultEl.innerHTML = `<div class="banner show err">
+          ✗ APPLY blocked — integrity CHECK failed. Run <strong>Fix Issues</strong> to resolve errors first.
+          ${errList ? `<ul style="margin:6px 0 0 16px">${errList}</ul>` : ''}
+        </div>`;
+        return;
+      }
       if (data.status === 'error') {
         // Structured recovery error — pause and present options to user
         const action = await showCompileErrorDialog(data);

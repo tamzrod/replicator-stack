@@ -1205,10 +1205,6 @@ app.post('/device/:id/duplicate', (req, res) => {
         let newUnitId = (Number(orig.unitId) || 0) + 1;
         while (_idx.devicesByUnitId.has(newUnitId)) newUnitId++;
 
-        // status_slot is system-assigned — allocate the next available slot within the new endpoint group.
-        // status_unit_id is system-managed; new device starts without one.
-        const newStatusSlot = assignNextSlot(model, newTargetEndpoint);
-
         // Find the next free target_endpoint by incrementing the port number.
         // newUnitId is already globally unique so (origPort+1, newUnitId) is
         // guaranteed to be conflict-free; the while loop is a defensive guard.
@@ -1235,10 +1231,11 @@ app.post('/device/:id/duplicate', (req, res) => {
             source_unit_id: newSourceUnitId,
             target_endpoint: newTargetEndpoint,
             unitId: newUnitId,
-            // status_slot: system-assigned global slot (lowest available).
-            // status_unit_id: null for all duplicates — system-managed; the memory
-            // reconciliation flow assigns it when status memory is provisioned.
-            status_slot: newStatusSlot,
+            // status_slot is NOT copied from the original — it must be reallocated
+            // via the FIX flow (POST /yaml-integrity/fix) so the system assigns the
+            // correct slot within the new endpoint group without copying stale state.
+            // status_unit_id is system-managed and starts as null for all new devices.
+            status_slot: null,
             status_unit_id: null,
             reads: newReads,
         };
@@ -2921,6 +2918,22 @@ app.post('/compile', (req, res) => {
     try {
         const model = readModel();
 
+        // APPLY gate: enforce CHECK → APPLY order.
+        // APPLY is only permitted when the CHECK layer reports no errors.
+        // Warnings (e.g. devices without reads) do not block compilation.
+        const integrity = computeIntegrity(model);
+        if (!integrity.ok) {
+            const errorMessages = integrity.issues
+                .filter(i => i.severity === 'error')
+                .map(i => `[${i.deviceName}] ${i.message}`);
+            return res.status(422).json({
+                status: 'integrity_failed',
+                error: 'APPLY blocked — integrity CHECK failed. Run Fix Issues to resolve errors before applying.',
+                integrity_errors: errorMessages,
+                integrity: integrity,
+            });
+        }
+
         // Parse optional list of port numbers the user chose NOT to create (excluded from this compile).
         const excludedPortsList = Array.isArray(req.body && req.body.excluded_ports)
             ? req.body.excluded_ports
@@ -3136,136 +3149,153 @@ app.get('/validate', rateLimit, (req, res) => {
     }
 });
 
-// GET /yaml-integrity — check replicator YAML integrity across all devices.
-// Verifies status_slot assignment and uniqueness per target_endpoint group,
-// status_unit_id assignment and consistency within the same target_endpoint,
-// required fields, and which devices would be included in the compiled YAML.
-// Returns { ok, issues, devices, status_slot_size } — read-only, never mutates model.
+// ---------------------------------------------------------------------------
+// computeIntegrity(model) — pure CHECK layer (read-only, no side effects).
+//
+// Detects configuration and system inconsistencies across all devices:
+//   - UNALLOCATED_SLOT  : device has no assigned status_slot
+//   - DUPLICATE_SLOT    : status_slot collision within the same target_endpoint group
+//   - UNASSIGNED_STATUS_UNIT_ID : status_unit_id not yet assigned
+//   - INCONSISTENT_STATUS_UNIT_ID : different status_unit_ids within same endpoint group
+//   - Missing required source/target fields
+//   - Devices without reads (warning — device excluded from YAML)
+//
+// Returns { ok, issues, devices, status_slot_size } — identical shape to
+// the GET /yaml-integrity HTTP response.  Safe to call from any route that
+// needs to gate behaviour on integrity state without issuing an HTTP request.
+// ---------------------------------------------------------------------------
+function computeIntegrity(model) {
+    const devices = model.devices || [];
+
+    // Build per-endpoint slot map: endpointKey → Map<slot, deviceId[]>
+    // Used to detect duplicate status_slots within the same target_endpoint group.
+    const epSlotMap = new Map();
+    for (const device of devices) {
+        const slot = device.status_slot;
+        if (slot == null) continue;
+        const epKey = (device.target_endpoint || '').trim().toLowerCase() || '__null__';
+        if (!epSlotMap.has(epKey)) epSlotMap.set(epKey, new Map());
+        const slotMap = epSlotMap.get(epKey);
+        const slotNum = Number(slot);
+        if (!slotMap.has(slotNum)) slotMap.set(slotNum, []);
+        slotMap.get(slotNum).push(device.id);
+    }
+
+    // Build per-endpoint status_unit_id maps for consistency checks.
+    // All devices sharing the same target_endpoint must have the same status_unit_id.
+    // Canonical = highest count wins; lowest value breaks ties — same rule as the fix endpoint.
+    const epStatusUidMap = new Map();
+    const epCanonicalUid = new Map();
+    for (const device of devices) {
+        if (device.status_unit_id == null) continue;
+        const epKey = (device.target_endpoint || '').trim().toLowerCase() || '__null__';
+        if (!epStatusUidMap.has(epKey)) epStatusUidMap.set(epKey, new Map());
+        const counts = epStatusUidMap.get(epKey);
+        const suid = Number(device.status_unit_id);
+        counts.set(suid, (counts.get(suid) || 0) + 1);
+    }
+    for (const [epKey, counts] of epStatusUidMap) {
+        let canonical = null;
+        let bestCount = -1;
+        for (const [suid, count] of counts) {
+            if (count > bestCount || (count === bestCount && suid < canonical)) {
+                canonical = suid;
+                bestCount = count;
+            }
+        }
+        epCanonicalUid.set(epKey, canonical);
+    }
+
+    const issues = [];
+    const deviceResults = [];
+
+    for (const device of devices) {
+        const deviceIssues = [];
+
+        // CHECK: status_slot is assigned and unique within the same target_endpoint group.
+        if (device.status_slot == null) {
+            deviceIssues.push({ code: 'UNALLOCATED_SLOT', severity: 'error', message: 'UNALLOCATED_SLOT — device has no assigned slot; run Fix Issues to repair' });
+        } else {
+            const epKey = (device.target_endpoint || '').trim().toLowerCase() || '__null__';
+            const slotMap = epSlotMap.get(epKey) || new Map();
+            const slot = Number(device.status_slot);
+            const sharing = slotMap.get(slot) || [];
+            if (sharing.length > 1) {
+                const others = sharing.filter(id => id !== device.id).join(', ');
+                deviceIssues.push({ code: 'DUPLICATE_SLOT', severity: 'error', message: `DUPLICATE_SLOT — status_slot ${slot} is duplicated within endpoint "${device.target_endpoint}" — also used by: ${others}` });
+            }
+        }
+
+        // CHECK: status_unit_id is assigned and matches all devices on the same target_endpoint.
+        if (device.status_unit_id == null) {
+            deviceIssues.push({ code: 'UNASSIGNED_STATUS_UNIT_ID', severity: 'error', message: 'UNASSIGNED_STATUS_UNIT_ID — status_unit_id not assigned; run Memory Consistency check to fix' });
+        } else {
+            const epKey = (device.target_endpoint || '').trim().toLowerCase() || '__null__';
+            const counts = epStatusUidMap.get(epKey) || new Map();
+            if (counts.size > 1) {
+                const canonical = epCanonicalUid.get(epKey);
+                const actual = Number(device.status_unit_id);
+                if (actual !== canonical) {
+                    const allUids = [...counts.keys()].join(', ');
+                    deviceIssues.push({ code: 'INCONSISTENT_STATUS_UNIT_ID', severity: 'error', message: `INCONSISTENT_STATUS_UNIT_ID — status_unit_id ${actual} differs from other devices on endpoint "${device.target_endpoint}" — found [${allUids}], expected all to match` });
+                }
+            }
+        }
+
+        // CHECK: required source fields.
+        if (!device.source_endpoint) {
+            deviceIssues.push({ code: 'MISSING_SOURCE_ENDPOINT', severity: 'error', message: 'source_endpoint is missing' });
+        }
+        if (device.source_unit_id == null) {
+            deviceIssues.push({ code: 'MISSING_SOURCE_UNIT_ID', severity: 'error', message: 'source_unit_id is missing' });
+        }
+
+        // CHECK: required target fields.
+        if (!device.target_endpoint) {
+            deviceIssues.push({ code: 'MISSING_TARGET_ENDPOINT', severity: 'error', message: 'target_endpoint is missing' });
+        }
+        if (device.unitId == null) {
+            deviceIssues.push({ code: 'MISSING_TARGET_UNIT_ID', severity: 'error', message: 'target unit_id (unitId) is missing' });
+        }
+
+        // CHECK: device would be included in compiled YAML (needs at least one read).
+        const reads = device.reads || [];
+        const includedInYaml = reads.length > 0;
+        if (!includedInYaml) {
+            deviceIssues.push({ code: 'NO_READS', severity: 'warning', message: 'no reads configured — device excluded from replicator YAML' });
+        }
+
+        const result = {
+            id: device.id,
+            name: device.name || device.id,
+            status_slot: device.status_slot != null ? Number(device.status_slot) : null,
+            status_unit_id: device.status_unit_id != null ? Number(device.status_unit_id) : null,
+            target_port: endpointPort(device.target_endpoint),
+            includedInYaml,
+            issues: deviceIssues,
+        };
+        deviceResults.push(result);
+
+        for (const issue of deviceIssues) {
+            issues.push({ deviceId: device.id, deviceName: device.name || device.id, ...issue });
+        }
+    }
+
+    return {
+        ok: issues.filter(i => i.severity === 'error').length === 0,
+        issues,
+        devices: deviceResults,
+        status_slot_size: STATUS_SLOT_SIZE,
+    };
+}
+
+// GET /yaml-integrity — CHECK layer: detect configuration and system inconsistencies.
+// Read-only — never mutates model or state.
+// Returns { ok, issues, devices, status_slot_size }.
 app.get('/yaml-integrity', (req, res) => {
     try {
         const model = readModel();
-        const devices = model.devices || [];
-
-        // Build per-endpoint slot map: endpointKey → Map<slot, [deviceIds]>
-        // Used to detect duplicate status_slots within the same target_endpoint group.
-        const epSlotMap = new Map(); // endpointKey → Map<slot, deviceId[]>
-        for (const device of devices) {
-            const slot = device.status_slot;
-            if (slot == null) continue;
-            const epKey = (device.target_endpoint || '').trim().toLowerCase() || '__null__';
-            if (!epSlotMap.has(epKey)) epSlotMap.set(epKey, new Map());
-            const slotMap = epSlotMap.get(epKey);
-            const slotNum = Number(slot);
-            if (!slotMap.has(slotNum)) slotMap.set(slotNum, []);
-            slotMap.get(slotNum).push(device.id);
-        }
-
-        // Build per-endpoint status_unit_id maps for consistency checks.
-        // All devices sharing the same target_endpoint must have the same status_unit_id.
-        // Canonical = highest count wins; lowest value breaks ties — same rule as the fix endpoint.
-        const epStatusUidMap = new Map(); // endpointKey → Map<suid, count>
-        const epCanonicalUid = new Map(); // endpointKey → canonical suid
-        for (const device of devices) {
-            if (device.status_unit_id == null) continue;
-            const epKey = (device.target_endpoint || '').trim().toLowerCase() || '__null__';
-            if (!epStatusUidMap.has(epKey)) epStatusUidMap.set(epKey, new Map());
-            const counts = epStatusUidMap.get(epKey);
-            const suid = Number(device.status_unit_id);
-            counts.set(suid, (counts.get(suid) || 0) + 1);
-        }
-        for (const [epKey, counts] of epStatusUidMap) {
-            let canonical = null;
-            let bestCount = -1;
-            for (const [suid, count] of counts) {
-                if (count > bestCount || (count === bestCount && suid < canonical)) {
-                    canonical = suid;
-                    bestCount = count;
-                }
-            }
-            epCanonicalUid.set(epKey, canonical);
-        }
-
-        const issues = [];
-        const deviceResults = [];
-
-        for (const device of devices) {
-            const deviceIssues = [];
-
-            // Check status_slot is assigned and unique within the same target_endpoint group.
-            if (device.status_slot == null) {
-                deviceIssues.push({ severity: 'error', message: 'status_slot not assigned — save config to fix' });
-            } else {
-                const epKey = (device.target_endpoint || '').trim().toLowerCase() || '__null__';
-                const slotMap = epSlotMap.get(epKey) || new Map();
-                const slot = Number(device.status_slot);
-                const sharing = slotMap.get(slot) || [];
-                if (sharing.length > 1) {
-                    const others = sharing.filter(id => id !== device.id).join(', ');
-                    deviceIssues.push({ severity: 'error', message: `status_slot ${slot} is duplicated within endpoint "${device.target_endpoint}" — also used by: ${others}` });
-                }
-            }
-
-            // Check status_unit_id is assigned and matches all devices on the same target_endpoint.
-            if (device.status_unit_id == null) {
-                deviceIssues.push({ severity: 'error', message: 'status_unit_id not assigned — run Memory Consistency check to fix' });
-            } else {
-                const epKey = (device.target_endpoint || '').trim().toLowerCase() || '__null__';
-                const counts = epStatusUidMap.get(epKey) || new Map();
-                if (counts.size > 1) {
-                    const canonical = epCanonicalUid.get(epKey);
-                    const actual = Number(device.status_unit_id);
-                    if (actual !== canonical) {
-                        const allUids = [...counts.keys()].join(', ');
-                        deviceIssues.push({ severity: 'error', message: `status_unit_id ${actual} differs from other devices on endpoint "${device.target_endpoint}" — found [${allUids}], expected all to match` });
-                    }
-                }
-            }
-
-            // Check required source fields.
-            if (!device.source_endpoint) {
-                deviceIssues.push({ severity: 'error', message: 'source_endpoint is missing' });
-            }
-            if (device.source_unit_id == null) {
-                deviceIssues.push({ severity: 'error', message: 'source_unit_id is missing' });
-            }
-
-            // Check required target fields.
-            if (!device.target_endpoint) {
-                deviceIssues.push({ severity: 'error', message: 'target_endpoint is missing' });
-            }
-            if (device.unitId == null) {
-                deviceIssues.push({ severity: 'error', message: 'target unit_id (unitId) is missing' });
-            }
-
-            // Check device would be included in compiled YAML (needs at least one read).
-            const reads = device.reads || [];
-            const includedInYaml = reads.length > 0;
-            if (!includedInYaml) {
-                deviceIssues.push({ severity: 'warning', message: 'no reads configured — device excluded from replicator YAML' });
-            }
-
-            const result = {
-                id: device.id,
-                name: device.name || device.id,
-                status_slot: device.status_slot != null ? Number(device.status_slot) : null,
-                status_unit_id: device.status_unit_id != null ? Number(device.status_unit_id) : null,
-                target_port: endpointPort(device.target_endpoint),
-                includedInYaml,
-                issues: deviceIssues,
-            };
-            deviceResults.push(result);
-
-            for (const issue of deviceIssues) {
-                issues.push({ deviceId: device.id, deviceName: device.name || device.id, ...issue });
-            }
-        }
-
-        res.json({
-            ok: issues.filter(i => i.severity === 'error').length === 0,
-            issues,
-            devices: deviceResults,
-            status_slot_size: STATUS_SLOT_SIZE,
-        });
+        res.json(computeIntegrity(model));
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -3335,7 +3365,10 @@ app.post('/yaml-integrity/fix', (req, res) => {
             scheduleCompile();
         }
 
-        res.json({ fixed, changes });
+        // After FIX, automatically re-run CHECK and include the updated integrity state
+        // in the response so callers can determine if all issues have been resolved.
+        const postFixIntegrity = computeIntegrity(readModel());
+        res.json({ fixed, changes, integrity: postFixIntegrity });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -3682,10 +3715,25 @@ function countRoutes(model, excludedPortNums) {
     return count;
 }
 
-// POST /runtime/apply — compile configs and write to disk (no service restart)
+// POST /runtime/apply — APPLY layer: compile configs and write to disk (no service restart).
+// Blocked if the CHECK layer (computeIntegrity) reports any errors — enforces CHECK → APPLY order.
 app.post('/runtime/apply', async (req, res) => {
     try {
         const model = readModel();
+
+        // APPLY gate: only permitted when CHECK passes.
+        const integrity = computeIntegrity(model);
+        if (!integrity.ok) {
+            const errorMessages = integrity.issues
+                .filter(i => i.severity === 'error')
+                .map(i => `[${i.deviceName}] ${i.message}`);
+            return res.status(422).json({
+                status: 'integrity_failed',
+                error: 'APPLY blocked — integrity CHECK failed. Run Fix Issues to resolve errors before applying.',
+                integrity_errors: errorMessages,
+                integrity: integrity,
+            });
+        }
 
         const excludedPortsList = Array.isArray(req.body && req.body.excluded_ports)
             ? req.body.excluded_ports : [];
@@ -3721,10 +3769,25 @@ app.post('/runtime/apply', async (req, res) => {
     }
 });
 
-// POST /runtime/apply-restart — compile configs and restart both services
+// POST /runtime/apply-restart — APPLY layer: compile configs and restart both services.
+// Blocked if the CHECK layer (computeIntegrity) reports any errors — enforces CHECK → APPLY order.
 app.post('/runtime/apply-restart', async (req, res) => {
     try {
         const model = readModel();
+
+        // APPLY gate: only permitted when CHECK passes.
+        const integrity = computeIntegrity(model);
+        if (!integrity.ok) {
+            const errorMessages = integrity.issues
+                .filter(i => i.severity === 'error')
+                .map(i => `[${i.deviceName}] ${i.message}`);
+            return res.status(422).json({
+                status: 'integrity_failed',
+                error: 'APPLY blocked — integrity CHECK failed. Run Fix Issues to resolve errors before applying.',
+                integrity_errors: errorMessages,
+                integrity: integrity,
+            });
+        }
 
         const excludedPortsList = Array.isArray(req.body && req.body.excluded_ports)
             ? req.body.excluded_ports : [];
