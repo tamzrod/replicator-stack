@@ -93,7 +93,7 @@ const _idx = {
     devicesByUnitId:       new Map(),
     devicesByStatusUnitId: new Map(),
     devicesByStatusSlot:   new Map(),
-    devicesByTarget:       new Map(), // device.target_endpoint (string) → device object
+    devicesByTarget:       new Map(), // "device.target_endpoint|device.unitId" (composite key) → device object
     portsById:             new Map(),
     portsByNumber:         new Map(),
 };
@@ -131,7 +131,7 @@ function rebuildIndexes(model) {
         }
 
         if (device.target_endpoint) {
-            _idx.devicesByTarget.set(device.target_endpoint.trim(), device);
+            _idx.devicesByTarget.set(`${device.target_endpoint.trim()}|${device.unitId}`, device);
         }
     }
 
@@ -1033,9 +1033,9 @@ app.post('/device', (req, res) => {
         }
 
         const targetEndpointTrimmed = device.target_endpoint.trim();
-        const conflicting = _idx.devicesByTarget.get(targetEndpointTrimmed);
+        const conflicting = _idx.devicesByTarget.get(`${targetEndpointTrimmed}|${unitId}`);
         if (conflicting) {
-            return res.status(409).json({ error: `target_endpoint "${targetEndpointTrimmed}" is already used by device "${conflicting.name || conflicting.id}"` });
+            return res.status(409).json({ error: `target_endpoint "${targetEndpointTrimmed}" with unit ID ${unitId} is already used by device "${conflicting.name || conflicting.id}"` });
         }
 
         const generatedId = `device_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
@@ -1087,9 +1087,10 @@ app.put('/device/:id', (req, res) => {
                 return res.status(400).json({ error: 'device.target_endpoint must be a valid endpoint (e.g. mma2:501)' });
             }
             const targetEndpointTrimmed = device.target_endpoint.trim();
-            const conflicting = _idx.devicesByTarget.get(targetEndpointTrimmed);
+            const effectiveUnitId = device.unitId !== undefined ? Number(device.unitId) : Number(existing.unitId);
+            const conflicting = _idx.devicesByTarget.get(`${targetEndpointTrimmed}|${effectiveUnitId}`);
             if (conflicting && conflicting.id !== id) {
-                return res.status(409).json({ error: `target_endpoint "${targetEndpointTrimmed}" is already used by device "${conflicting.name || conflicting.id}"` });
+                return res.status(409).json({ error: `target_endpoint "${targetEndpointTrimmed}" with unit ID ${effectiveUnitId} is already used by device "${conflicting.name || conflicting.id}"` });
             }
             existing.target_endpoint = targetEndpointTrimmed;
         }
@@ -1186,7 +1187,11 @@ app.post('/device/:id/duplicate', (req, res) => {
         while (usedSlots.has(newStatusSlot)) newStatusSlot++;
 
         // Find the next free target_endpoint by incrementing the port number.
-        // target_endpoint must be unique across all devices.
+        // A (target_endpoint, unitId) pair must be unique across all devices. Because newUnitId
+        // is already globally unique, (origPort, newUnitId) is always conflict-free; however
+        // we still start from origPort+1 by convention so the clone gets its own port.
+        // The while-loop guard is kept for defensive correctness even though it will never
+        // iterate in practice.
         // Fall back to orig.target_endpoint if it cannot be parsed (isValidEndpoint
         // guarantees host:port for any stored device, but defensive parsing is safer).
         const origTarget = orig.target_endpoint || '';
@@ -1196,7 +1201,7 @@ app.post('/device/:id/duplicate', (req, res) => {
         let newTargetEndpoint = origTarget; // fallback: keep original if unparseable
         if (targetHost && Number.isFinite(parsedOrigPort)) {
             let newTargetPort = parsedOrigPort + 1;
-            while (_idx.devicesByTarget.has(`${targetHost}:${newTargetPort}`)) newTargetPort++;
+            while (_idx.devicesByTarget.has(`${targetHost}:${newTargetPort}|${newUnitId}`)) newTargetPort++;
             newTargetEndpoint = `${targetHost}:${newTargetPort}`;
         }
 
@@ -1305,9 +1310,9 @@ app.post('/config/save', (req, res) => {
             if (sourceConfig.status_slot !== undefined) existing.status_slot = Number(sourceConfig.status_slot);
 
             const targetEndpointTrimmed = targetConfig.target_endpoint.trim();
-            const conflicting = _idx.devicesByTarget.get(targetEndpointTrimmed);
+            const conflicting = _idx.devicesByTarget.get(`${targetEndpointTrimmed}|${targetUnitId}`);
             if (conflicting && conflicting.id !== deviceId) {
-                return res.status(409).json({ error: `target_endpoint "${targetEndpointTrimmed}" is already used by device "${conflicting.name || conflicting.id}"` });
+                return res.status(409).json({ error: `target_endpoint "${targetEndpointTrimmed}" with unit ID ${targetUnitId} is already used by device "${conflicting.name || conflicting.id}"` });
             }
             existing.target_endpoint = targetEndpointTrimmed;
             existing.unitId = targetUnitId;
@@ -1939,7 +1944,146 @@ app.get('/memory/reconcile', (req, res) => {
             }
         }
 
-        res.json({ missing, orphaned, valid, area_mismatch });
+        // -------------------------------------------------------------------
+        // Status memory checks
+        // For each unique (targetPort, status_unit_id) group, verify that
+        // the port has a unit with the right holding_registers allocation:
+        //   start = 0, count = deviceCount * STATUS_SLOT_SIZE
+        // -------------------------------------------------------------------
+        // Build a map: `${portNum}:${status_unit_id}` → { portNum, statusUnitId, devices[] }
+        const statusGroups = new Map();
+        for (const device of devices) {
+            if (device.status_unit_id == null) continue;
+            const portNum = endpointPort(device.target_endpoint);
+            if (portNum == null) continue;
+            const suid = Number(device.status_unit_id);
+            const key = `${portNum}:${suid}`;
+            if (!statusGroups.has(key)) {
+                statusGroups.set(key, { portNum, statusUnitId: suid, devices: [] });
+            }
+            statusGroups.get(key).devices.push({
+                id: device.id,
+                name: device.name,
+                status_slot: device.status_slot,
+                unitId: device.unitId,
+            });
+        }
+
+        const status_missing = [];
+        const status_size_mismatch = [];
+
+        for (const { portNum, statusUnitId, devices: groupDevices } of statusGroups.values()) {
+            const deviceCount = groupDevices.length;
+            const requiredCount = deviceCount * STATUS_SLOT_SIZE;
+
+            const portEntry = portMap.get(portNum);
+            const unit = portEntry && portEntry.units.get(statusUnitId);
+
+            if (!unit) {
+                // Port or unit is absent — status memory needs to be created.
+                status_missing.push({
+                    statusUnitId,
+                    portNum,
+                    portId: portEntry ? portEntry.portId : null,
+                    deviceCount,
+                    requiredCount,
+                    devices: groupDevices,
+                });
+            } else {
+                // Unit exists — check that it has a holding_registers area at start=0
+                // with count >= requiredCount.
+                const hrAreas = (unit.areas || []).filter(a => a.type === 'holding_registers');
+                const hrArea = hrAreas[0] || null;
+                const configuredStart = hrArea != null ? Number(hrArea.start) : null;
+                const configuredCount = hrArea != null ? Number(hrArea.count) : null;
+                const sizeOk = hrArea != null && configuredStart === 0 && configuredCount >= requiredCount;
+                if (!sizeOk) {
+                    status_size_mismatch.push({
+                        statusUnitId,
+                        portNum,
+                        portId: portEntry.portId,
+                        unitDbId: unit.id,
+                        deviceCount,
+                        requiredCount,
+                        configuredStart,
+                        configuredCount,
+                        devices: groupDevices,
+                    });
+                }
+            }
+        }
+
+        res.json({ missing, orphaned, valid, area_mismatch, status_missing, status_size_mismatch, status_slot_size: STATUS_SLOT_SIZE });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /memory/reconcile/fix-status — create or correct a status memory unit.
+// For the given (status_unit_id, port_num) group this endpoint finds or creates
+// the target memory port + unit and sets its holding_registers area to
+// start=0, count=deviceCount*STATUS_SLOT_SIZE.
+// Body: { status_unit_id, port_num }
+app.post('/memory/reconcile/fix-status', (req, res) => {
+    try {
+        const { status_unit_id, port_num } = req.body;
+        const statusUnitId = Number(status_unit_id);
+        const portNum = Number(port_num);
+        if (!Number.isFinite(statusUnitId) || statusUnitId < 0) {
+            return res.status(400).json({ error: 'status_unit_id is required and must be a non-negative integer' });
+        }
+        if (!Number.isFinite(portNum) || portNum < 1) {
+            return res.status(400).json({ error: 'port_num is required and must be a positive integer' });
+        }
+
+        const model = readModel();
+        const devices = model.devices || [];
+
+        // Count devices in this (port, status_unit_id) group.
+        const deviceCount = devices.filter(d =>
+            d.status_unit_id != null &&
+            Number(d.status_unit_id) === statusUnitId &&
+            endpointPort(d.target_endpoint) === portNum
+        ).length;
+
+        if (deviceCount === 0) {
+            return res.status(404).json({ error: `No devices found with status_unit_id ${statusUnitId} targeting port ${portNum}` });
+        }
+
+        const requiredCount = deviceCount * STATUS_SLOT_SIZE;
+
+        // Find or create the memory port.
+        let port = _idx.portsByNumber.get(portNum) || null;
+        if (!port) {
+            port = { id: randomUUID(), port: portNum, blocks: [], units: [] };
+            model.memory.ports.push(port);
+            _idx.portsByNumber.set(portNum, port);
+            _idx.portsById.set(port.id, port);
+        }
+        if (!port.units) port.units = [];
+
+        // Find or create the status unit.
+        let unit = port.units.find(u => Number(u.unit_id) === statusUnitId);
+        if (!unit) {
+            unit = { id: randomUUID(), unit_id: statusUnitId, areas: [] };
+            port.units.push(unit);
+        }
+        if (!unit.areas) unit.areas = [];
+
+        // Remove any existing holding_registers areas for this unit.
+        unit.areas = unit.areas.filter(a => a.type !== 'holding_registers');
+
+        // Add the correctly-sized holding_registers area.
+        unit.areas.push({
+            id: randomUUID(),
+            type: 'holding_registers',
+            start: 0,
+            count: requiredCount,
+        });
+
+        writeModel(model);
+        scheduleCompile();
+        res.json({ ok: true, requiredCount });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

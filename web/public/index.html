@@ -1611,8 +1611,8 @@
     <h2>🔍 Memory Consistency Check</h2>
     <p style="color:#6B7280;font-size:.85rem;margin-bottom:14px">
       Scan replicator device configurations against the memory registry to detect
-      <strong>missing</strong> or <strong>orphaned</strong> memory allocations.
-      No changes are made automatically — all actions require explicit confirmation.
+      <strong>missing</strong> or <strong>orphaned</strong> memory allocations, including
+      <strong>status memory</strong> units. No changes are made automatically — all actions require explicit confirmation.
     </p>
     <button id="mem-reconcile-btn">🔍 Check Memory Consistency</button>
     <div id="mem-reconcile-banner" class="banner"></div>
@@ -4254,20 +4254,26 @@ document.getElementById('mem-reconcile-btn').addEventListener('click', async () 
     return;
   }
 
-  const { missing, orphaned, valid, area_mismatch } = data;
+  const { missing, orphaned, valid, area_mismatch, status_missing, status_size_mismatch, status_slot_size } = data;
   const areaMismatch = area_mismatch || [];
+  const statusMissing = status_missing || [];
+  const statusSizeMismatch = status_size_mismatch || [];
+  const statusSlotSize = status_slot_size || 30;
   const total = missing.length + orphaned.length + valid.length + areaMismatch.length;
-  const issues = missing.length + areaMismatch.length;
+  const issues = missing.length + areaMismatch.length + statusMissing.length + statusSizeMismatch.length;
   const bannerClass = issues > 0 ? 'banner show err' : 'banner show ok';
-  banner.textContent = `✓ Scan complete — ${total} device/unit pair(s) analyzed: ${missing.length} missing, ${areaMismatch.length} area mismatch, ${orphaned.length} orphaned, ${valid.length} valid.`;
+  banner.textContent = `✓ Scan complete — ${total} device/unit pair(s) analyzed: ${missing.length} missing, ${areaMismatch.length} area mismatch, ${orphaned.length} orphaned, ${valid.length} valid. Status memory: ${statusMissing.length} missing, ${statusSizeMismatch.length} size mismatch.`;
   banner.className = bannerClass;
 
-  results.innerHTML = renderReconcileResults(missing, orphaned, valid, areaMismatch);
+  results.innerHTML = renderReconcileResults(missing, orphaned, valid, areaMismatch, statusMissing, statusSizeMismatch, statusSlotSize);
   _attachReconcileHandlers(results);
 });
 
-function renderReconcileResults(missing, orphaned, valid, area_mismatch) {
+function renderReconcileResults(missing, orphaned, valid, area_mismatch, status_missing, status_size_mismatch, statusSlotSize) {
   const areaMismatch = area_mismatch || [];
+  const statusMissing = status_missing || [];
+  const statusSizeMismatch = status_size_mismatch || [];
+  const slotSize = statusSlotSize || 30;
   const missingHtml = missing.length === 0
     ? '<div class="mem-recon-empty">None — all devices have a memory allocation.</div>'
     : missing.map(entry => {
@@ -4423,6 +4429,82 @@ function renderReconcileResults(missing, orphaned, valid, area_mismatch) {
         </div>`;
       }).join('');
 
+  const statusMissingHtml = statusMissing.length === 0
+    ? '<div class="mem-recon-empty">None — all status memory units exist.</div>'
+    : statusMissing.map(entry => {
+        const portLabel = entry.portId ? `Port ${entry.portNum}` : `Port ${entry.portNum} (not yet created)`;
+        return `<div class="mem-recon-row missing"
+            data-status-unit-id="${escapeHtml(String(entry.statusUnitId))}"
+            data-port-num="${escapeHtml(String(entry.portNum))}">
+          <span class="mem-recon-badge missing">MISSING STATUS UNIT</span>
+          <div class="mem-recon-field">
+            <label>Status Unit ID</label>
+            <span>${escapeHtml(String(entry.statusUnitId))}</span>
+          </div>
+          <div class="mem-recon-field">
+            <label>Target Port</label>
+            <span>${escapeHtml(portLabel)}</span>
+          </div>
+          <div class="mem-recon-field">
+            <label>Devices</label>
+            <span>${escapeHtml(entry.devices.map(d => d.name || d.id).join(', '))}</span>
+          </div>
+          <div class="mem-recon-field">
+            <label>Required Registers</label>
+            <span>holding_registers start=0 count=${escapeHtml(String(entry.requiredCount))} (${escapeHtml(String(entry.deviceCount))} device(s) × ${slotSize})</span>
+          </div>
+          <div class="mem-recon-actions">
+            <button class="btn-mem mem-recon-fix-status-btn"
+              data-status-unit-id="${escapeHtml(String(entry.statusUnitId))}"
+              data-port-num="${escapeHtml(String(entry.portNum))}"
+              data-required-count="${escapeHtml(String(entry.requiredCount))}">
+              + Create Status Unit
+            </button>
+          </div>
+        </div>`;
+      }).join('');
+
+  const statusSizeMismatchHtml = statusSizeMismatch.length === 0
+    ? '<div class="mem-recon-empty">None — all status memory allocations are correctly sized.</div>'
+    : statusSizeMismatch.map(entry => {
+        const currentDesc = entry.configuredCount != null
+          ? `holding_registers start=${entry.configuredStart} count=${entry.configuredCount}`
+          : '(no holding_registers area)';
+        return `<div class="mem-recon-row missing"
+            data-status-unit-id="${escapeHtml(String(entry.statusUnitId))}"
+            data-port-num="${escapeHtml(String(entry.portNum))}">
+          <span class="mem-recon-badge missing">STATUS SIZE MISMATCH</span>
+          <div class="mem-recon-field">
+            <label>Status Unit ID</label>
+            <span>${escapeHtml(String(entry.statusUnitId))}</span>
+          </div>
+          <div class="mem-recon-field">
+            <label>Port</label>
+            <span>${escapeHtml(String(entry.portNum))}</span>
+          </div>
+          <div class="mem-recon-field">
+            <label>Devices</label>
+            <span>${escapeHtml(entry.devices.map(d => d.name || d.id).join(', '))}</span>
+          </div>
+          <div class="mem-recon-field">
+            <label>Current</label>
+            <span>${escapeHtml(currentDesc)}</span>
+          </div>
+          <div class="mem-recon-field">
+            <label>Required</label>
+            <span>holding_registers start=0 count=${escapeHtml(String(entry.requiredCount))} (${escapeHtml(String(entry.deviceCount))} device(s) × ${slotSize})</span>
+          </div>
+          <div class="mem-recon-actions">
+            <button class="btn-mem mem-recon-fix-status-btn"
+              data-status-unit-id="${escapeHtml(String(entry.statusUnitId))}"
+              data-port-num="${escapeHtml(String(entry.portNum))}"
+              data-required-count="${escapeHtml(String(entry.requiredCount))}">
+              ✚ Fix Status Unit
+            </button>
+          </div>
+        </div>`;
+      }).join('');
+
   return `
     <div class="mem-recon-section">
       <div class="mem-recon-section-title missing">⚠ Missing Memory — ${missing.length} device(s) need allocation</div>
@@ -4431,6 +4513,14 @@ function renderReconcileResults(missing, orphaned, valid, area_mismatch) {
     <div class="mem-recon-section">
       <div class="mem-recon-section-title missing">⚠ Area Mismatch — ${areaMismatch.length} unit(s) missing required area types or address coverage</div>
       ${areaMismatchHtml}
+    </div>
+    <div class="mem-recon-section">
+      <div class="mem-recon-section-title missing">⚠ Status Memory Missing — ${statusMissing.length} status unit(s) need creation</div>
+      ${statusMissingHtml}
+    </div>
+    <div class="mem-recon-section">
+      <div class="mem-recon-section-title missing">⚠ Status Size Mismatch — ${statusSizeMismatch.length} status unit(s) have incorrect allocation</div>
+      ${statusSizeMismatchHtml}
     </div>
     <div class="mem-recon-section">
       <div class="mem-recon-section-title orphaned">✗ Unused Memory — ${orphaned.length} orphaned unit(s)</div>
@@ -4519,6 +4609,37 @@ function _attachReconcileHandlers(container) {
       } else {
         btn.disabled = false;
         btn.textContent = '✚ Fix Areas';
+        alert(`Error: ${data.error || 'Unknown error'}`);
+      }
+    });
+  });
+
+  // Create or fix a status memory unit
+  container.querySelectorAll('.mem-recon-fix-status-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const statusUnitId = Number(btn.dataset.statusUnitId);
+      const portNum = Number(btn.dataset.portNum);
+      const requiredCount = Number(btn.dataset.requiredCount);
+      const originalLabel = btn.textContent;
+      if (!confirm(`Create/fix status memory unit (status_unit_id: ${statusUnitId}, port: ${portNum})?\nWill set holding_registers start=0 count=${requiredCount}.`)) return;
+
+      btn.disabled = true;
+      btn.textContent = '…';
+
+      const { ok, data } = await api('POST', '/memory/reconcile/fix-status', {
+        status_unit_id: statusUnitId,
+        port_num: portNum,
+      });
+
+      if (ok) {
+        _appendMmaLog(`[memory reconcile] Fixed status memory unit_id ${statusUnitId} on port ${portNum} (count=${data.requiredCount})`);
+        setDirty(true);
+        await _bus.emit(EV.MODEL_MUTATED);
+        // Re-run scan to refresh results
+        document.getElementById('mem-reconcile-btn').click();
+      } else {
+        btn.disabled = false;
+        btn.textContent = originalLabel;
         alert(`Error: ${data.error || 'Unknown error'}`);
       }
     });
