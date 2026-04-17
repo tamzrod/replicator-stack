@@ -666,7 +666,7 @@ function toReplicatorYaml(model, excludedPortNums = new Set()) {
         lines.push(`      source:`);
         lines.push(`        endpoint: "${sourceEndpoint}"`);
         lines.push(`        unit_id: ${device.source_unit_id}`);
-        lines.push(`        device_name: "${device.id}"`);
+        lines.push(`        device_name: "${device.name || device.id}"`);
         if (device.status_unit_id != null) {
             lines.push(`        status_slot: ${statusSlot}`);
         }
