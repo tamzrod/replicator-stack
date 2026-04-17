@@ -5810,6 +5810,7 @@ const MODBUS_EXCEPTION_CODES = Object.freeze({
 
 function _modbusErrLabel(code) {
   const n = Number(code);
+  if (!Number.isFinite(n)) return 'UNKNOWN CODE';
   return MODBUS_EXCEPTION_CODES[n] !== undefined ? MODBUS_EXCEPTION_CODES[n] : `CODE ${n}`;
 }
 

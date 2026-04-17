@@ -3590,8 +3590,9 @@ app.get('/devices/status', async (req, res) => {
 
             for (const device of grpDevs) {
                 const base = (Number(device.status_slot) || 0) * STATUS_SLOT_SIZE;
-                // Helper: safely read one register at slot-relative offset.
-                const get = (off) => (regs && regs.length > base + off) ? (regs[base + off] || 0) : 0;
+                // Helper: read one register at slot-relative offset (called only inside the
+                // `if (regs && regs.length > base)` guard, so regs is guaranteed non-null here).
+                const get = (off) => (regs.length > base + off) ? (regs[base + off] || 0) : 0;
                 // Helper: read uint32 (lo word at loOff, hi word at loOff+1).
                 const get32 = (loOff) => get(loOff) + get(loOff + 1) * 65536;
 
