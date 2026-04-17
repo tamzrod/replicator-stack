@@ -1087,7 +1087,7 @@ app.put('/device/:id', (req, res) => {
                 return res.status(400).json({ error: 'device.target_endpoint must be a valid endpoint (e.g. mma2:501)' });
             }
             const targetEndpointTrimmed = device.target_endpoint.trim();
-            const effectiveUnitId = device.unitId !== undefined ? Number(device.unitId) : existing.unitId;
+            const effectiveUnitId = device.unitId !== undefined ? Number(device.unitId) : Number(existing.unitId);
             const conflicting = _idx.devicesByTarget.get(`${targetEndpointTrimmed}|${effectiveUnitId}`);
             if (conflicting && conflicting.id !== id) {
                 return res.status(409).json({ error: `target_endpoint "${targetEndpointTrimmed}" with unit ID ${effectiveUnitId} is already used by device "${conflicting.name || conflicting.id}"` });
@@ -1187,9 +1187,11 @@ app.post('/device/:id/duplicate', (req, res) => {
         while (usedSlots.has(newStatusSlot)) newStatusSlot++;
 
         // Find the next free target_endpoint by incrementing the port number.
-        // A (target_endpoint, unitId) pair must be unique across all devices; since newUnitId
-        // is already globally unique, (origPort, newUnitId) is always free, but we still
-        // increment the port so the clone starts on its own port by convention.
+        // A (target_endpoint, unitId) pair must be unique across all devices. Because newUnitId
+        // is already globally unique, (origPort, newUnitId) is always conflict-free; however
+        // we still start from origPort+1 by convention so the clone gets its own port.
+        // The while-loop guard is kept for defensive correctness even though it will never
+        // iterate in practice.
         // Fall back to orig.target_endpoint if it cannot be parsed (isValidEndpoint
         // guarantees host:port for any stored device, but defensive parsing is safer).
         const origTarget = orig.target_endpoint || '';
