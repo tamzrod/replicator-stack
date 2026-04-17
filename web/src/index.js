@@ -24,6 +24,10 @@ const DEFAULT_SYSTEM = {};
 // Number of holding registers consumed by each device's status slot.
 const STATUS_SLOT_SIZE = 30;
 
+// Default Modbus unit_id used for the status memory block on each MMA listener.
+// Chosen to avoid collision with typical device unit_id values (usually small integers).
+const DEFAULT_STATUS_UNIT_ID = 246;
+
 // ---------------------------------------------------------------------------
 // In-memory model cache — eliminates repeated fs.readFileSync / JSON.parse
 // on every request.  Invalidated (and re-populated) on every writeModel().
@@ -537,6 +541,36 @@ function generateUniqueReadId(reads) {
     let n = 1;
     while (existingIds.has(`read_${n}`)) n++;
     return `read_${n}`;
+}
+
+/**
+ * Return the status_unit_id that all devices on the given target_endpoint should
+ * share.  Returns the most-common existing value for the endpoint group, or
+ * DEFAULT_STATUS_UNIT_ID when no device in the group has one assigned yet.
+ *
+ * @param {object} model
+ * @param {string} targetEndpoint  — normalised target_endpoint of the device
+ * @returns {number}
+ */
+function getCanonicalStatusUnitId(model, targetEndpoint) {
+    const epKey = (targetEndpoint || '').trim().toLowerCase();
+    const counts = new Map();
+    for (const d of (model.devices || [])) {
+        if (d.status_unit_id == null) continue;
+        if ((d.target_endpoint || '').trim().toLowerCase() !== epKey) continue;
+        const suid = Number(d.status_unit_id);
+        counts.set(suid, (counts.get(suid) || 0) + 1);
+    }
+    if (counts.size === 0) return DEFAULT_STATUS_UNIT_ID;
+    let canonical = null;
+    let bestCount = -1;
+    for (const [suid, count] of counts) {
+        if (count > bestCount || (count === bestCount && (canonical === null || suid < canonical))) {
+            canonical = suid;
+            bestCount = count;
+        }
+    }
+    return canonical;
 }
 
 /**
@@ -1087,9 +1121,9 @@ app.post('/device', (req, res) => {
         const generatedId = `device_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
 
         // status_slot is system-assigned — the lowest available slot within the same target_endpoint group.
-        // status_unit_id is system-managed (not user-editable) and defaults to null for
-        // all new devices.  The memory reconciliation flow assigns status_unit_id when
-        // status memory is provisioned for this device.
+        // status_unit_id is system-managed (not user-editable).  New devices inherit the canonical
+        // status_unit_id already used by the endpoint group, or DEFAULT_STATUS_UNIT_ID when the
+        // group has no assigned value yet.
         const newDevice = {
             id: generatedId,
             name: device.name || '',
@@ -1099,7 +1133,7 @@ app.post('/device', (req, res) => {
             target_endpoint: device.target_endpoint.trim(),
             unitId,
             status_slot: assignNextSlot(model, device.target_endpoint.trim()),
-            status_unit_id: null,
+            status_unit_id: getCanonicalStatusUnitId(model, device.target_endpoint.trim()),
             reads: []
         };
         model.devices.push(newDevice);
@@ -1249,9 +1283,9 @@ app.post('/device/:id/duplicate', (req, res) => {
             // status_slot is NOT copied from the original — it must be reallocated
             // via the FIX flow (POST /yaml-integrity/fix) so the system assigns the
             // correct slot within the new endpoint group without copying stale state.
-            // status_unit_id is system-managed and starts as null for all new devices.
+            // status_unit_id inherits the canonical value for the new endpoint group.
             status_slot: null,
-            status_unit_id: null,
+            status_unit_id: getCanonicalStatusUnitId(model, newTargetEndpoint),
             reads: newReads,
         };
 
@@ -2010,19 +2044,20 @@ app.get('/memory/reconcile', (req, res) => {
             const portEntry = portMap.get(portNum);
             const unit = portEntry && portEntry.units.get(statusUnitId);
 
-            if (!unit) {
-                // Port or unit is absent — status memory needs to be created.
+            if (!portEntry) {
+                // The memory port itself does not exist — no MMA listener will be emitted
+                // for this port at all, so status memory cannot be auto-generated.
                 status_missing.push({
                     statusUnitId,
                     portNum,
-                    portId: portEntry ? portEntry.portId : null,
+                    portId: null,
                     deviceCount,
                     requiredCount,
                     devices: groupDevices,
                 });
-            } else {
-                // Unit exists — check that it has a holding_registers area at start=0
-                // with count >= requiredCount.
+            } else if (unit) {
+                // Unit explicitly stored in port.units[] — verify it has a correctly-sized
+                // holding_registers area (start=0, count >= requiredCount).
                 const hrAreas = (unit.areas || []).filter(a => a.type === 'holding_registers');
                 const hrArea = hrAreas[0] || null;
                 const configuredStart = hrArea != null ? Number(hrArea.start) : null;
@@ -2070,16 +2105,29 @@ app.post('/memory/reconcile/fix-status', (req, res) => {
         const model = readModel();
         const devices = model.devices || [];
 
-        // Count devices in this (port, status_unit_id) group.
-        const deviceCount = devices.filter(d =>
-            d.status_unit_id != null &&
-            Number(d.status_unit_id) === statusUnitId &&
-            endpointPort(d.target_endpoint) === portNum
-        ).length;
+        // Identify all target_endpoints on this port that have devices with the
+        // requested status_unit_id — then extend the fix to ALL devices on those
+        // endpoints (including any that currently have null or a different value).
+        const affectedEndpoints = new Set(
+            devices
+                .filter(d => d.status_unit_id != null &&
+                    Number(d.status_unit_id) === statusUnitId &&
+                    endpointPort(d.target_endpoint) === portNum)
+                .map(d => (d.target_endpoint || '').trim().toLowerCase())
+        );
 
-        if (deviceCount === 0) {
+        if (affectedEndpoints.size === 0) {
             return res.status(404).json({ error: `No devices found with status_unit_id ${statusUnitId} targeting port ${portNum}` });
         }
+
+        // Update ALL devices on the affected endpoints to share the same status_unit_id.
+        const affectedDevices = devices.filter(d =>
+            affectedEndpoints.has((d.target_endpoint || '').trim().toLowerCase())
+        );
+        for (const d of affectedDevices) {
+            d.status_unit_id = statusUnitId;
+        }
+        const deviceCount = affectedDevices.length;
 
         const requiredCount = deviceCount * STATUS_SLOT_SIZE;
 
@@ -2618,7 +2666,44 @@ function rehydrateFromYaml(model) {
         }
     }
 
-    const modified = blocksChanged || statusSlots.modified;
+    // Step 4: ensure every device has a non-null status_unit_id.
+    // Devices on the same target_endpoint must share the same value.
+    // Any device that still has null is assigned the endpoint group's canonical
+    // value, falling back to DEFAULT_STATUS_UNIT_ID when the whole group is unset.
+    let statusUidsModified = false;
+    const epStatusCounts = new Map(); // epKey → Map<suid, count>
+    for (const device of (model.devices || [])) {
+        if (device.status_unit_id == null) continue;
+        const epKey = (device.target_endpoint || '').trim().toLowerCase();
+        if (!epStatusCounts.has(epKey)) epStatusCounts.set(epKey, new Map());
+        const suid = Number(device.status_unit_id);
+        const m = epStatusCounts.get(epKey);
+        m.set(suid, (m.get(suid) || 0) + 1);
+    }
+    for (const device of (model.devices || [])) {
+        if (device.status_unit_id != null) continue;
+        const epKey = (device.target_endpoint || '').trim().toLowerCase();
+        const counts = epStatusCounts.get(epKey);
+        let canonical = DEFAULT_STATUS_UNIT_ID;
+        if (counts && counts.size > 0) {
+            let bestCount = -1;
+            for (const [suid, count] of counts) {
+                if (count > bestCount || (count === bestCount && suid < canonical)) {
+                    canonical = suid;
+                    bestCount = count;
+                }
+            }
+        }
+        device.status_unit_id = canonical;
+        // Register the assigned value so subsequent null devices on the same
+        // endpoint get the same canonical rather than each defaulting independently.
+        if (!epStatusCounts.has(epKey)) epStatusCounts.set(epKey, new Map());
+        const m = epStatusCounts.get(epKey);
+        m.set(canonical, (m.get(canonical) || 0) + 1);
+        statusUidsModified = true;
+    }
+
+    const modified = blocksChanged || statusSlots.modified || statusUidsModified;
     return { modified, blocksCreated };
 }
 
@@ -3243,7 +3328,7 @@ function computeIntegrity(model) {
 
         // CHECK: status_unit_id is assigned and matches all devices on the same target_endpoint.
         if (device.status_unit_id == null) {
-            deviceIssues.push({ code: 'UNASSIGNED_STATUS_UNIT_ID', severity: 'error', message: 'UNASSIGNED_STATUS_UNIT_ID — status_unit_id not assigned; run Memory Consistency check to fix' });
+            deviceIssues.push({ code: 'UNASSIGNED_STATUS_UNIT_ID', severity: 'error', message: 'UNASSIGNED_STATUS_UNIT_ID — status_unit_id not assigned; run Fix Issues or trigger a compile to repair' });
         } else {
             const epKey = (device.target_endpoint || '').trim().toLowerCase() || '__null__';
             const counts = epStatusUidMap.get(epKey) || new Map();
@@ -3351,7 +3436,20 @@ app.post('/yaml-integrity/fix', (req, res) => {
         }
 
         for (const { endpoint, counts, devices: grpDevices } of epGroups.values()) {
-            if (counts.size === 0) continue; // no devices with status_unit_id in this group
+            // When NO device in the group has a status_unit_id yet, assign DEFAULT_STATUS_UNIT_ID.
+            if (counts.size === 0) {
+                let assigned = 0;
+                for (const device of grpDevices) {
+                    if (device.status_unit_id == null) {
+                        device.status_unit_id = DEFAULT_STATUS_UNIT_ID;
+                        assigned++;
+                    }
+                }
+                if (assigned > 0) {
+                    changes.push(`Endpoint "${endpoint}": assigned default status_unit_id ${DEFAULT_STATUS_UNIT_ID} to ${assigned} unassigned device(s)`);
+                }
+                continue;
+            }
 
             // Choose the canonical value: highest count wins; lowest value breaks ties.
             let canonical = null;
