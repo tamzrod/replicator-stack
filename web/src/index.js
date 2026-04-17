@@ -33,6 +33,17 @@ const STATUS_SLOT_SIZE = 30;
 let _modelCache = null;
 
 // ---------------------------------------------------------------------------
+// Canonical version counter — the single source-of-truth version stamp.
+//
+// Incremented every time compileAndWrite() successfully writes both YAML
+// config files to disk.  Returned alongside the model and compiled YAML in
+// GET /model/snapshot so every UI view can prove it is rendering the same
+// compiled state.  Never reset (monotonically increasing within a process
+// lifetime; clients should treat it as an opaque comparable token).
+// ---------------------------------------------------------------------------
+let _canonicalVersion = 0;
+
+// ---------------------------------------------------------------------------
 // Compile queue — decouples autoCompile from the synchronous CRUD hot path.
 // A short debounce ensures rapid back-to-back mutations only trigger one
 // compile pass.  The compile result is always based on the latest model
@@ -917,6 +928,36 @@ app.get('/version', (req, res) => {
 app.get('/model', (req, res) => {
     try {
         res.json(readModel());
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /model/snapshot — single canonical response combining model + compiled YAML.
+//
+// This is the endpoint that ALL views must use for their primary data load.
+// Returning model and compiled configs in one response guarantees they come
+// from the same canonical version — there is no window where the Memory Tab
+// could show a model that is ahead of or behind the Config Viewer's YAML.
+//
+// Response shape:
+//   { model, canonicalVersion, config: { replicator: string|null, mma: string|null } }
+// Rate-limited (same policy as /validate) because each response includes two
+// file system reads for the compiled YAML files.
+app.get('/model/snapshot', rateLimit, (req, res) => {
+    try {
+        const model = readModel();
+        const replicatorYaml = fs.existsSync(REPLICATOR_CONFIG_PATH)
+            ? fs.readFileSync(REPLICATOR_CONFIG_PATH, 'utf-8')
+            : null;
+        const mmaYaml = fs.existsSync(MMA_CONFIG_PATH)
+            ? fs.readFileSync(MMA_CONFIG_PATH, 'utf-8')
+            : null;
+        res.json({
+            model,
+            canonicalVersion: _canonicalVersion,
+            config: { replicator: replicatorYaml, mma: mmaYaml },
+        });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -2537,6 +2578,9 @@ function compileAndWrite(model, excludedPortNums = new Set(), opts = {}) {
 
     atomicWrite(REPLICATOR_CONFIG_PATH, replicatorYaml);
     atomicWrite(MMA_CONFIG_PATH, mmaYaml);
+    // Advance the canonical version stamp — every successful YAML write moves
+    // the authoritative state forward by exactly one step.
+    _canonicalVersion++;
     return { ok: true, blocksCreated: rehydrated.blocksCreated, resolutionLog, mergeLog };
 }
 
