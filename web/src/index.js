@@ -1869,7 +1869,7 @@ app.get('/memory/reconcile', (req, res) => {
                     const areaType = read.source_area || 'holding_registers';
                     if (!configuredAreas.has(areaType)) continue; // already flagged as missing
                     const readStart = Number(read.source_address);
-                    const readCount = Number(read.count) || 1;
+                    const readCount = Number(read.source_count) || 1;
                     const readEnd = readStart + readCount - 1;
                     const matchingAreas = (unit.areas || []).filter(a => a.type === areaType);
                     const covered = matchingAreas.some(a => {
