@@ -256,6 +256,7 @@
     .banner.show { display: block; }
     .banner.ok  { background: #DCFCE7; color: #166534; }
     .banner.err { background: #FEF2F2; color: #991B1B; }
+    .banner.warn { background: #FFFBEB; color: #92400E; }
 
     .model-header {
       display: flex;
@@ -1524,7 +1525,10 @@
   <div class="card" id="yaml-integrity-card">
     <div class="ws-card-header">
       <h2>🔍 YAML Integrity Check</h2>
-      <button class="btn-refresh" id="btn-yaml-integrity" style="font-size:.8rem;padding:7px 14px">🔍 Check YAML Integrity</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn-refresh" id="btn-yaml-integrity" style="font-size:.8rem;padding:7px 14px">🔍 Check YAML Integrity</button>
+        <button class="btn-primary" id="btn-yaml-integrity-fix" style="font-size:.8rem;padding:7px 14px;display:none">🔧 Rectify Issues</button>
+      </div>
     </div>
     <div id="yaml-integrity-banner" class="banner"></div>
     <div id="yaml-integrity-results"></div>
@@ -4602,8 +4606,9 @@ function _attachReconcileHandlers(container) {
 
 // ── YAML Integrity Check ──────────────────────────────────────────────────────
 
-document.getElementById('btn-yaml-integrity').addEventListener('click', async () => {
+async function runYamlIntegrityCheck() {
   const btn = document.getElementById('btn-yaml-integrity');
+  const fixBtn = document.getElementById('btn-yaml-integrity-fix');
   const banner = document.getElementById('yaml-integrity-banner');
   const results = document.getElementById('yaml-integrity-results');
 
@@ -4611,6 +4616,7 @@ document.getElementById('btn-yaml-integrity').addEventListener('click', async ()
   btn.textContent = '⏳ Checking…';
   banner.className = 'banner';
   results.innerHTML = '';
+  fixBtn.style.display = 'none';
 
   const { ok: reqOk, data } = await api('GET', '/yaml-integrity');
 
@@ -4628,6 +4634,12 @@ document.getElementById('btn-yaml-integrity').addEventListener('click', async ()
   const warnCount  = issues.filter(i => i.severity === 'warning').length;
   const includedCount = devices.filter(d => d.includedInYaml).length;
 
+  // Determine which errors are auto-fixable (slot and status_unit_id consistency issues).
+  const fixableErrors = issues.filter(i =>
+    i.severity === 'error' &&
+    (i.message.includes('status_slot') || i.message.includes('status_unit_id') && i.message.includes('differs'))
+  );
+
   if (errorCount > 0) {
     banner.textContent = `✗ ${errorCount} error(s), ${warnCount} warning(s) — ${includedCount}/${devices.length} device(s) included in YAML`;
     banner.className = 'banner show err';
@@ -4639,7 +4651,65 @@ document.getElementById('btn-yaml-integrity').addEventListener('click', async ()
     banner.className = 'banner show ok';
   }
 
+  fixBtn.style.display = fixableErrors.length > 0 ? '' : 'none';
   results.innerHTML = renderYamlIntegrityResults(devices);
+}
+
+document.getElementById('btn-yaml-integrity').addEventListener('click', runYamlIntegrityCheck);
+
+document.getElementById('btn-yaml-integrity-fix').addEventListener('click', async () => {
+  const fixBtn = document.getElementById('btn-yaml-integrity-fix');
+  const banner = document.getElementById('yaml-integrity-banner');
+
+  // Build a summary of what will be fixed for the confirm prompt.
+  const { ok: preOk, data: preData } = await api('GET', '/yaml-integrity');
+  if (!preOk) {
+    banner.textContent = `✗ Could not fetch current issues: ${preData.error || 'Unknown error'}`;
+    banner.className = 'banner show err';
+    return;
+  }
+
+  const fixableIssues = (preData.issues || []).filter(i =>
+    i.severity === 'error' &&
+    (i.message.includes('status_slot') || (i.message.includes('status_unit_id') && i.message.includes('differs')))
+  );
+
+  if (fixableIssues.length === 0) {
+    await runYamlIntegrityCheck();
+    return;
+  }
+
+  const summaryLines = fixableIssues.map(i => `• [${i.deviceName}] ${i.message}`).join('\n');
+  const confirmed = window.confirm(
+    `The following ${fixableIssues.length} issue(s) will be auto-rectified:\n\n${summaryLines}\n\nProceed?`
+  );
+  if (!confirmed) return;
+
+  fixBtn.disabled = true;
+  fixBtn.textContent = '⏳ Fixing…';
+
+  const { ok: fixOk, data: fixData } = await api('POST', '/yaml-integrity/fix', {});
+
+  fixBtn.disabled = false;
+  fixBtn.textContent = '🔧 Rectify Issues';
+
+  if (!fixOk) {
+    banner.textContent = `✗ Fix failed: ${fixData.error || 'Unknown error'}`;
+    banner.className = 'banner show err';
+    return;
+  }
+
+  if (fixData.fixed) {
+    banner.textContent = `✓ Rectified: ${fixData.changes.join('; ')}`;
+    banner.className = 'banner show ok';
+    await _bus.emit(EV.MODEL_MUTATED);
+  } else {
+    banner.textContent = '✓ No changes needed — model is already consistent';
+    banner.className = 'banner show ok';
+  }
+
+  // Re-run the check to reflect the updated state.
+  await runYamlIntegrityCheck();
 });
 
 function renderYamlIntegrityResults(devices) {

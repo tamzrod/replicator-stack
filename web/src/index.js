@@ -3241,6 +3241,77 @@ app.get('/yaml-integrity', (req, res) => {
     }
 });
 
+// POST /yaml-integrity/fix — auto-fix status_slot and status_unit_id inconsistencies.
+// Fixes:
+//   1. Missing or duplicate status_slots — recompileStatusSlots() fills gaps deterministically.
+//   2. Devices on the same port with differing status_unit_id — normalise to the value
+//      used by the majority (or the lowest when tied) so all share one status unit.
+// Does NOT assign status_unit_id to devices that have null — use the Memory Consistency
+// tool to establish the initial status_unit_id for a port group.
+// Returns { fixed, changes: string[] }
+app.post('/yaml-integrity/fix', (req, res) => {
+    try {
+        const model = readModel();
+        const devices = model.devices || [];
+        const changes = [];
+
+        // ── 1. Fix status_slot ────────────────────────────────────────────────
+        const { modified: slotsModified } = recompileStatusSlots(model);
+        if (slotsModified) {
+            changes.push('Re-assigned missing or duplicate status_slot values');
+        }
+
+        // ── 2. Fix status_unit_id per-port inconsistency ───────────────────
+        // Group devices by target port, collect their status_unit_id values.
+        const portGroups = new Map(); // portNum → { counts: Map<suid, count>, devices: device[] }
+        for (const device of devices) {
+            if (device.status_unit_id == null) continue;
+            const portNum = endpointPort(device.target_endpoint);
+            if (portNum == null) continue;
+            if (!portGroups.has(portNum)) portGroups.set(portNum, { counts: new Map(), devices: [] });
+            const grp = portGroups.get(portNum);
+            const suid = Number(device.status_unit_id);
+            grp.counts.set(suid, (grp.counts.get(suid) || 0) + 1);
+            grp.devices.push(device);
+        }
+
+        for (const [portNum, { counts, devices: grpDevices }] of portGroups) {
+            if (counts.size <= 1) continue; // already consistent
+
+            // Choose the canonical value: highest count wins; lowest value breaks ties.
+            let canonical = null;
+            let bestCount = -1;
+            for (const [suid, count] of counts) {
+                if (count > bestCount || (count === bestCount && suid < canonical)) {
+                    canonical = suid;
+                    bestCount = count;
+                }
+            }
+
+            let reassigned = 0;
+            for (const device of grpDevices) {
+                if (Number(device.status_unit_id) !== canonical) {
+                    device.status_unit_id = canonical;
+                    reassigned++;
+                }
+            }
+            if (reassigned > 0) {
+                changes.push(`Port ${portNum}: normalised ${reassigned} device(s) to status_unit_id ${canonical}`);
+            }
+        }
+
+        const fixed = changes.length > 0;
+        if (fixed) {
+            writeModel(model);
+            scheduleCompile();
+        }
+
+        res.json({ fixed, changes });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // ---------------------------------------------------------------------------
 // Device status reading (Modbus TCP → MMA status blocks)
 // ---------------------------------------------------------------------------
