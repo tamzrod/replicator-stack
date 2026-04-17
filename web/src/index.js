@@ -93,7 +93,7 @@ const _idx = {
     devicesByUnitId:       new Map(),
     devicesByStatusUnitId: new Map(),
     devicesByStatusSlot:   new Map(),
-    devicesByTarget:       new Map(), // "device.target_endpoint|device.unitId" (composite key) → device object
+    devicesByTarget:       new Map(), // "device.target_endpoint|device.status_unit_id|device.status_slot" (composite key) → device object
     portsById:             new Map(),
     portsByNumber:         new Map(),
 };
@@ -131,7 +131,7 @@ function rebuildIndexes(model) {
         }
 
         if (device.target_endpoint) {
-            _idx.devicesByTarget.set(`${device.target_endpoint.trim()}|${device.unitId}`, device);
+            _idx.devicesByTarget.set(`${device.target_endpoint.trim()}|${device.status_unit_id ?? 'null'}|${device.status_slot ?? 0}`, device);
         }
     }
 
@@ -1033,9 +1033,11 @@ app.post('/device', (req, res) => {
         }
 
         const targetEndpointTrimmed = device.target_endpoint.trim();
-        const conflicting = _idx.devicesByTarget.get(`${targetEndpointTrimmed}|${unitId}`);
+        const statusUnitId = device.status_unit_id != null ? Number(device.status_unit_id) : null;
+        const statusSlot = device.status_slot != null ? Number(device.status_slot) : 0;
+        const conflicting = _idx.devicesByTarget.get(`${targetEndpointTrimmed}|${statusUnitId ?? 'null'}|${statusSlot}`);
         if (conflicting) {
-            return res.status(409).json({ error: `target_endpoint "${targetEndpointTrimmed}" with unit ID ${unitId} is already used by device "${conflicting.name || conflicting.id}"` });
+            return res.status(409).json({ error: `target_endpoint "${targetEndpointTrimmed}" with status unit ID ${statusUnitId ?? 'none'} and status slot ${statusSlot} is already used by device "${conflicting.name || conflicting.id}"` });
         }
 
         const generatedId = `device_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
@@ -1086,13 +1088,7 @@ app.put('/device/:id', (req, res) => {
             if (!isValidEndpoint(device.target_endpoint)) {
                 return res.status(400).json({ error: 'device.target_endpoint must be a valid endpoint (e.g. mma2:501)' });
             }
-            const targetEndpointTrimmed = device.target_endpoint.trim();
-            const effectiveUnitId = device.unitId !== undefined ? Number(device.unitId) : Number(existing.unitId);
-            const conflicting = _idx.devicesByTarget.get(`${targetEndpointTrimmed}|${effectiveUnitId}`);
-            if (conflicting && conflicting.id !== id) {
-                return res.status(409).json({ error: `target_endpoint "${targetEndpointTrimmed}" with unit ID ${effectiveUnitId} is already used by device "${conflicting.name || conflicting.id}"` });
-            }
-            existing.target_endpoint = targetEndpointTrimmed;
+            existing.target_endpoint = device.target_endpoint.trim();
         }
         if (device.unitId !== undefined) {
             const unitId = Number(device.unitId);
@@ -1100,6 +1096,18 @@ app.put('/device/:id', (req, res) => {
                 return res.status(400).json({ error: 'device.unitId must be a non-negative integer (MMA unit ID)' });
             }
             existing.unitId = unitId;
+        }
+        // Check (target_endpoint, status_unit_id, status_slot) uniqueness whenever any of
+        // the three key fields are changing.
+        if (device.target_endpoint !== undefined || device.status_unit_id !== undefined || device.status_slot !== undefined) {
+            const effectiveStatusUnitId = device.status_unit_id !== undefined
+                ? (device.status_unit_id != null ? Number(device.status_unit_id) : null)
+                : existing.status_unit_id;
+            const effectiveStatusSlot = device.status_slot !== undefined ? Number(device.status_slot) : Number(existing.status_slot ?? 0);
+            const conflicting = _idx.devicesByTarget.get(`${existing.target_endpoint}|${effectiveStatusUnitId ?? 'null'}|${effectiveStatusSlot}`);
+            if (conflicting && conflicting.id !== id) {
+                return res.status(409).json({ error: `target_endpoint "${existing.target_endpoint}" with status unit ID ${effectiveStatusUnitId ?? 'none'} and status slot ${effectiveStatusSlot} is already used by device "${conflicting.name || conflicting.id}"` });
+            }
         }
         if (device.name !== undefined) existing.name = device.name;
         if (device.groupId !== undefined) {
@@ -1201,7 +1209,7 @@ app.post('/device/:id/duplicate', (req, res) => {
         let newTargetEndpoint = origTarget; // fallback: keep original if unparseable
         if (targetHost && Number.isFinite(parsedOrigPort)) {
             let newTargetPort = parsedOrigPort + 1;
-            while (_idx.devicesByTarget.has(`${targetHost}:${newTargetPort}|${newUnitId}`)) newTargetPort++;
+            while (_idx.devicesByTarget.has(`${targetHost}:${newTargetPort}|${statusUnitId ?? 'null'}|${newStatusSlot}`)) newTargetPort++;
             newTargetEndpoint = `${targetHost}:${newTargetPort}`;
         }
 
@@ -1310,9 +1318,12 @@ app.post('/config/save', (req, res) => {
             if (sourceConfig.status_slot !== undefined) existing.status_slot = Number(sourceConfig.status_slot);
 
             const targetEndpointTrimmed = targetConfig.target_endpoint.trim();
-            const conflicting = _idx.devicesByTarget.get(`${targetEndpointTrimmed}|${targetUnitId}`);
+            const effectiveStatusUnitId = targetConfig.status_unit_id !== undefined
+                ? (targetConfig.status_unit_id != null ? Number(targetConfig.status_unit_id) : null)
+                : existing.status_unit_id;
+            const conflicting = _idx.devicesByTarget.get(`${targetEndpointTrimmed}|${effectiveStatusUnitId ?? 'null'}|${existing.status_slot ?? 0}`);
             if (conflicting && conflicting.id !== deviceId) {
-                return res.status(409).json({ error: `target_endpoint "${targetEndpointTrimmed}" with unit ID ${targetUnitId} is already used by device "${conflicting.name || conflicting.id}"` });
+                return res.status(409).json({ error: `target_endpoint "${targetEndpointTrimmed}" with status unit ID ${effectiveStatusUnitId ?? 'none'} and status slot ${existing.status_slot ?? 0} is already used by device "${conflicting.name || conflicting.id}"` });
             }
             existing.target_endpoint = targetEndpointTrimmed;
             existing.unitId = targetUnitId;
