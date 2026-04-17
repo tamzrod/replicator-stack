@@ -568,6 +568,7 @@ function recompileStatusSlots(model) {
             groupDevices
                 .filter(d => d.status_slot != null)
                 .map(d => Number(d.status_slot))
+                .filter(n => Number.isFinite(n))
         );
 
         // Only assign a slot to devices that don't have one yet.
