@@ -948,6 +948,15 @@ app.get('/model', (req, res) => {
 // file system reads for the compiled YAML files.
 app.get('/model/snapshot', rateLimit, (req, res) => {
     try {
+        // Flush any pending debounced compile so the snapshot always returns
+        // YAML that matches the current model.  Without this, a rapid
+        // mutation + snapshot sequence would read stale YAML from disk while
+        // the Config Viewer already shows the new Memory-tab state.
+        if (_compilePending) {
+            if (_compileTimer) { clearTimeout(_compileTimer); _compileTimer = null; }
+            _compilePending = false;
+            autoCompile(readModel());
+        }
         const model = readModel();
         const replicatorYaml = fs.existsSync(REPLICATOR_CONFIG_PATH)
             ? fs.readFileSync(REPLICATOR_CONFIG_PATH, 'utf-8')
