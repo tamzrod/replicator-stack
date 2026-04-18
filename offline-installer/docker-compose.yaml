@@ -1,0 +1,69 @@
+version: "3.9"
+
+services:
+
+  mma:
+    image: rodtamin/modbus-memory-appliance:2.3.4
+    container_name: mma
+    restart: unless-stopped
+    ports:
+      - "502:502"
+    volumes:
+      - ./data/mma:/config
+    command: ["/config/config.yaml"]
+    environment:
+      - APP_VERSION=${APP_VERSION:-dev}
+    networks:
+      - replicator-net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  replicator:
+    image: rodtamin/modbus-replicator:v0.1.3
+    container_name: replicator
+    restart: unless-stopped
+    depends_on:
+      - mma
+    volumes:
+      - ./data/replicator:/config
+    command: ["/config/config.yaml"]
+    environment:
+      - APP_VERSION=${APP_VERSION:-dev}
+    networks:
+      - replicator-net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  web:
+    image: rodtamin/mcs-web:${APP_VERSION:-dev}
+    container_name: mcs-web
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - DOCKER_DIGEST=${DOCKER_DIGEST:-}
+      - APP_VERSION=${APP_VERSION:-dev}
+      - GIT_SHA=${GIT_SHA:-}
+    depends_on:
+      - mma
+      - replicator
+    networks:
+      - replicator-net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+networks:
+  replicator-net:
+    driver: bridge
