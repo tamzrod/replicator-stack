@@ -5258,7 +5258,7 @@ document.getElementById('tab-bar').addEventListener('click', e => {
 
   if (tab === 'model') {
     appContainer.style.display = '';
-    stopStatusPolling();
+    startStatusPolling();
     stopLogStream();
   } else if (tab === 'memory') {
     memContainer.classList.add('active');
