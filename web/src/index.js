@@ -38,20 +38,27 @@ const SALT_BYTES = 16;
 const _sessions = new Map(); // token → { username, createdAt }
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
-// Rate limiter for auth endpoints: max 10 attempts per IP per minute.
-const _authRateLimitStore = new Map();
-function authRateLimit(req, res, next) {
-    const key = req.ip || 'unknown';
-    const now = Date.now();
-    const entry = _authRateLimitStore.get(key) || { count: 0, start: now };
-    if (now - entry.start > 60_000) { entry.count = 0; entry.start = now; }
-    entry.count += 1;
-    _authRateLimitStore.set(key, entry);
-    if (entry.count > 10) {
-        return res.status(429).json({ error: 'Too many attempts — please wait before retrying' });
-    }
-    next();
+// ---------------------------------------------------------------------------
+// Rate limiting — factory used for both auth and general endpoints.
+// ---------------------------------------------------------------------------
+function makeRateLimiter({ maxRequests, windowMs, message }) {
+    const store = new Map();
+    return function(req, res, next) {
+        const key = req.ip || 'unknown';
+        const now = Date.now();
+        const entry = store.get(key) || { count: 0, start: now };
+        if (now - entry.start > windowMs) { entry.count = 0; entry.start = now; }
+        entry.count += 1;
+        store.set(key, entry);
+        if (entry.count > maxRequests) {
+            return res.status(429).json({ error: message });
+        }
+        next();
+    };
 }
+
+// Rate limiter for auth endpoints: max 10 attempts per IP per minute.
+const authRateLimit = makeRateLimiter({ maxRequests: 10, windowMs: 60_000, message: 'Too many attempts — please wait before retrying' });
 
 function hashPassword(password, salt) {
     return scryptSync(password, salt, HASH_LEN, SCRYPT_PARAMS).toString('hex');
@@ -285,6 +292,16 @@ function initialModel() {
     return { system: DEFAULT_SYSTEM, groups: [], devices: [], memory: { ports: [] } };
 }
 
+/**
+ * Return the widest range that covers both (start1, count1) and (start2, count2).
+ * Used wherever two address ranges for the same area type must be merged.
+ */
+function widenRange(start1, count1, start2, count2) {
+    const newStart = Math.min(start1, start2);
+    const newEnd   = Math.max(start1 + count1 - 1, start2 + count2 - 1);
+    return { start: newStart, count: newEnd - newStart + 1 };
+}
+
 function readModel() {
     if (_modelCache !== null) {
         return _modelCache;
@@ -329,9 +346,7 @@ function readModel() {
                     byType.set(area.type, { ...area });
                 } else {
                     const ex = byType.get(area.type);
-                    const newEnd = Math.max(ex.start + ex.count - 1, area.start + area.count - 1);
-                    ex.start = Math.min(ex.start, area.start);
-                    ex.count = newEnd - ex.start + 1;
+                    ({ start: ex.start, count: ex.count } = widenRange(ex.start, ex.count, area.start, area.count));
                     hasDuplicates = true;
                     migrated = true;
                 }
@@ -901,11 +916,8 @@ function compileMma2Config(blocks, statusMap = new Map()) {
         if (entry.domains.has(area)) {
             // Preserve widest range across duplicate (unit_id, area) blocks.
             const existing = entry.domains.get(area);
-            const newStart = Math.min(existing.start, address);
-            const newEnd   = Math.max(existing.start + existing.count - 1, address + count - 1);
             const oldEntry = { start: existing.start, count: existing.count };
-            existing.start = newStart;
-            existing.count = newEnd - newStart + 1;
+            ({ start: existing.start, count: existing.count } = widenRange(existing.start, existing.count, address, count));
             if (existing.start !== oldEntry.start || existing.count !== oldEntry.count) {
                 mergeLog.push({
                     unit_id: uid,
@@ -1878,9 +1890,7 @@ app.post('/memory/port/:portId/unit/:unitId/area', (req, res) => {
         // with the generated MMA config.
         const existingArea = (unit.areas || []).find(a => a.type === areaType);
         if (existingArea) {
-            const newEnd = Math.max(existingArea.start + existingArea.count - 1, start + count - 1);
-            existingArea.start = Math.min(existingArea.start, start);
-            existingArea.count = newEnd - existingArea.start + 1;
+            ({ start: existingArea.start, count: existingArea.count } = widenRange(existingArea.start, existingArea.count, start, count));
             writeModel(model);
             scheduleCompile();
             return res.status(200).json({ ok: true, id: existingArea.id, merged: true });
@@ -1925,9 +1935,7 @@ app.put('/memory/port/:portId/unit/:unitId/area/:areaId', (req, res) => {
             if (area.type !== existing.type) {
                 const duplicate = (unit.areas || []).find(a => a.id !== areaId && a.type === area.type);
                 if (duplicate) {
-                    const newEnd = Math.max(duplicate.start + duplicate.count - 1, existing.start + existing.count - 1);
-                    duplicate.start = Math.min(duplicate.start, existing.start);
-                    duplicate.count = newEnd - duplicate.start + 1;
+                    ({ start: duplicate.start, count: duplicate.count } = widenRange(duplicate.start, duplicate.count, existing.start, existing.count));
                     unit.areas = unit.areas.filter(a => a.id !== areaId);
                     writeModel(model);
                     scheduleCompile();
@@ -2030,12 +2038,7 @@ app.post('/memory/port/:portId/units/populate', (req, res) => {
                 for (const area of areas) {
                     const existingArea = (existing.areas || []).find(a => a.type === area.type);
                     if (existingArea) {
-                        const newEnd = Math.max(
-                            existingArea.start + existingArea.count - 1,
-                            area.start + area.count - 1
-                        );
-                        existingArea.start = Math.min(existingArea.start, area.start);
-                        existingArea.count = newEnd - existingArea.start + 1;
+                        ({ start: existingArea.start, count: existingArea.count } = widenRange(existingArea.start, existingArea.count, area.start, area.count));
                     } else {
                         existing.areas.push(area);
                         added++;
@@ -2657,7 +2660,6 @@ app.post('/read/:deviceId/import-csv', express.text({ type: 'text/plain' }), (re
             poll_interval_ms: header.indexOf('poll_interval_ms'),
         };
 
-        const VALID_AREAS = new Set(['holding_registers', 'coils', 'input_registers', 'discrete_inputs']);
         const imported = [];
         const errors = [];
 
@@ -2669,7 +2671,7 @@ app.post('/read/:deviceId/import-csv', express.text({ type: 'text/plain' }), (re
             const source_count  = Number(cols[colIdx.count]);
             const poll_interval = Number(cols[colIdx.poll_interval_ms]);
 
-            if (!VALID_AREAS.has(source_area)) {
+            if (!VALID_AREA_TYPES.has(source_area)) {
                 errors.push(`Row ${i + 1}: invalid source_area "${source_area}"`);
                 continue;
             }
@@ -3244,18 +3246,7 @@ app.post('/compile', (req, res) => {
 
         // APPLY gate: enforce CHECK → APPLY order.
         // APPLY is only permitted when the CHECK layer reports no errors.
-        const integrity = computeIntegrity(model);
-        if (!integrity.ok) {
-            const errorMessages = integrity.issues
-                .filter(i => i.severity === 'error')
-                .map(i => `[${i.deviceName}] ${i.message}`);
-            return res.status(422).json({
-                status: 'integrity_failed',
-                error: 'APPLY blocked — integrity CHECK failed. Run Fix Issues to resolve errors before applying.',
-                integrity_errors: errorMessages,
-                integrity: integrity,
-            });
-        }
+        if (applyIntegrityGate(model, res)) return;
 
         // Parse optional list of port numbers the user chose NOT to create (excluded from this compile).
         const excludedPortsList = Array.isArray(req.body && req.body.excluded_ports)
@@ -3379,19 +3370,7 @@ app.post('/compile/resolve', async (req, res) => {
         const mergeLog = result.mergeLog || [];
 
         if (shouldRestart) {
-            const restartErrors = [];
-            for (const service of ['mma', 'replicator']) {
-                try {
-                    const stopTimeout = service === 'mma' ? `?t=${MMA_SAFE_STOP_TIMEOUT_SECS}` : '';
-                    const r = await dockerApi('POST', `/containers/${service}/restart${stopTimeout}`);
-                    if (r.status !== 204 && r.status !== 304) {
-                        const msg = (r.body && r.body.message) ? r.body.message : `HTTP ${r.status}`;
-                        restartErrors.push(`${service}: ${msg}`);
-                    }
-                } catch (dockerErr) {
-                    restartErrors.push(`${service}: ${dockerErr.message}`);
-                }
-            }
+            const { errors: restartErrors } = await restartServices(['mma', 'replicator']);
             if (restartErrors.length > 0) {
                 return res.status(207).json({
                     status: 'resolved',
@@ -3419,24 +3398,7 @@ app.post('/compile/resolve', async (req, res) => {
 });
 
 // Simple in-memory rate limiter for read-heavy endpoints (max 30 req/min per IP).
-const _rateLimitStore = new Map();
-function rateLimit(req, res, next) {
-    const key = req.ip || 'unknown';
-    const now = Date.now();
-    const window = 60_000;
-    const maxReqs = 30;
-    const entry = _rateLimitStore.get(key) || { count: 0, start: now };
-    if (now - entry.start > window) {
-        entry.count = 0;
-        entry.start = now;
-    }
-    entry.count += 1;
-    _rateLimitStore.set(key, entry);
-    if (entry.count > maxReqs) {
-        return res.status(429).json({ error: 'Too many requests — please wait before retrying' });
-    }
-    next();
-}
+const rateLimit = makeRateLimiter({ maxRequests: 30, windowMs: 60_000, message: 'Too many requests — please wait before retrying' });
 
 // GET /validate — validate the current on-disk config files against separation rules
 app.get('/validate', rateLimit, (req, res) => {
@@ -3611,6 +3573,34 @@ function computeIntegrity(model) {
         devices: deviceResults,
         status_slot_size: STATUS_SLOT_SIZE,
     };
+}
+
+/**
+ * APPLY integrity gate — call before any APPLY operation.
+ *
+ * Runs computeIntegrity(model).  If the result is not ok, sends a 422 response
+ * with the standard integrity_failed shape and returns true so the caller can
+ * `return` immediately.  Returns false when integrity passes.
+ *
+ * @param {object} model
+ * @param {object} res  - Express response object
+ * @returns {boolean}  true → caller should return; false → proceed with APPLY
+ */
+function applyIntegrityGate(model, res) {
+    const integrity = computeIntegrity(model);
+    if (!integrity.ok) {
+        const errorMessages = integrity.issues
+            .filter(i => i.severity === 'error')
+            .map(i => `[${i.deviceName}] ${i.message}`);
+        res.status(422).json({
+            status: 'integrity_failed',
+            error: 'APPLY blocked — integrity CHECK failed. Run Fix Issues to resolve errors before applying.',
+            integrity_errors: errorMessages,
+            integrity: integrity,
+        });
+        return true;
+    }
+    return false;
 }
 
 // GET /yaml-integrity — CHECK layer: detect configuration and system inconsistencies.
@@ -3917,6 +3907,31 @@ function dockerApi(method, apiPath) {
     });
 }
 
+/**
+ * Restart MMA and Replicator containers sequentially via the Docker socket.
+ * MMA is given a graceful SIGTERM window (MMA_SAFE_STOP_TIMEOUT_SECS); Replicator
+ * is restarted immediately.
+ *
+ * @param {string[]} services  - ordered list of service names to restart
+ * @returns {Promise<{errors: string[]}>}
+ */
+async function restartServices(services) {
+    const errors = [];
+    for (const service of services) {
+        try {
+            const stopTimeout = service === 'mma' ? `?t=${MMA_SAFE_STOP_TIMEOUT_SECS}` : '';
+            const r = await dockerApi('POST', `/containers/${service}/restart${stopTimeout}`);
+            if (r.status !== 204 && r.status !== 304) {
+                const msg = (r.body && r.body.message) ? r.body.message : `HTTP ${r.status}`;
+                errors.push(`${service}: ${msg}`);
+            }
+        } catch (dockerErr) {
+            errors.push(`${service}: ${dockerErr.message}`);
+        }
+    }
+    return { errors };
+}
+
 // GET /runtime/status — return running state of mma and replicator containers
 app.get('/runtime/status', async (req, res) => {
     try {
@@ -4104,18 +4119,7 @@ app.post('/runtime/apply', async (req, res) => {
         const model = readModel();
 
         // APPLY gate: only permitted when CHECK passes.
-        const integrity = computeIntegrity(model);
-        if (!integrity.ok) {
-            const errorMessages = integrity.issues
-                .filter(i => i.severity === 'error')
-                .map(i => `[${i.deviceName}] ${i.message}`);
-            return res.status(422).json({
-                status: 'integrity_failed',
-                error: 'APPLY blocked — integrity CHECK failed. Run Fix Issues to resolve errors before applying.',
-                integrity_errors: errorMessages,
-                integrity: integrity,
-            });
-        }
+        if (applyIntegrityGate(model, res)) return;
 
         const excludedPortsList = Array.isArray(req.body && req.body.excluded_ports)
             ? req.body.excluded_ports : [];
@@ -4158,18 +4162,7 @@ app.post('/runtime/apply-restart', async (req, res) => {
         const model = readModel();
 
         // APPLY gate: only permitted when CHECK passes.
-        const integrity = computeIntegrity(model);
-        if (!integrity.ok) {
-            const errorMessages = integrity.issues
-                .filter(i => i.severity === 'error')
-                .map(i => `[${i.deviceName}] ${i.message}`);
-            return res.status(422).json({
-                status: 'integrity_failed',
-                error: 'APPLY blocked — integrity CHECK failed. Run Fix Issues to resolve errors before applying.',
-                integrity_errors: errorMessages,
-                integrity: integrity,
-            });
-        }
+        if (applyIntegrityGate(model, res)) return;
 
         const excludedPortsList = Array.isArray(req.body && req.body.excluded_ports)
             ? req.body.excluded_ports : [];
@@ -4203,19 +4196,7 @@ app.post('/runtime/apply-restart', async (req, res) => {
         const routes = countRoutes(model, excludedPortNums);
 
         // Restart both services sequentially: MMA first (with safe stop timeout), then Replicator
-        const restartErrors = [];
-        for (const service of ['mma', 'replicator']) {
-            try {
-                const stopTimeout = service === 'mma' ? `?t=${MMA_SAFE_STOP_TIMEOUT_SECS}` : '';
-                const r = await dockerApi('POST', `/containers/${service}/restart${stopTimeout}`);
-                if (r.status !== 204 && r.status !== 304) {
-                    const msg = (r.body && r.body.message) ? r.body.message : `HTTP ${r.status}`;
-                    restartErrors.push(`${service}: ${msg}`);
-                }
-            } catch (dockerErr) {
-                restartErrors.push(`${service}: ${dockerErr.message}`);
-            }
-        }
+        const { errors: restartErrors } = await restartServices(['mma', 'replicator']);
 
         if (restartErrors.length > 0) {
             return res.status(207).json({
