@@ -311,24 +311,12 @@ function widenRange(start1, count1, start2, count2) {
     return { start: newStart, count: newEnd - newStart + 1 };
 }
 
-function readModel() {
-    if (_modelCache !== null) {
-        return _modelCache;
-    }
-    if (!fs.existsSync(MODEL_PATH)) {
-        const initial = initialModel();
-        writeModel(initial);
-        return initial;
-    }
-    let model;
-    try {
-        model = JSON.parse(fs.readFileSync(MODEL_PATH, 'utf-8'));
-    } catch (parseErr) {
-        console.error(`[readModel] Failed to parse ${MODEL_PATH}: ${parseErr.message} — resetting to initial model`);
-        const initial = initialModel();
-        writeModel(initial);
-        return initial;
-    }
+/**
+ * Apply all in-place migration passes to a freshly parsed model object.
+ * Writes the model back to disk when any field was changed.
+ * Returns the (possibly mutated) model.
+ */
+function migrateModel(model) {
     if (!Array.isArray(model.devices)) model.devices = [];
     if (!Array.isArray(model.groups)) model.groups = [];
     if (!model.system) model.system = {};
@@ -444,6 +432,28 @@ function readModel() {
         }
     }
     if (migrated) writeModel(model);
+    return model;
+}
+
+function readModel() {
+    if (_modelCache !== null) {
+        return _modelCache;
+    }
+    if (!fs.existsSync(MODEL_PATH)) {
+        const initial = initialModel();
+        writeModel(initial);
+        return initial;
+    }
+    let model;
+    try {
+        model = JSON.parse(fs.readFileSync(MODEL_PATH, 'utf-8'));
+    } catch (parseErr) {
+        console.error(`[readModel] Failed to parse ${MODEL_PATH}: ${parseErr.message} — resetting to initial model`);
+        const initial = initialModel();
+        writeModel(initial);
+        return initial;
+    }
+    model = migrateModel(model);
     _modelCache = model; // always cache after the first cold read, regardless of migration
     rebuildIndexes(model);
     return model;
