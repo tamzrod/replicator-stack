@@ -3123,6 +3123,27 @@ function compileAndWrite(model, excludedPortNums = new Set(), opts = {}) {
         // unit in the output, not an error.
     }
 
+    // Validate that every device has at least one read definition.
+    // This check is ALWAYS enforced — skipValidation does not bypass it.
+    // A device with no reads cannot produce valid YAML and is always an invalid state.
+    const devicesWithNoReads = (model.devices || []).filter(d => !(d.reads && d.reads.length > 0));
+    if (devicesWithNoReads.length > 0) {
+        _modelCache = null;
+        const validationErrors = devicesWithNoReads.map(d => ({
+            type: 'validation_error',
+            target: 'device',
+            device_id: d.id,
+            message: 'Device must have at least one read definition',
+        }));
+        return {
+            ok: false,
+            mmaErrors: [],
+            replicatorErrors: devicesWithNoReads.map(d => `Device "${d.name || d.id}" must have at least one read definition`),
+            validationErrors,
+            resolutionLog,
+        };
+    }
+
     // Validate that no included port has an empty memory block list AND no status devices.
     // A port with no regular blocks is still valid if devices with status_unit_id target it
     // (status blocks are generated dynamically in toMmaYaml).
@@ -3223,7 +3244,6 @@ app.post('/compile', (req, res) => {
 
         // APPLY gate: enforce CHECK → APPLY order.
         // APPLY is only permitted when the CHECK layer reports no errors.
-        // Warnings (e.g. devices without reads) do not block compilation.
         const integrity = computeIntegrity(model);
         if (!integrity.ok) {
             const errorMessages = integrity.issues
@@ -3555,11 +3575,18 @@ function computeIntegrity(model) {
             deviceIssues.push({ code: 'MISSING_TARGET_UNIT_ID', severity: 'error', message: 'target unit_id (unitId) is missing' });
         }
 
-        // CHECK: device would be included in compiled YAML (needs at least one read).
+        // CHECK: device must have at least one read definition — required for valid YAML.
         const reads = device.reads || [];
         const includedInYaml = reads.length > 0;
         if (!includedInYaml) {
-            deviceIssues.push({ code: 'NO_READS', severity: 'warning', message: 'no reads configured — device excluded from replicator YAML' });
+            deviceIssues.push({
+                type: 'validation_error',
+                target: 'device',
+                device_id: device.id,
+                code: 'NO_READS',
+                severity: 'error',
+                message: 'Device must have at least one read definition',
+            });
         }
 
         const result = {
