@@ -2566,7 +2566,7 @@ function renderDeviceWorkspace() {
   // ── B. READ Section (inline editing per row) ───────────────────────
   let readsBody;
   if (reads.length === 0) {
-    readsBody = `<tr><td colspan="7"><div class="empty-state" style="padding:16px 0;color:#EF4444;font-weight:500">⚠ At least one read is required for this device — add a read below.</div></td></tr>`;
+    readsBody = `<tr><td colspan="7"><div role="alert" class="empty-state" style="padding:16px 0;color:#EF4444;font-weight:500">⚠ At least one read is required for this device — add a read below.</div></td></tr>`;
   } else {
     readsBody = reads.map(r => {
       if (r.id === _editingReadId) {
@@ -2609,7 +2609,7 @@ function renderDeviceWorkspace() {
         <button class="btn-primary" id="ws-btn-show-add-read" style="font-size:.8rem;padding:7px 14px">+ Add Read</button>
       </div>
     </div>
-    ${reads.length === 0 ? `<div class="banner show err" style="margin-bottom:8px">⚠ At least one read is required for this device — config cannot be saved until a read is added.</div>` : ''}
+    ${reads.length === 0 ? `<div role="alert" class="banner show err" style="margin-bottom:8px">⚠ At least one read is required for this device — config cannot be saved until a read is added.</div>` : ''}
     <input type="file" id="ws-reads-csv-file-input" accept=".csv,text/plain" style="display:none" />
     <div id="ws-read-inline-error" class="banner" style="margin-bottom:8px"></div>
     <div class="reads-table-wrap">
@@ -3475,7 +3475,7 @@ function renderTree(data) {
           ? `${escapeHtml(displayName)} <span style="color:#9CA3AF;font-size:.72rem">— ${escapeHtml(d.id)}</span>`
           : escapeHtml(d.id);
         const hasNoReads = !(d.reads && d.reads.length > 0);
-        const noReadsIndicator = hasNoReads ? ` <span style="color:#EF4444;font-size:.7rem;font-weight:600" title="No reads — device cannot be saved">⚠ NO READS</span>` : '';
+        const noReadsIndicator = hasNoReads ? ` <span aria-label="No reads — device cannot be saved" style="color:#EF4444;font-size:.7rem;font-weight:600" title="No reads — device cannot be saved">⚠ NO READS</span>` : '';
         html += `<div class="tree-device${sel}${hasNoReads ? ' tree-device-no-reads' : ''}" data-device-id="${escapeHtml(d.id)}">
           <span class="device-status-dot ${dotClass}" title="${dotTitle}"></span>
           <span class="tree-device-name">${label}${noReadsIndicator}</span>
