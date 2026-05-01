@@ -3179,11 +3179,12 @@ function compileAndWrite(model, excludedPortNums = new Set(), opts = {}) {
     atomicWrite(MMA_CONFIG_PATH, mmaYaml);
     // Compute a content hash of the written YAML pair so the UI can detect
     // filesystem drift between saves (e.g. external edits or a second client).
-    _yamlContentHash = createHash('sha256')
-        .update(replicatorYaml)
-        .update('\n')
-        .update(mmaYaml)
-        .digest('hex');
+    // Each file is hashed independently and the two digests are concatenated so
+    // swapping file order or re-combining them differently does not produce a
+    // false-negative collision.
+    const replicatorHash = createHash('sha256').update(replicatorYaml).digest('hex');
+    const mmaHash        = createHash('sha256').update(mmaYaml).digest('hex');
+    _yamlContentHash = `${replicatorHash}:${mmaHash}`;
     // Advance the canonical version stamp — every successful YAML write moves
     // the authoritative state forward by exactly one step.
     _canonicalVersion++;
