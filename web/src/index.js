@@ -4,7 +4,7 @@ const http = require('http');
 const net = require('net');
 const os = require('os');
 const path = require('path');
-const { randomUUID, scryptSync, randomBytes, timingSafeEqual } = require('crypto');
+const { randomUUID, scryptSync, randomBytes, timingSafeEqual, createHash } = require('crypto');
 
 const app = express();
 app.use(express.json());
@@ -144,6 +144,15 @@ let _modelCache = null;
 // lifetime; clients should treat it as an opaque comparable token).
 // ---------------------------------------------------------------------------
 let _canonicalVersion = 0;
+
+// ---------------------------------------------------------------------------
+// YAML content hash — SHA-256 of the last successfully written replicator.yaml
+// + mma.yaml pair.  Computed and stored inside compileAndWrite() whenever both
+// files are atomically committed to disk.  Exposed via GET /model/snapshot so
+// the UI can detect filesystem drift between saves (e.g. external edits or a
+// second client triggering a compile).  Null until the first successful compile.
+// ---------------------------------------------------------------------------
+let _yamlContentHash = null;
 
 // ---------------------------------------------------------------------------
 // Compile queue — decouples autoCompile from the synchronous CRUD hot path.
@@ -1262,6 +1271,7 @@ app.get('/model/snapshot', rateLimit, (req, res) => {
         res.json({
             model,
             canonicalVersion: _canonicalVersion,
+            yamlHash: _yamlContentHash,
             config: { replicator: replicatorYaml, mma: mmaYaml },
         });
     } catch (err) {
@@ -3093,15 +3103,17 @@ function compileAndWrite(model, excludedPortNums = new Set(), opts = {}) {
     // fixed automatically rather than causing a hard failure.
     const { resolutionLog, error: conflictError } = resolveIdentityConflicts(model);
     if (conflictError) {
+        // Discard in-memory mutations (rehydration, conflict resolution) without
+        // persisting them — model.json and YAML remain at their last good state.
+        _modelCache = null;
         return { ok: false, mmaErrors: [conflictError], replicatorErrors: [], resolutionLog: [] };
     }
 
-    if (rehydrated.modified || resolutionLog.length > 0) {
-        // Write model when either rehydration produced new block state OR when conflict
-        // resolution remapped one or more status_unit_id values — both mutations must
-        // be persisted so subsequent compiles start from the resolved state.
-        writeModel(model);
-    }
+    // NOTE: writeModel() is intentionally NOT called here.
+    // model.json is only written alongside the YAML files (below) so that the two
+    // stores are always atomically consistent.  Any in-memory mutations made by
+    // rehydrateFromYaml / resolveIdentityConflicts that do not survive a failed
+    // validation are discarded by resetting _modelCache (see failure paths below).
 
     if (!skipValidation) {
         // Validate no duplicate unit_id within the same port (listener).
@@ -3132,6 +3144,8 @@ function compileAndWrite(model, excludedPortNums = new Set(), opts = {}) {
         })
         .map(p => Number(p.port));
     if (emptyPorts.length > 0) {
+        // Discard in-memory mutations without persisting them.
+        _modelCache = null;
         return {
             ok: false,
             mmaErrors: [`MMA port(s) ${emptyPorts.join(', ')} have no memory blocks — add a read on a device targeting this port before compiling`],
@@ -3147,12 +3161,29 @@ function compileAndWrite(model, excludedPortNums = new Set(), opts = {}) {
         const mmaErrors = validateMmaConfig(mmaYaml);
         const replicatorErrors = validateReplicatorConfig(replicatorYaml);
         if (mmaErrors.length > 0 || replicatorErrors.length > 0) {
+            // Discard in-memory mutations without persisting them.
+            _modelCache = null;
             return { ok: false, mmaErrors, replicatorErrors, resolutionLog, mergeLog };
         }
     }
 
+    // All validation passed — write model.json and YAML together so the two
+    // stores are always co-committed.  model.json is written here (not earlier)
+    // to guarantee it is never ahead of or behind the YAML files on disk.
+    if (rehydrated.modified || resolutionLog.length > 0) {
+        // Persist rehydration mutations (blocks, status slots, status_unit_ids)
+        // and any conflict-resolution remappings alongside the YAML write.
+        writeModel(model);
+    }
     atomicWrite(REPLICATOR_CONFIG_PATH, replicatorYaml);
     atomicWrite(MMA_CONFIG_PATH, mmaYaml);
+    // Compute a content hash of the written YAML pair so the UI can detect
+    // filesystem drift between saves (e.g. external edits or a second client).
+    _yamlContentHash = createHash('sha256')
+        .update(replicatorYaml)
+        .update('\n')
+        .update(mmaYaml)
+        .digest('hex');
     // Advance the canonical version stamp — every successful YAML write moves
     // the authoritative state forward by exactly one step.
     _canonicalVersion++;
