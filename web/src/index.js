@@ -514,7 +514,7 @@ function findGroup(model, groupId) {
 //   • leaves areas whose type is still required untouched (preserving user-set start/count)
 //
 // Safe to call with an already-mutated model before writeModel() — all changes are
-// applied in-place and _idx is kept consistent for subsequent calls in the same request.
+// applied in-place.
 function ensureTargetMemory(model, device) {
     const portNum = endpointPort(device.target_endpoint);
     if (portNum == null) return; // invalid endpoint — validation catches this separately
@@ -527,10 +527,6 @@ function ensureTargetMemory(model, device) {
     if (!port) {
         port = { id: randomUUID(), port: portNum, blocks: [], units: [] };
         model.memory.ports.push(port);
-        // Keep _idx current so subsequent ensureTargetMemory calls in the same
-        // request find this port without requiring a writeModel() round-trip.
-        _idx.portsByNumber.set(portNum, port);
-        _idx.portsById.set(port.id, port);
         console.log(`[ensureTargetMemory] Created target memory port ${portNum} for unit_id: ${unitId}`);
     }
 
@@ -1982,8 +1978,6 @@ app.post('/memory/reconcile/fix-status', (req, res) => {
         if (!port) {
             port = { id: randomUUID(), port: portNum, blocks: [], units: [] };
             model.memory.ports.push(port);
-            _idx.portsByNumber.set(portNum, port);
-            _idx.portsById.set(port.id, port);
         }
         if (!port.units) port.units = [];
 
