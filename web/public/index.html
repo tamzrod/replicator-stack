@@ -1850,7 +1850,7 @@
       <div class="row">
         <div class="field">
           <label>Target Endpoint</label>
-          <input id="ad-tgt-endpoint" type="text" placeholder="mma:502" title="MMA server address in host:port format, e.g. mma:502" required />
+          <input id="ad-tgt-endpoint" type="text" placeholder="127.0.0.1:502" title="MMA server address in host:port format, e.g. 127.0.0.1:502" required />
         </div>
         <div class="field">
           <label>MMA Unit ID <span style="color:#6B7280;font-size:.75rem;font-weight:400">(memory unit)</span></label>
@@ -2645,7 +2645,7 @@ function renderDeviceWorkspace() {
       <div class="info-field">
         <label>Target Endpoint</label>
         <input class="info-edit-input" type="text" id="ws-tgt-endpoint" value="${escapeHtml(device.target_endpoint || '')}"
-          form="ws-config-form" placeholder="e.g. mma2:501" title="MMA server address in host:port format, e.g. mma:502" required />
+          form="ws-config-form" placeholder="e.g. 127.0.0.1:502" title="MMA server address in host:port format, e.g. 127.0.0.1:502" required />
       </div>
       <div class="info-field">
         <label>Unit ID <span style="color:#9CA3AF;font-weight:400">(MMA unit)</span></label>
@@ -2947,7 +2947,7 @@ function nextMmaUnitIdForEndpoint(targetEndpoint) {
 function openAddDevice() {
   document.getElementById('add-device-form').reset();
   document.getElementById('ad-src-endpoint').value = '';
-  const defaultTarget = 'mma:502';
+  const defaultTarget = '127.0.0.1:502';
   document.getElementById('ad-tgt-endpoint').value = defaultTarget;
   document.getElementById('ad-unit').value = '1';
   document.getElementById('ad-mma-unit').value = String(nextMmaUnitIdForEndpoint(defaultTarget));
@@ -5684,7 +5684,7 @@ document.getElementById('adv-override-toggle').addEventListener('change', functi
   if (!this.checked) {
     document.getElementById('adv-mma-host').value = '';
     document.getElementById('adv-mma-port').value = '';
-    const autoLabel = document.getElementById('adv-endpoint-hint').dataset.autoLabel || 'mma:502';
+    const autoLabel = document.getElementById('adv-endpoint-hint').dataset.autoLabel || '127.0.0.1:502';
     summaryEl.textContent = `MMA Endpoint: Auto (${autoLabel})`;
   } else {
     summaryEl.textContent = 'MMA Endpoint: (override)';

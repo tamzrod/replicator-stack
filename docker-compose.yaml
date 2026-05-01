@@ -6,8 +6,7 @@ services:
     image: rodtamin/modbus-memory-appliance:2.3.4
     container_name: mma
     restart: unless-stopped
-    ports:
-      - "502:502"
+    network_mode: "host"
     volumes:
       - ./data/mma:/config
     command: ["/config/config.yaml"]
@@ -18,8 +17,6 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-    networks:
-      - replicator-net
 
   replicator:
     image: rodtamin/modbus-replicator:latest
