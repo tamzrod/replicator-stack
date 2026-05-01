@@ -6,15 +6,12 @@ services:
     image: rodtamin/modbus-memory-appliance:2.3.4
     container_name: mma
     restart: unless-stopped
-    ports:
-      - "502:502"
+    network_mode: "host"
     volumes:
       - ./data/mma:/config
     command: ["/config/config.yaml"]
     environment:
       - APP_VERSION=${APP_VERSION:-dev}
-    networks:
-      - replicator-net
     logging:
       driver: "json-file"
       options:
