@@ -2127,6 +2127,12 @@ let _currentModel = null;
 // that they are all rendering identical canonical state.
 let _canonicalVersion = null;
 
+// SHA-256 hash of the last YAML pair successfully written to disk, received from
+// the server via /model/snapshot.  Stored here so the UI can detect out-of-band
+// changes (e.g. external file edits or another client triggering a compile) by
+// comparing against the hash returned on the next snapshot fetch.
+let _lastYamlHash = null;
+
 // Last compiled YAML content received from the server as part of the snapshot.
 // The Config Viewer reads exclusively from this object — it never fetches
 // /config independently unless the user presses the manual Refresh button.
@@ -2858,7 +2864,7 @@ async function loadModel() {
     return;
   }
 
-  const { model, canonicalVersion, config } = data;
+  const { model, canonicalVersion, yamlHash, config } = data;
 
   // Capture previous snapshot BEFORE updating _currentModel so that the diff
   // compares the previously-rendered state against the freshly-fetched data.
@@ -2868,6 +2874,7 @@ async function loadModel() {
   // Advance the client-side canonical version stamp and store the compiled YAML
   // so the Config Viewer can render from the same snapshot without re-fetching.
   _canonicalVersion = canonicalVersion;
+  _lastYamlHash = yamlHash || null;
   _canonicalConfig.replicator = config ? config.replicator : null;
   _canonicalConfig.mma        = config ? config.mma        : null;
 
@@ -3218,8 +3225,9 @@ async function globalSave() {
       // Structured recovery error — pause and present options to user
       const action = await showCompileErrorDialog(data);
       if (action === 'cancel') {
-        _showGlobalSaveStatus('✗ Save cancelled — no changes applied', true);
+        _showGlobalSaveStatus('✗ Save cancelled — runtime config not updated', true);
         setCompileState('error');
+        await _bus.emit(EV.MODEL_MUTATED); // re-sync UI to actual persisted state
         return;
       }
       const resolveExcluded = data.details?.excluded_ports ?? excludedPorts;
@@ -3253,9 +3261,11 @@ async function globalSave() {
       } else if (resolveData.status === 'error') {
         _showGlobalSaveStatus(`✗ Auto-fix could not resolve all errors: ${resolveData.errorSummary || ''}`, true);
         setCompileState('error');
+        await _bus.emit(EV.MODEL_MUTATED); // re-sync UI to actual persisted state
       } else {
         _showGlobalSaveStatus(`✗ ${resolveData.error || 'Save failed'}`, true);
         setCompileState('error');
+        await _bus.emit(EV.MODEL_MUTATED); // re-sync UI to actual persisted state
       }
     } else if (data.restart_errors) {
       const errMsg = (data.restart_errors || []).join('; ');
@@ -3268,10 +3278,12 @@ async function globalSave() {
     } else {
       _showGlobalSaveStatus(`✗ ${data.error || 'Save failed'}`, true);
       setCompileState('error');
+      await _bus.emit(EV.MODEL_MUTATED); // re-sync UI to actual persisted state
     }
   } catch (err) {
     _showGlobalSaveStatus(`✗ Unexpected error: ${err.message}`, true);
     setCompileState('error');
+    try { await _bus.emit(EV.MODEL_MUTATED); } catch (_) { /* best-effort re-sync */ }
   } finally {
     btn.textContent = '💾 Save';
     btn.removeAttribute('aria-busy');
