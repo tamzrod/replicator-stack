@@ -915,7 +915,9 @@ app.post('/memory/port/:portId/unit/:unitId/area/:areaId/segment', (req, res) =>
         const area = (unit.areas || []).find(a => a.id === areaId);
         if (!area) return res.status(404).json({ error: `Area ${areaId} not found on unit ${unitId}` });
         if (!Array.isArray(area.segments)) area.segments = [];
-        area.segments.push({ start, count });
+        const newSeg = { start, count };
+        if (segment.name !== undefined) newSeg.name = String(segment.name).trim() || undefined;
+        area.segments.push(newSeg);
         writeModel(model);
         scheduleCompile();
         res.status(201).json({ ok: true, segmentIndex: area.segments.length - 1 });
@@ -956,6 +958,14 @@ app.put('/memory/port/:portId/unit/:unitId/area/:areaId/segment/:segIdx', (req, 
                 return res.status(400).json({ error: 'segment.count must be a positive integer' });
             }
             area.segments[idx].count = count;
+        }
+        if (segment.name !== undefined) {
+            const name = String(segment.name).trim();
+            if (name) {
+                area.segments[idx].name = name;
+            } else {
+                delete area.segments[idx].name;
+            }
         }
         writeModel(model);
         scheduleCompile();
