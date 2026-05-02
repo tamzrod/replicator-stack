@@ -1,6 +1,7 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const net = require('net');
 const { randomUUID, randomBytes } = require('crypto');
 
 const { _sessions, SESSION_TTL_MS, SALT_BYTES, hashPassword, verifyPassword, readAuth, writeAuth, parseCookies, requireAuth } = require('./services/authService');
@@ -2310,6 +2311,53 @@ app.post('/runtime/apply-restart', async (req, res) => {
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
+});
+
+// POST /test-connection — TCP reachability check (no Modbus payload).
+// Body: { endpoint: "host:port" }
+// Response: { success: boolean, latency_ms?: number, error?: string }
+app.post('/test-connection', (req, res) => {
+    const { endpoint } = req.body || {};
+    if (!endpoint || typeof endpoint !== 'string') {
+        return res.status(400).json({ success: false, error: 'endpoint is required' });
+    }
+    const lastColon = endpoint.lastIndexOf(':');
+    if (lastColon < 1) {
+        return res.status(400).json({ success: false, error: 'Invalid endpoint format — expected host:port' });
+    }
+    const host = endpoint.slice(0, lastColon);
+    const port = Number(endpoint.slice(lastColon + 1));
+    if (!host || !Number.isFinite(port) || port < 1 || port > 65535) {
+        return res.status(400).json({ success: false, error: 'Invalid endpoint format — expected host:port' });
+    }
+
+    const TIMEOUT_MS = 3000;
+    const start = Date.now();
+    const socket = new net.Socket();
+    let settled = false;
+
+    function finish(success, error) {
+        if (settled) return;
+        settled = true;
+        socket.destroy();
+        const latency_ms = Date.now() - start;
+        if (success) {
+            res.json({ success: true, latency_ms });
+        } else {
+            res.json({ success: false, latency_ms, error });
+        }
+    }
+
+    socket.setTimeout(TIMEOUT_MS);
+    socket.connect(port, host, () => finish(true, null));
+    socket.on('error', (err) => {
+        const msg = err.code === 'ECONNREFUSED' ? 'Connection refused'
+            : err.code === 'ENOTFOUND'     ? 'DNS resolution failed'
+            : err.code === 'ETIMEDOUT'     ? 'Connection timed out'
+            : err.message;
+        finish(false, msg);
+    });
+    socket.on('timeout', () => finish(false, 'Connection timed out'));
 });
 
 discoverVersion().finally(() => {
