@@ -4199,6 +4199,7 @@ function renderUnit(portId, unit) {
           <div class="mem-segs-edit" data-area-id="${escapeHtml(area.id)}">
             ${renderSegmentsTable(portId, unitDbIdEsc, area.id, segs, area.type)}
           </div>
+          <div class="mem-seg-overlap-banner" style="display:none;color:#EF4444;font-size:.75rem;padding:4px 0;font-weight:500"></div>
           <form class="mem-add-seg-form" data-port-id="${escapeHtml(portId)}" data-unit-id="${unitDbIdEsc}" data-area-id="${escapeHtml(area.id)}"
             style="display:flex;align-items:flex-end;gap:6px;flex-wrap:wrap;padding-top:6px;border-top:1px dashed #E5E7EB">
             <div class="field" style="display:flex;flex-direction:column;gap:2px">
@@ -4801,6 +4802,54 @@ function _attachMemoryTabHandlers(container) {
     });
   });
 
+  // ── Segment overlap detection ─────────────────────────────────────────
+  // Reads current DOM values from a .mem-seg-table and returns a Set of
+  // row indices that are involved in at least one overlap.
+  // Also updates the inline overlap banner.
+  function _checkSegmentOverlaps(tableEl) {
+    const editSection = tableEl.closest('.mem-area-edit');
+    const banner = editSection ? editSection.querySelector('.mem-seg-overlap-banner') : null;
+    const rows = Array.from(tableEl.querySelectorAll('.mem-seg-row'));
+    const entries = rows.map((row, i) => {
+      const start = Number(row.querySelector('.mem-seg-start')?.value ?? NaN);
+      const count = Number(row.querySelector('.mem-seg-count')?.value ?? NaN);
+      const nameEl = row.querySelector('.mem-seg-name');
+      const label = (nameEl?.value?.trim()) || `segment ${i}`;
+      return { i, label, start, end: Number.isFinite(start) && Number.isFinite(count) && count >= 1 ? start + count - 1 : NaN };
+    });
+
+    const badSet = new Set();
+    const sorted = entries.filter(e => !isNaN(e.end)).slice().sort((a, b) => a.start - b.start || a.end - b.end);
+    let firstMsg = null;
+    for (let k = 0; k < sorted.length - 1; k++) {
+      if (sorted[k].end >= sorted[k + 1].start) {
+        badSet.add(sorted[k].i);
+        badSet.add(sorted[k + 1].i);
+        if (!firstMsg) firstMsg = `⚠ Segment "${sorted[k].label}" overlaps with segment "${sorted[k + 1].label}"`;
+      }
+    }
+
+    // Highlight rows
+    rows.forEach((row, i) => {
+      row.style.background = badSet.has(i) ? '#FEF2F2' : '';
+      row.querySelectorAll('.mem-seg-start, .mem-seg-count').forEach(inp => {
+        inp.style.borderColor = badSet.has(i) ? '#EF4444' : '';
+      });
+    });
+
+    if (banner) {
+      if (firstMsg) {
+        banner.textContent = firstMsg;
+        banner.style.display = 'block';
+      } else {
+        banner.textContent = '';
+        banner.style.display = 'none';
+      }
+    }
+
+    return badSet;
+  }
+
   // ── Save individual segment (start/count/name on change) ────────────────────
   async function _saveSegment(inp) {
     const portId  = inp.dataset.portId;
@@ -4815,6 +4864,14 @@ function _attachMemoryTabHandlers(container) {
     const start   = Number(startEl.value);
     const count   = Number(countEl.value);
     if (!Number.isFinite(start) || start < 0 || !Number.isFinite(count) || count < 1) return;
+
+    // Block save if any overlap exists in the current table
+    const tableEl = row.closest('.mem-seg-table');
+    if (tableEl) {
+      const badSet = _checkSegmentOverlaps(tableEl);
+      if (badSet.size > 0) return; // overlap banner already shown
+    }
+
     const segment = { start, count, name: nameEl?.value };
     const { ok, data } = await api(
       'PUT',
@@ -4832,6 +4889,13 @@ function _attachMemoryTabHandlers(container) {
 
   container.querySelectorAll('.mem-seg-start, .mem-seg-count, .mem-seg-name').forEach(inp => {
     inp.addEventListener('change', () => _saveSegment(inp));
+    // Real-time overlap highlight (no save)
+    if (inp.classList.contains('mem-seg-start') || inp.classList.contains('mem-seg-count')) {
+      inp.addEventListener('input', () => {
+        const tableEl = inp.closest('.mem-seg-table');
+        if (tableEl) _checkSegmentOverlaps(tableEl);
+      });
+    }
   });
 
   // ── Delete segment ───────────────────────────────────────────────────
@@ -4873,6 +4937,27 @@ function _attachMemoryTabHandlers(container) {
         banner.textContent = '✗ Count must be ≥ 1';
         banner.className = 'mem-seg-banner banner show err';
         return;
+      }
+      // Pre-flight overlap check: test new segment against existing DOM rows
+      const editSection = form.closest('.mem-area-edit');
+      const tableEl = editSection ? editSection.querySelector('.mem-seg-table') : null;
+      if (tableEl) {
+        const rows = Array.from(tableEl.querySelectorAll('.mem-seg-row'));
+        const newEnd = start + count - 1;
+        const newLabel = name || `segment ${rows.length}`;
+        for (let i = 0; i < rows.length; i++) {
+          const s = Number(rows[i].querySelector('.mem-seg-start')?.value ?? NaN);
+          const c = Number(rows[i].querySelector('.mem-seg-count')?.value ?? NaN);
+          if (!Number.isFinite(s) || !Number.isFinite(c) || c < 1) continue;
+          const end = s + c - 1;
+          const nameEl = rows[i].querySelector('.mem-seg-name');
+          const rowLabel = (nameEl?.value?.trim()) || `segment ${i}`;
+          if (start <= end && newEnd >= s) {
+            banner.textContent = `✗ "${newLabel}" overlaps with "${rowLabel}"`;
+            banner.className = 'mem-seg-banner banner show err';
+            return;
+          }
+        }
       }
       const { ok, data } = await api(
         'POST',
