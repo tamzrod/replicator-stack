@@ -1175,6 +1175,87 @@
       margin-bottom: 6px;
     }
 
+    /* ── Access Control (Policy) info tooltip ───────────────────────── */
+    .mem-policy-title-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+    .mem-policy-title-row .mem-adv-section-title {
+      margin-bottom: 0;
+    }
+    .mem-policy-info-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: none;
+      border: none;
+      padding: 0 2px;
+      cursor: pointer;
+      font-size: .85rem;
+      color: #9CA3AF;
+      line-height: 1;
+      border-radius: 50%;
+      transition: color .15s;
+    }
+    .mem-policy-info-btn:hover,
+    .mem-policy-info-btn:focus-visible {
+      color: #6366F1;
+      outline: 2px solid #A5B4FC;
+      outline-offset: 1px;
+    }
+    .mem-policy-tooltip-wrap {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+    }
+    .mem-policy-tooltip {
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0;
+      z-index: 9999;
+      width: 320px;
+      max-width: calc(100vw - 24px);
+      background: #fff;
+      border: 1px solid #E5E7EB;
+      border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(0,0,0,.12);
+      padding: 12px 14px;
+      font-size: .76rem;
+      color: #374151;
+      line-height: 1.5;
+    }
+    .mem-policy-tooltip-title {
+      font-size: .72rem;
+      font-weight: 700;
+      color: #111827;
+      margin-bottom: 8px;
+      letter-spacing: .01em;
+    }
+    .mem-policy-tooltip ul {
+      margin: 6px 0 6px 4px;
+      padding: 0;
+      list-style: none;
+    }
+    .mem-policy-tooltip ul li {
+      padding-left: 14px;
+      position: relative;
+      margin-bottom: 2px;
+    }
+    .mem-policy-tooltip ul li::before {
+      content: "•";
+      position: absolute;
+      left: 0;
+      color: #6B7280;
+    }
+    .mem-policy-tooltip p {
+      margin: 4px 0;
+    }
+    .mem-policy-tooltip strong {
+      color: #111827;
+    }
+
     /* ── Open-access risk indicator ─────────────────────────────────── */
     .mem-open-access-badge {
       display: inline-flex;
@@ -4446,7 +4527,31 @@ function renderUnit(portId, unit) {
 
       <hr class="mem-adv-divider" />
 
-      <div class="mem-adv-section-title">Access Control (Policy)</div>
+      <div class="mem-policy-title-row">
+        <div class="mem-adv-section-title">Access Control (Policy)</div>
+        <div class="mem-policy-tooltip-wrap">
+          <button type="button" class="mem-policy-info-btn"
+            aria-label="Deployment info"
+            data-policy-info-btn="${unitDbIdEsc}">ⓘ</button>
+          <div class="mem-policy-tooltip" data-policy-tooltip="${unitDbIdEsc}" style="display:none" role="tooltip" aria-hidden="true" tabindex="-1">
+            <div class="mem-policy-tooltip-title">Deployment Note (Docker Networking &amp; Windows NAT)</div>
+            <p>When running inside Docker on Windows, inbound connections pass through a NAT layer. This may cause the source IP to appear as the Docker gateway instead of the real client.</p>
+            <p><strong>Windows (Docker Desktop)</strong></p>
+            <ul>
+              <li>Uses NAT; source IP may be masked</li>
+              <li>0.0.0.0/0 is often required</li>
+              <li>IP filtering may not behave as expected</li>
+            </ul>
+            <p><strong>Linux (Docker Engine)</strong></p>
+            <ul>
+              <li>Supports host networking</li>
+              <li>Real client IP is preserved</li>
+              <li>IP filtering works as expected</li>
+            </ul>
+            <p><strong>Recommendation:</strong><br>Use Linux host networking for strict access control.<br>On Windows, rely on firewall rules instead.</p>
+          </div>
+        </div>
+      </div>
       <div class="mem-policy-enable-row">
         <label class="mem-seal-toggle-label">
           <input type="checkbox" class="mem-policy-enable"
@@ -4634,6 +4739,54 @@ function _attachMemoryTabHandlers(container) {
       }
     });
   });
+
+  // ── Policy info tooltip (click-to-open, Esc/outside to close) ───────
+  container.querySelectorAll('[data-policy-info-btn]').forEach(btn => {
+    const unitId = btn.dataset.policyInfoBtn;
+    const tooltip = container.querySelector(`[data-policy-tooltip="${unitId}"]`);
+    if (!tooltip) return;
+
+    function openTooltip() {
+      tooltip.style.display = 'block';
+      tooltip.setAttribute('aria-hidden', 'false');
+      btn.setAttribute('aria-expanded', 'true');
+    }
+    function closeTooltip() {
+      tooltip.style.display = 'none';
+      tooltip.setAttribute('aria-hidden', 'true');
+      btn.setAttribute('aria-expanded', 'false');
+    }
+    function isOpen() { return tooltip.style.display !== 'none'; }
+
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      isOpen() ? closeTooltip() : openTooltip();
+    });
+    btn.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        isOpen() ? closeTooltip() : openTooltip();
+      } else if (e.key === 'Escape') {
+        closeTooltip();
+        btn.focus();
+      }
+    });
+    tooltip.addEventListener('click', e => e.stopPropagation());
+    tooltip.addEventListener('keydown', e => {
+      if (e.key === 'Escape') { closeTooltip(); btn.focus(); }
+    });
+  });
+
+  // Close any open policy tooltips when clicking outside
+  document.addEventListener('click', () => {
+    container.querySelectorAll('[data-policy-tooltip]').forEach(t => {
+      t.style.display = 'none';
+      t.setAttribute('aria-hidden', 'true');
+      const unitId = t.dataset.policyTooltip;
+      const btn = container.querySelector(`[data-policy-info-btn="${unitId}"]`);
+      if (btn) btn.setAttribute('aria-expanded', 'false');
+    });
+  }, { capture: false });
 
   // ── Policy enable toggle ─────────────────────────────────────────────
   container.querySelectorAll('.mem-policy-enable').forEach(chk => {
