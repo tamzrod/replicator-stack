@@ -1959,7 +1959,9 @@ app.post('/config/global-import', rateLimit, (req, res) => {
             importedModel.system = {};
         }
 
-        // Ensure memory ports have the required units[] array (added in later schema versions)
+        // Ensure memory ports have the required blocks[] and units[] arrays.
+        // blocks[] is the auto-derived list populated by rehydrateFromYaml on compile.
+        // units[] is the manual unit-based config layer introduced in a later schema version.
         for (const port of importedModel.memory.ports) {
             if (!Array.isArray(port.blocks)) port.blocks = [];
             if (!Array.isArray(port.units))  port.units  = [];
