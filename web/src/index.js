@@ -900,7 +900,7 @@ function checkSegmentOverlaps(segments) {
     if (!Array.isArray(segments) || segments.length < 2) return null;
     const tagged = segments.map((s, i) => ({
         i,
-        label: s.name || `segment ${i}`,
+        label: s.name || `HR_${i}`,
         start: s.start,
         end: s.start + s.count - 1,
     })).sort((x, y) => x.start - y.start || x.end - y.end);

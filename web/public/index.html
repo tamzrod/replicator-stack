@@ -4116,7 +4116,7 @@ function renderUnit(portId, unit) {
             data-port-id="${escapeHtml(portId)}" data-unit-id="${escapeHtml(unitDbId)}"
             data-area-id="${escapeHtml(areaId)}" data-seg-idx="${i}" style="width:70px" />
         </td>
-        <td style="color:#6B7280;font-size:.72rem">${seg.start}–${seg.start + seg.count - 1}</td>
+        <td class="mem-seg-range" style="color:#6B7280;font-size:.72rem">${seg.start}–${seg.start + seg.count - 1}</td>
         <td>
           <button class="btn-mem-danger mem-del-segment" style="font-size:.7rem;padding:2px 6px"
             data-port-id="${escapeHtml(portId)}" data-unit-id="${escapeHtml(unitDbId)}"
@@ -4814,7 +4814,7 @@ function _attachMemoryTabHandlers(container) {
       const start = Number(row.querySelector('.mem-seg-start')?.value ?? NaN);
       const count = Number(row.querySelector('.mem-seg-count')?.value ?? NaN);
       const nameEl = row.querySelector('.mem-seg-name');
-      const label = (nameEl?.value?.trim()) || `segment ${i}`;
+      const label = (nameEl?.value?.trim()) || `HR_${i}`;
       return { i, label, start, end: Number.isFinite(start) && Number.isFinite(count) && count >= 1 ? start + count - 1 : NaN };
     });
 
@@ -4879,8 +4879,8 @@ function _attachMemoryTabHandlers(container) {
       { segment }
     );
     if (!ok) { alert(`Error: ${data.error || 'Unknown error'}`); return; }
-    // Update the range preview cell (now column 4 with Name added as col 1)
-    const rangeCell = row.querySelector('td:nth-child(4)');
+    // Update the range preview cell
+    const rangeCell = row.querySelector('.mem-seg-range');
     if (rangeCell) rangeCell.textContent = `${start}–${start + count - 1}`;
     setDirty(true);
     _appendMmaLog(`[memory] Segment updated — start:${start} count:${count}`);
@@ -4944,16 +4944,15 @@ function _attachMemoryTabHandlers(container) {
       if (tableEl) {
         const rows = Array.from(tableEl.querySelectorAll('.mem-seg-row'));
         const newEnd = start + count - 1;
-        const newLabel = name || `segment ${rows.length}`;
         for (let i = 0; i < rows.length; i++) {
           const s = Number(rows[i].querySelector('.mem-seg-start')?.value ?? NaN);
           const c = Number(rows[i].querySelector('.mem-seg-count')?.value ?? NaN);
           if (!Number.isFinite(s) || !Number.isFinite(c) || c < 1) continue;
           const end = s + c - 1;
           const nameEl = rows[i].querySelector('.mem-seg-name');
-          const rowLabel = (nameEl?.value?.trim()) || `segment ${i}`;
+          const rowLabel = (nameEl?.value?.trim()) || `HR_${i}`;
           if (start <= end && newEnd >= s) {
-            banner.textContent = `✗ "${newLabel}" overlaps with "${rowLabel}"`;
+            banner.textContent = `✗ "${name || 'new segment'}" overlaps with "${rowLabel}"`;
             banner.className = 'mem-seg-banner banner show err';
             return;
           }
