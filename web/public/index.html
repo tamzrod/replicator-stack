@@ -4109,11 +4109,11 @@ function renderUnit(portId, unit) {
       </div>
       <div class="mem-unit-actions" onclick="event.stopPropagation()">
         <!-- View mode -->
-        <div class="mem-unit-id-view">
+        <div class="mem-unit-id-view" data-orig-unit-id="${unitIdEsc}">
           <label style="font-size:.72rem;color:#6B7280;white-space:nowrap">unit_id:</label>
           <span class="mem-unit-id-display mem-unit-id-badge">${unitIdEsc}</span>
           <button class="btn-mem-sm mem-edit-unit-id"
-            data-unit-id="${unitDbIdEsc}" title="Edit unit_id">✏</button>
+            data-port-id="${escapeHtml(portId)}" data-unit-id="${unitDbIdEsc}" title="Edit unit_id">✏</button>
         </div>
         <!-- Edit mode (hidden by default) -->
         <div class="mem-unit-id-editrow">
@@ -4451,10 +4451,9 @@ function _attachMemoryTabHandlers(container) {
       if (!card) return;
       const viewDiv = card.querySelector('.mem-unit-id-view');
       const editDiv = card.querySelector('.mem-unit-id-editrow');
-      // Restore original value from the view display span
-      const display = viewDiv && viewDiv.querySelector('.mem-unit-id-display');
+      // Restore original value from the stored data attribute
       const inp = editDiv && editDiv.querySelector('.mem-unit-id-edit');
-      if (inp && display) inp.value = display.textContent;
+      if (inp && viewDiv) inp.value = viewDiv.dataset.origUnitId;
       if (editDiv) editDiv.style.display = 'none';
       if (viewDiv) viewDiv.style.display = 'flex';
     });
