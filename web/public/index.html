@@ -2381,18 +2381,15 @@ function _snapshotMemory(model) {
   const ports = (model.memory && model.memory.ports) || [];
   return ports.map(p => {
     const units = (p.units || []).map(u => {
-      const areas = (u.areas || []).map(a =>
-        `${a.id}:${a.type}:${a.start}:${a.count}`
-      ).join(',');
+      const areas = (u.areas || []).map(a => {
+        const segs = (a.segments || []).map(s => `${s.start}:${s.count}`).join('+');
+        return `${a.id}:${a.type}:${segs}:${a.mode || ''}`;
+      }).join(',');
       const seal  = u.state_sealing ? JSON.stringify(u.state_sealing) : '';
       const pol   = u.policy ? JSON.stringify(u.policy) : '';
       return `${u.id}:${u.unit_id}:[${areas}]:${seal}:${pol}`;
     }).join(';');
     // Include a compact block fingerprint: unit_id:area:address:count per block.
-    // New UUIDs are assigned on every compile so we key on content, not id.
-    // Assumption: rehydrateFromYaml() produces at most one block per
-    // (unit_id, area) combination per port (unified min→max range), so this
-    // four-field tuple is sufficient to uniquely identify each auto-derived block.
     // Blocks are sorted so insertion-order differences don't trigger false positives.
     const blocks = (p.blocks || []).map(b =>
       `${b.unit_id}:${b.area}:${b.address}:${b.count}`
@@ -4094,62 +4091,119 @@ function renderMemoryTab(data) {
 }
 
 function renderUnit(portId, unit) {
-  // Sort areas by canonical type order so same-type entries are grouped together
-  // and the display matches the MMA config output (one entry per area type).
+  // Sort areas by canonical type order so same-type entries are grouped together.
   const AREA_TYPE_ORDER = Object.keys(AREA_TYPE_LABELS);
   const areas = [...(unit.areas || [])].sort((a, b) =>
     AREA_TYPE_ORDER.indexOf(a.type) - AREA_TYPE_ORDER.indexOf(b.type));
   const unitIdEsc = escapeHtml(String(unit.unit_id));
   const unitDbIdEsc = escapeHtml(unit.id);
 
+  function renderSegmentsTable(portId, unitDbId, areaId, segments, areaType) {
+    const rows = (segments || []).map((seg, i) => `
+      <tr class="mem-seg-row" data-seg-idx="${i}">
+        <td>
+          <input class="mem-seg-start inline-input" type="number" min="0" value="${escapeHtml(String(seg.start))}"
+            data-port-id="${escapeHtml(portId)}" data-unit-id="${escapeHtml(unitDbId)}"
+            data-area-id="${escapeHtml(areaId)}" data-seg-idx="${i}" style="width:80px" />
+        </td>
+        <td>
+          <input class="mem-seg-count inline-input" type="number" min="1" value="${escapeHtml(String(seg.count))}"
+            data-port-id="${escapeHtml(portId)}" data-unit-id="${escapeHtml(unitDbId)}"
+            data-area-id="${escapeHtml(areaId)}" data-seg-idx="${i}" style="width:70px" />
+        </td>
+        <td style="color:#6B7280;font-size:.72rem">${seg.start}–${seg.start + seg.count - 1}</td>
+        <td>
+          <button class="btn-mem-danger mem-del-segment" style="font-size:.7rem;padding:2px 6px"
+            data-port-id="${escapeHtml(portId)}" data-unit-id="${escapeHtml(unitDbId)}"
+            data-area-id="${escapeHtml(areaId)}" data-seg-idx="${i}" title="Remove segment">✕</button>
+        </td>
+      </tr>`).join('');
+
+    return `<table class="mem-seg-table" style="width:100%;border-collapse:collapse;font-size:.8rem">
+      <thead>
+        <tr style="color:#6B7280;font-size:.7rem">
+          <th style="text-align:left;padding:2px 4px">Start</th>
+          <th style="text-align:left;padding:2px 4px">Count</th>
+          <th style="text-align:left;padding:2px 4px">Range</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+  }
+
   const areasHtml = areas.length === 0
     ? `<div class="empty-state" style="padding:6px 0;font-size:.78rem">No areas — add one below.</div>`
-    : areas.map(area => `
+    : areas.map(area => {
+        const segs = area.segments || [];
+        const modeTag = area.mode === 'merged'
+          ? `<span style="font-size:.65rem;color:#D97706;background:#FEF3C7;padding:1px 5px;border-radius:3px;margin-left:6px">merged</span>`
+          : (segs.length > 1 ? `<span style="font-size:.65rem;color:#2563EB;background:#EFF6FF;padding:1px 5px;border-radius:3px;margin-left:6px">${segs.length} segments</span>` : '');
+        return `
       <div class="mem-area-row" data-area-id="${escapeHtml(area.id)}"
-        data-orig-type="${escapeHtml(area.type)}"
-        data-orig-start="${escapeHtml(String(area.start))}"
-        data-orig-count="${escapeHtml(String(area.count))}">
+        data-orig-type="${escapeHtml(area.type)}">
         <!-- View mode -->
-        <div class="mem-area-view">
-          <span class="mem-area-type-label">${escapeHtml(AREA_TYPE_LABELS[area.type] || area.type)}</span>
-          <span class="mem-area-view-val">Start: <strong>${escapeHtml(String(area.start))}</strong></span>
-          <span class="mem-area-view-val">Count: <strong>${escapeHtml(String(area.count))}</strong></span>
-          <button class="btn-mem-sm mem-edit-area" style="margin-left:auto"
-            data-area-id="${escapeHtml(area.id)}" title="Edit this area">✏ Edit</button>
-          <button class="btn-mem-danger mem-del-area"
-            data-port-id="${escapeHtml(portId)}" data-unit-id="${unitDbIdEsc}" data-area-id="${escapeHtml(area.id)}"
-            title="Remove this area">✕</button>
+        <div class="mem-area-view" style="flex-direction:column;align-items:flex-start;gap:6px">
+          <div style="display:flex;align-items:center;width:100%;gap:8px">
+            <span class="mem-area-type-label">${escapeHtml(AREA_TYPE_LABELS[area.type] || area.type)}</span>
+            ${modeTag}
+            <div style="display:flex;gap:6px;margin-left:auto">
+              ${segs.length > 1 ? `<button class="btn-mem-sm mem-merge-segments" style="font-size:.7rem;padding:3px 8px"
+                data-port-id="${escapeHtml(portId)}" data-unit-id="${unitDbIdEsc}" data-area-id="${escapeHtml(area.id)}"
+                title="Merge all segments into one">⊕ Merge</button>` : ''}
+              <button class="btn-mem-sm mem-edit-area" style="font-size:.7rem;padding:3px 8px"
+                data-area-id="${escapeHtml(area.id)}" title="Edit segments">✏ Edit</button>
+              <button class="btn-mem-danger mem-del-area"
+                data-port-id="${escapeHtml(portId)}" data-unit-id="${unitDbIdEsc}" data-area-id="${escapeHtml(area.id)}"
+                style="font-size:.7rem;padding:3px 8px" title="Remove this area">✕</button>
+            </div>
+          </div>
+          <div class="mem-segs-view" style="width:100%">
+            ${segs.length === 0
+              ? '<span style="color:#9CA3AF;font-size:.75rem">No segments</span>'
+              : segs.map(seg => `<span style="display:inline-block;background:#F3F4F6;border:1px solid #E5E7EB;border-radius:3px;padding:1px 6px;margin:1px;font-size:.75rem"><code>${seg.start}–${seg.start + seg.count - 1}</code> <span style="color:#6B7280">(${seg.count})</span></span>`).join('')}
+          </div>
         </div>
         <!-- Edit mode (hidden by default) -->
-        <div class="mem-area-edit">
-          <div class="mem-area-field" style="flex:2;min-width:140px">
-            <label>Area Type</label>
-            <select class="mem-area-type-sel" data-port-id="${escapeHtml(portId)}" data-unit-id="${unitDbIdEsc}" data-area-id="${escapeHtml(area.id)}">
-              ${Object.entries(AREA_TYPE_LABELS).map(([v, l]) =>
-                `<option value="${v}"${area.type === v ? ' selected' : ''}>${l}</option>`
-              ).join('')}
-            </select>
+        <div class="mem-area-edit" style="flex-direction:column;gap:8px">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <div class="mem-area-field" style="flex:2;min-width:140px">
+              <label>Area Type</label>
+              <select class="mem-area-type-sel" data-port-id="${escapeHtml(portId)}" data-unit-id="${unitDbIdEsc}" data-area-id="${escapeHtml(area.id)}">
+                ${Object.entries(AREA_TYPE_LABELS).map(([v, l]) =>
+                  `<option value="${v}"${area.type === v ? ' selected' : ''}>${l}</option>`
+                ).join('')}
+              </select>
+            </div>
+            <button class="btn-mem-sm mem-save-area-type"
+              data-port-id="${escapeHtml(portId)}" data-unit-id="${unitDbIdEsc}" data-area-id="${escapeHtml(area.id)}"
+              style="align-self:flex-end;margin-bottom:1px">✔ Save Type</button>
+            <button class="btn-mem-sm mem-cancel-area"
+              data-area-id="${escapeHtml(area.id)}"
+              style="align-self:flex-end;margin-bottom:1px;background:#F3F4F6;color:#374151">✖ Done</button>
           </div>
-          <div class="mem-area-field" style="max-width:100px">
-            <label>Start Addr</label>
-            <input class="mem-area-start-inp" type="number" min="0" value="${escapeHtml(String(area.start))}"
-              data-port-id="${escapeHtml(portId)}" data-unit-id="${unitDbIdEsc}" data-area-id="${escapeHtml(area.id)}" />
+          <div style="font-size:.72rem;font-weight:700;color:#6B7280;text-transform:uppercase;margin-top:4px">Segments</div>
+          <div class="mem-segs-edit" data-area-id="${escapeHtml(area.id)}">
+            ${renderSegmentsTable(portId, unitDbIdEsc, area.id, segs, area.type)}
           </div>
-          <div class="mem-area-field" style="max-width:90px">
-            <label>Count</label>
-            <input class="mem-area-count-inp" type="number" min="1" value="${escapeHtml(String(area.count))}"
-              data-port-id="${escapeHtml(portId)}" data-unit-id="${unitDbIdEsc}" data-area-id="${escapeHtml(area.id)}" />
-          </div>
-          <button class="btn-mem-sm mem-save-area"
-            data-port-id="${escapeHtml(portId)}" data-unit-id="${unitDbIdEsc}" data-area-id="${escapeHtml(area.id)}"
-            style="align-self:flex-end;margin-bottom:1px">✔ Save</button>
-          <button class="btn-mem-sm mem-cancel-area"
-            data-area-id="${escapeHtml(area.id)}"
-            style="align-self:flex-end;margin-bottom:1px;background:#F3F4F6;color:#374151">✖ Cancel</button>
+          <form class="mem-add-seg-form" data-port-id="${escapeHtml(portId)}" data-unit-id="${unitDbIdEsc}" data-area-id="${escapeHtml(area.id)}"
+            style="display:flex;align-items:flex-end;gap:6px;flex-wrap:wrap;padding-top:6px;border-top:1px dashed #E5E7EB">
+            <div class="field" style="display:flex;flex-direction:column;gap:2px">
+              <label style="font-size:.65rem;font-weight:700;color:#6B7280;text-transform:uppercase">Start</label>
+              <input class="mem-new-seg-start" type="number" min="0" value="0" style="width:80px;font-size:.82rem;padding:3px 6px;border:1px solid #D1D5DB;border-radius:4px" />
+            </div>
+            <div class="field" style="display:flex;flex-direction:column;gap:2px">
+              <label style="font-size:.65rem;font-weight:700;color:#6B7280;text-transform:uppercase">Count</label>
+              <input class="mem-new-seg-count" type="number" min="1" value="10" style="width:70px;font-size:.82rem;padding:3px 6px;border:1px solid #D1D5DB;border-radius:4px" />
+            </div>
+            <button type="submit" class="btn-mem-sm" style="align-self:flex-end;margin-bottom:1px">+ Add Segment</button>
+            <span class="mem-seg-banner banner" style="font-size:.75rem;align-self:flex-end"></span>
+          </form>
         </div>
-      </div>`).join('');
+      </div>`;
+      }).join('');
 
-  // Add-area inline form
+  // Add-area inline form (creates area with initial segment)
   const addAreaForm = `
     <form class="mem-add-area-form" data-port-id="${escapeHtml(portId)}" data-unit-id="${unitDbIdEsc}">
       <div class="field">
@@ -4354,21 +4408,25 @@ function _attachMemoryTabHandlers(container) {
           return;
         }
 
-        // Validate address is within the coils area for this unit
+        // Validate address is within at least one segment of the coils area for this unit
         const unitCard = container.querySelector(`.mem-unit-card[data-unit-id="${unitId}"]`);
-        const coilsRow = unitCard && [...unitCard.querySelectorAll('.mem-area-row')].find(row => {
-          const sel = row.querySelector('.mem-area-type-sel');
-          return sel && sel.value === 'coils';
-        });
-        if (!coilsRow) {
+        // Find the coils area from the live model rather than DOM inputs.
+        const currentPort = _currentModel && (_currentModel.memory && _currentModel.memory.ports || [])
+          .find(p => (p.units || []).some(u => u.id === unitId));
+        const currentUnit = currentPort && (currentPort.units || []).find(u => u.id === unitId);
+        const coilsArea = currentUnit && (currentUnit.areas || []).find(a => a.type === 'coils');
+        if (!coilsArea) {
           banner.textContent = '✗ State sealing requires a Coils area to be defined for this unit';
           banner.className = 'mem-adv-banner banner show err';
           return;
         }
-        const coilStart = Number(coilsRow.querySelector('.mem-area-start-inp').value);
-        const coilCount = Number(coilsRow.querySelector('.mem-area-count-inp').value);
-        if (addr < coilStart || addr >= coilStart + coilCount) {
-          banner.textContent = `✗ Address ${addr} is outside the coils area (${coilStart}–${coilStart + coilCount - 1})`;
+        const coveredBySegment = (coilsArea.segments || []).some(seg => {
+          const sStart = Number(seg.start);
+          return addr >= sStart && addr < sStart + Number(seg.count);
+        });
+        if (!coveredBySegment) {
+          const ranges = (coilsArea.segments || []).map(s => `${s.start}–${s.start + s.count - 1}`).join(', ');
+          banner.textContent = `✗ Address ${addr} is outside all coils segments (${ranges || 'none'})`;
           banner.className = 'mem-adv-banner banner show err';
           return;
         }
@@ -4638,7 +4696,7 @@ function _attachMemoryTabHandlers(container) {
       const { ok, data } = await api(
         'POST',
         `/memory/port/${encodeURIComponent(portId)}/unit/${encodeURIComponent(unitId)}/area`,
-        { area: { type, start, count } }
+        { area: { type, segments: [{ start, count }] } }
       );
       if (ok) {
         _appendMmaLog(`[memory] Memory area added — ${type} start:${start} count:${count}`);
@@ -4665,50 +4723,33 @@ function _attachMemoryTabHandlers(container) {
     });
   });
 
-  // ── Save area ────────────────────────────────────────────────────────
-  container.querySelectorAll('.mem-save-area').forEach(btn => {
+  // ── Save area type change ────────────────────────────────────────────
+  container.querySelectorAll('.mem-save-area-type').forEach(btn => {
     btn.addEventListener('click', async () => {
       const portId = btn.dataset.portId;
       const unitId = btn.dataset.unitId;
       const areaId = btn.dataset.areaId;
       const row = container.querySelector(`.mem-area-row[data-area-id="${areaId}"]`);
       if (!row) return;
-      const editDiv = row.querySelector('.mem-area-edit');
-
-      const typeEl  = editDiv.querySelector('.mem-area-type-sel');
-      const startEl = editDiv.querySelector('.mem-area-start-inp');
-      const countEl = editDiv.querySelector('.mem-area-count-inp');
-
-      const newType  = typeEl.value;
-      const newStart = Number(startEl.value);
-      const newCount = Number(countEl.value);
-
-      const patch = {};
-      if (newType  !== row.dataset.origType)          patch.type  = newType;
-      if (newStart !== Number(row.dataset.origStart)) patch.start = newStart;
-      if (newCount !== Number(row.dataset.origCount)) patch.count = newCount;
-
-      if (Object.keys(patch).length === 0) {
-        // No changes — just exit edit mode
-        editDiv.style.display = 'none';
+      const typeEl = row.querySelector('.mem-area-type-sel');
+      const newType = typeEl && typeEl.value;
+      if (!newType || newType === row.dataset.origType) {
+        // No type change — just exit edit mode
+        row.querySelector('.mem-area-edit').style.display = 'none';
         row.querySelector('.mem-area-view').style.display = 'flex';
         return;
       }
-
       const { ok, data } = await api(
         'PUT',
         `/memory/port/${encodeURIComponent(portId)}/unit/${encodeURIComponent(unitId)}/area/${encodeURIComponent(areaId)}`,
-        { area: patch }
+        { area: { type: newType } }
       );
       if (!ok) {
-        alert(`Error saving area: ${data.error || 'Unknown error'}`);
+        alert(`Error saving area type: ${data.error || 'Unknown error'}`);
         return;
       }
-      if (patch.type  !== undefined) _appendMmaLog(`[memory] Memory area moved — type changed to ${patch.type}`);
-      if (patch.start !== undefined) _appendMmaLog(`[memory] Memory area updated — start address set to ${patch.start}`);
-      if (patch.count !== undefined) _appendMmaLog(`[memory] Memory area updated — count set to ${patch.count}`);
+      _appendMmaLog(`[memory] Memory area type changed to ${newType}`);
       setDirty(true);
-      // Re-render refreshes the row with updated values and resets to view mode
       await _bus.emit(EV.MODEL_MUTATED);
     });
   });
@@ -4719,13 +4760,8 @@ function _attachMemoryTabHandlers(container) {
       const areaId = btn.dataset.areaId;
       const row = container.querySelector(`.mem-area-row[data-area-id="${areaId}"]`);
       if (!row) return;
-      const editDiv = row.querySelector('.mem-area-edit');
-      // Restore original values
-      editDiv.querySelector('.mem-area-type-sel').value  = row.dataset.origType;
-      editDiv.querySelector('.mem-area-start-inp').value = row.dataset.origStart;
-      editDiv.querySelector('.mem-area-count-inp').value = row.dataset.origCount;
       // Switch back to view mode
-      editDiv.style.display = 'none';
+      row.querySelector('.mem-area-edit').style.display = 'none';
       row.querySelector('.mem-area-view').style.display = 'flex';
     });
   });
@@ -4743,6 +4779,113 @@ function _attachMemoryTabHandlers(container) {
       );
       if (!ok) { alert(`Error: ${data.error || 'Unknown error'}`); return; }
       _appendMmaLog(`[memory] Memory area removed`);
+      setDirty(true);
+      await _bus.emit(EV.MODEL_MUTATED);
+    });
+  });
+
+  // ── Save individual segment (start/count on blur) ────────────────────
+  async function _saveSegment(inp) {
+    const portId  = inp.dataset.portId;
+    const unitId  = inp.dataset.unitId;
+    const areaId  = inp.dataset.areaId;
+    const segIdx  = inp.dataset.segIdx;
+    const row     = inp.closest('.mem-seg-row');
+    if (!row) return;
+    const startEl = row.querySelector('.mem-seg-start');
+    const countEl = row.querySelector('.mem-seg-count');
+    const start   = Number(startEl.value);
+    const count   = Number(countEl.value);
+    if (!Number.isFinite(start) || start < 0 || !Number.isFinite(count) || count < 1) return;
+    const { ok, data } = await api(
+      'PUT',
+      `/memory/port/${encodeURIComponent(portId)}/unit/${encodeURIComponent(unitId)}/area/${encodeURIComponent(areaId)}/segment/${encodeURIComponent(segIdx)}`,
+      { segment: { start, count } }
+    );
+    if (!ok) { alert(`Error: ${data.error || 'Unknown error'}`); return; }
+    // Update the range preview cell
+    const rangeCell = row.querySelector('td:nth-child(3)');
+    if (rangeCell) rangeCell.textContent = `${start}–${start + count - 1}`;
+    setDirty(true);
+    _appendMmaLog(`[memory] Segment updated — start:${start} count:${count}`);
+    await _bus.emit(EV.MODEL_MUTATED);
+  }
+
+  container.querySelectorAll('.mem-seg-start, .mem-seg-count').forEach(inp => {
+    inp.addEventListener('change', () => _saveSegment(inp));
+  });
+
+  // ── Delete segment ───────────────────────────────────────────────────
+  container.querySelectorAll('.mem-del-segment').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const portId = btn.dataset.portId;
+      const unitId = btn.dataset.unitId;
+      const areaId = btn.dataset.areaId;
+      const segIdx = btn.dataset.segIdx;
+      const { ok, data } = await api(
+        'DELETE',
+        `/memory/port/${encodeURIComponent(portId)}/unit/${encodeURIComponent(unitId)}/area/${encodeURIComponent(areaId)}/segment/${encodeURIComponent(segIdx)}`
+      );
+      if (!ok) { alert(`Error: ${data.error || 'Unknown error'}`); return; }
+      _appendMmaLog(`[memory] Segment removed`);
+      setDirty(true);
+      await _bus.emit(EV.MODEL_MUTATED);
+    });
+  });
+
+  // ── Add segment form submission ──────────────────────────────────────
+  container.querySelectorAll('.mem-add-seg-form').forEach(form => {
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      const portId = form.dataset.portId;
+      const unitId = form.dataset.unitId;
+      const areaId = form.dataset.areaId;
+      const banner = form.querySelector('.mem-seg-banner');
+      banner.className = 'mem-seg-banner banner';
+      const start = Number(form.querySelector('.mem-new-seg-start').value);
+      const count = Number(form.querySelector('.mem-new-seg-count').value);
+      if (!Number.isFinite(start) || start < 0) {
+        banner.textContent = '✗ Start must be ≥ 0';
+        banner.className = 'mem-seg-banner banner show err';
+        return;
+      }
+      if (!Number.isFinite(count) || count < 1) {
+        banner.textContent = '✗ Count must be ≥ 1';
+        banner.className = 'mem-seg-banner banner show err';
+        return;
+      }
+      const { ok, data } = await api(
+        'POST',
+        `/memory/port/${encodeURIComponent(portId)}/unit/${encodeURIComponent(unitId)}/area/${encodeURIComponent(areaId)}/segment`,
+        { segment: { start, count } }
+      );
+      if (ok) {
+        _appendMmaLog(`[memory] Segment added — start:${start} count:${count}`);
+        setDirty(true);
+        await _bus.emit(EV.MODEL_MUTATED);
+      } else {
+        banner.textContent = `✗ ${data.error || 'Unknown error'}`;
+        banner.className = 'mem-seg-banner banner show err';
+      }
+    });
+  });
+
+  // ── Merge segments ───────────────────────────────────────────────────
+  container.querySelectorAll('.mem-merge-segments').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const portId = btn.dataset.portId;
+      const unitId = btn.dataset.unitId;
+      const areaId = btn.dataset.areaId;
+      if (!confirm(
+        'This will combine all segments into one continuous block and remove gaps.\n\nContinue?'
+      )) return;
+      const { ok, data } = await api(
+        'POST',
+        `/memory/port/${encodeURIComponent(portId)}/unit/${encodeURIComponent(unitId)}/area/${encodeURIComponent(areaId)}/merge-segments`
+      );
+      if (!ok) { alert(`Error: ${data.error || 'Unknown error'}`); return; }
+      const seg = data.segment || {};
+      _appendMmaLog(`[memory] Segments merged — start:${seg.start} count:${seg.count}`);
       setDirty(true);
       await _bus.emit(EV.MODEL_MUTATED);
     });
@@ -4890,9 +5033,10 @@ function renderReconcileResults(missing, orphaned, valid, area_mismatch, status_
         const unit = entry.unit;
         const rangeIssues = entry.rangeIssues || [];
         const rangeHtml = rangeIssues.length === 0 ? '' : rangeIssues.map(ri => {
-          const areaRange = ri.areaStart != null
-            ? `${ri.areaStart}–${ri.areaEnd} (count ${ri.areaCount})`
-            : '—';
+          const segs = ri.areaSegments || [];
+          const areaRange = segs.length > 0
+            ? segs.map(s => `${s.start}–${s.start + s.count - 1}`).join(', ')
+            : (ri.areaStart != null ? `${ri.areaStart}–${ri.areaEnd}` : '—');
           return `<div class="mem-recon-field" style="grid-column:1/-1">
             <label>Range Mismatch (${escapeHtml(ri.areaType)})</label>
             <span>Read &ldquo;${escapeHtml(ri.readName)}&rdquo; needs ${ri.readStart}–${ri.readEnd}; unit covers ${escapeHtml(areaRange)}</span>
@@ -6304,12 +6448,15 @@ async function generateReport() {
               const areasHtml = areas.length === 0
                 ? '<p class="note rpt-indent2">No areas.</p>'
                 : `<table class="rpt-area-table">
-                    <thead><tr><th>Area Type</th><th>Start</th><th>Count</th></tr></thead>
-                    <tbody>${areas.map(a => `<tr>
-                      <td><code>${esc(a.type || '—')}</code></td>
-                      <td>${esc(a.start ?? '—')}</td>
-                      <td>${esc(a.count ?? '—')}</td>
-                    </tr>`).join('')}</tbody>
+                    <thead><tr><th>Area Type</th><th>Segments</th><th>Mode</th></tr></thead>
+                    <tbody>${areas.map(a => {
+                      const segs = (a.segments || []).map(s => `${s.start}–${s.start + s.count - 1} (${s.count})`).join(', ') || '—';
+                      return `<tr>
+                        <td><code>${esc(a.type || '—')}</code></td>
+                        <td>${esc(segs)}</td>
+                        <td>${esc(a.mode || 'segmented')}</td>
+                      </tr>`;
+                    }).join('')}</tbody>
                   </table>`;
 
               return `<div class="rpt-unit">
