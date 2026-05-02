@@ -11,7 +11,7 @@ const { modbusReadHoldingRegisters, readDevicesStatus } = require('./services/mo
 const { validateMmaConfig, validateReplicatorConfig } = require('./services/yamlCompiler');
 const { computeIntegrity } = require('./services/integrityService');
 
-const GIT_SHA = process.env.GIT_SHA || 'dev';
+const GIT_SHA = process.env.GIT_SHA || null;
 const VALID_AREA_TYPES = new Set(['holding_registers', 'input_registers', 'coils', 'discrete_inputs']);
 const VALID_FC_SET = new Set([1, 2, 3, 4, 5, 6, 15, 16]);
 
@@ -2121,8 +2121,8 @@ app.post('/runtime/apply-restart', async (req, res) => {
     }
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    discoverVersion();
-    console.log(`MCS server running on port ${PORT} (GIT_SHA=${GIT_SHA})`);
+discoverVersion().finally(() => {
+    app.listen(8080, () => {
+        console.log('Web running on 8080');
+    });
 });
