@@ -4102,7 +4102,7 @@ function renderUnit(portId, unit) {
     const rows = (segments || []).map((seg, i) => `
       <tr class="mem-seg-row" data-seg-idx="${i}">
         <td>
-          <input class="mem-seg-name inline-input" type="text" value="${escapeHtml(seg.name || '')}" placeholder="HR_${i}"
+          <input class="mem-seg-name inline-input" type="text" value="${escapeHtml(seg.name || '')}" placeholder="${escapeHtml(`HR_${i}`)}"
             data-port-id="${escapeHtml(portId)}" data-unit-id="${escapeHtml(unitDbId)}"
             data-area-id="${escapeHtml(areaId)}" data-seg-idx="${i}" style="width:90px" />
         </td>
@@ -4815,7 +4815,7 @@ function _attachMemoryTabHandlers(container) {
     const start   = Number(startEl.value);
     const count   = Number(countEl.value);
     if (!Number.isFinite(start) || start < 0 || !Number.isFinite(count) || count < 1) return;
-    const segment = { start, count, name: nameEl ? nameEl.value : undefined };
+    const segment = { start, count, name: nameEl?.value };
     const { ok, data } = await api(
       'PUT',
       `/memory/port/${encodeURIComponent(portId)}/unit/${encodeURIComponent(unitId)}/area/${encodeURIComponent(areaId)}/segment/${encodeURIComponent(segIdx)}`,
