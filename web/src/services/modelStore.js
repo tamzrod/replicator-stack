@@ -239,7 +239,7 @@ function migrateModel(model) {
             for (const area of (unit.areas || [])) {
                 if (!Array.isArray(area.segments) &&
                         area.start !== undefined && area.count !== undefined) {
-                    console.warn('[migrateModel] Deprecated schema: scalar start/count on area migrated to segments array — "segments" wrapper removed');
+                    console.warn('[migrateModel] Deprecated schema: scalar start/count properties migrated to segments array format');
                     area.segments = [{ start: Number(area.start), count: Number(area.count) }];
                     delete area.start;
                     delete area.count;
