@@ -2316,6 +2316,9 @@ app.post('/runtime/apply-restart', async (req, res) => {
 // POST /test-connection — TCP reachability check (no Modbus payload).
 // Body: { endpoint: "host:port" }
 // Response: { success: boolean, latency_ms?: number, error?: string }
+// Note: protected by requireAuth (app.use(requireAuth) above). Only authenticated
+// admins can use this endpoint.  The TCP target is intentionally user-supplied —
+// this is an admin diagnostics tool, not a public proxy.
 app.post('/test-connection', (req, res) => {
     const { endpoint } = req.body || {};
     if (!endpoint || typeof endpoint !== 'string') {
@@ -2340,11 +2343,10 @@ app.post('/test-connection', (req, res) => {
         if (settled) return;
         settled = true;
         socket.destroy();
-        const latency_ms = Date.now() - start;
         if (success) {
-            res.json({ success: true, latency_ms });
+            res.json({ success: true, latency_ms: Date.now() - start });
         } else {
-            res.json({ success: false, latency_ms, error });
+            res.json({ success: false, error });
         }
     }
 
