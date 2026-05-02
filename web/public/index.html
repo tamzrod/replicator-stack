@@ -362,6 +362,8 @@
       border-radius: 50%; flex-shrink: 0; margin-right: 5px;
     }
     .ds-unknown  { background: #9CA3AF; }
+    .ds-online   { background: #22C55E; box-shadow: 0 0 0 2px rgba(34,197,94,.2); }
+    .ds-offline  { background: #EF4444; }
     .ds-ok       { background: #22C55E; }
     .ds-error    { background: #EF4444; }
     .ds-stale    { background: #F59E0B; }
@@ -1997,7 +1999,7 @@
       <span style="font-size:.75rem;color:#6B7280">Live — updates every 5 s while this tab is active</span>
     </div>
     <div class="st-card-body">
-      <div id="status-table-wrap"><div class="st-empty">Open this tab to start polling.</div></div>
+      <div id="status-table-wrap"><div class="st-empty">Loading device status…</div></div>
     </div>
   </div>
 </div><!-- #status-tab-container -->
@@ -2456,8 +2458,6 @@ const EV = Object.freeze({
 // If nothing changed, the function returns immediately with zero DOM work.
 // ---------------------------------------------------------------------------
 function _patchStatusDots(prevStatus, nextStatus) {
-  const STATUS_CLASSES = ['ds-unknown', 'ds-ok', 'ds-error', 'ds-stale', 'ds-disabled'];
-  const STATUS_LABELS  = ['UNKNOWN',   'OK',    'ERROR',   'STALE',   'DISABLED'];
   const panel = document.getElementById('tree-panel');
   if (!panel) return;
 
@@ -2475,24 +2475,28 @@ function _patchStatusDots(prevStatus, nextStatus) {
   for (const id of allIds) {
     const prev = (prevStatus || {})[id];
     const next = (nextStatus || {})[id];
-    const prevCode = prev ? (Number(prev.health_code) || 0) : 0;
-    const nextCode = next ? (Number(next.health_code) || 0) : 0;
+    // Use the `online` field as the single source of truth for dot colour.
+    // null means "no data yet" (unknown).
+    const prevOnline = prev != null ? prev.online : null;
+    const nextOnline = next != null ? next.online : null;
     const prevName = prev ? (prev.device_name || '') : '';
     const nextName = next ? (next.device_name || '') : '';
 
-    // Skip this device entirely if neither the health code nor the display
+    // Skip this device entirely if neither the online state nor the display
     // name changed — avoids any DOM query cost for unchanged devices.
-    if (prevCode === nextCode && prevName === nextName) continue;
+    if (prevOnline === nextOnline && prevName === nextName) continue;
 
     // The device row may be absent from the DOM when its group is collapsed.
     const row = panel.querySelector(`.tree-device[data-device-id="${CSS.escape(id)}"]`);
     if (!row) continue;
 
-    if (prevCode !== nextCode) {
+    if (prevOnline !== nextOnline) {
       const dot = row.querySelector('.device-status-dot');
       if (dot) {
-        dot.className = 'device-status-dot ' + (STATUS_CLASSES[nextCode] || 'ds-unknown');
-        dot.title = STATUS_LABELS[nextCode] || 'UNKNOWN';
+        const dotClass = nextOnline === null ? 'ds-unknown' : nextOnline ? 'ds-online' : 'ds-offline';
+        const dotTitle = nextOnline === null ? 'UNKNOWN' : nextOnline ? 'ONLINE' : 'OFFLINE';
+        dot.className = 'device-status-dot ' + dotClass;
+        dot.title = dotTitle;
       }
     }
 
@@ -3884,11 +3888,8 @@ function renderTree(data) {
       for (const d of group.devices) {
         const sel = d.id === _selectedDeviceId ? ' selected' : '';
         const statusInfo = _deviceStatus[d.id];
-        const healthCode = statusInfo ? (Number(statusInfo.health_code) || 0) : 0;
-        const statusClasses = ['ds-unknown', 'ds-ok', 'ds-error', 'ds-stale', 'ds-disabled'];
-        const statusLabels  = ['UNKNOWN', 'OK', 'ERROR', 'STALE', 'DISABLED'];
-        const dotClass = statusClasses[healthCode] || 'ds-unknown';
-        const dotTitle = statusLabels[healthCode] || 'UNKNOWN';
+        const dotClass = !statusInfo ? 'ds-unknown' : statusInfo.online ? 'ds-online' : 'ds-offline';
+        const dotTitle = !statusInfo ? 'UNKNOWN' : statusInfo.online ? 'ONLINE' : 'OFFLINE';
         const blockName = statusInfo && statusInfo.device_name ? statusInfo.device_name : '';
         const displayName = d.name || blockName;
         const label = displayName
@@ -6297,25 +6298,20 @@ document.getElementById('tab-bar').addEventListener('click', e => {
 
   if (tab === 'model') {
     appContainer.style.display = '';
-    startStatusPolling();
     stopLogStream();
   } else if (tab === 'memory') {
     memContainer.classList.add('active');
-    stopStatusPolling();
     stopLogStream();
   } else if (tab === 'runtime') {
     rtContainer.classList.add('active');
-    stopStatusPolling();
     loadRuntimeStatus();
     startRuntimeLogs();
   } else if (tab === 'status') {
     stContainer.classList.add('active');
     stopLogStream();
     renderStatusTab();
-    startStatusPolling();
   } else if (tab === 'config-viewer') {
     cvContainer.classList.add('active');
-    stopStatusPolling();
     // Use the already-fetched canonical config snapshot when available so the
     // Config Viewer always shows data that matches the current Memory Tab and
     // Device View state.  Fall back to an explicit API fetch only when the
@@ -7096,17 +7092,16 @@ function renderStatusTab() {
     const s          = _deviceStatus[d.id];
     const hasStatus  = d.status_unit_id != null;
 
-    // Health badge
+    // Health badge — derived from the `online` boolean (single source of truth).
     let healthBadge;
     if (!hasStatus) {
       healthBadge = '<span class="st-muted">—</span>';
     } else if (!s) {
       healthBadge = '<span class="st-muted">Polling…</span>';
+    } else if (s.online) {
+      healthBadge = '<span class="st-badge st-badge-ok">ONLINE</span>';
     } else {
-      const code     = Number(s.health_code) || 0;
-      const cls      = STATUS_BADGE[code] || 'st-badge-unknown';
-      const lbl      = STATUS_LABEL[code] || 'UNKNOWN';
-      healthBadge    = `<span class="st-badge ${cls}">${lbl}</span>`;
+      healthBadge = '<span class="st-badge st-badge-error">OFFLINE</span>';
     }
 
     // Helper — renders a single text cell respecting hasStatus / polling state
@@ -7189,15 +7184,22 @@ async function pollDeviceStatus() {
   _statusPollActive = true;
   try {
     const { ok, data } = await api('GET', '/devices/status');
+    const prev = _deviceStatus;
     if (ok && data && data.status) {
-      const prev = _deviceStatus;
       _deviceStatus = data.status;
-      // Patch only the changed status dots — no full tree rebuild.
-      _patchStatusDots(prev, _deviceStatus);
-      // Re-render the Status Tab table if it is currently visible.
-      if (document.getElementById('status-tab-container')?.classList.contains('active')) {
-        renderStatusTab();
+    } else {
+      // Fail closed: any request failure marks all known devices as offline.
+      const offline = {};
+      for (const d of (_currentModel?.devices || [])) {
+        offline[d.id] = { online: false, last_seen: null };
       }
+      _deviceStatus = offline;
+    }
+    // Patch only the changed status dots — no full tree rebuild.
+    _patchStatusDots(prev, _deviceStatus);
+    // Re-render the Status Tab table if it is currently visible.
+    if (document.getElementById('status-tab-container')?.classList.contains('active')) {
+      renderStatusTab();
     }
   } finally {
     _statusPollActive = false;
@@ -7338,6 +7340,7 @@ document.getElementById('input-global-import').addEventListener('change', async 
 })();
 
 loadModel();
+startStatusPolling();
 
 fetch('/version')
   .then(r => r.json())

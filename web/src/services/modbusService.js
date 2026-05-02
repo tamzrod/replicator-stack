@@ -138,7 +138,11 @@ async function readDevicesStatus(devices, targetHost, statusSlotSize) {
                 }
             }
 
+            const online    = !!(regs && regs.length > base && health_code === 1);
+            const last_seen = online ? new Date().toISOString() : null;
+
             result[device.id] = {
+                online, last_seen,
                 health_code, last_error_code, seconds_in_error, device_name,
                 requests_total, responses_valid_total, timeouts_total,
                 transport_errors_total, consecutive_fail_current, consecutive_fail_max,
