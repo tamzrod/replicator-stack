@@ -72,6 +72,8 @@ listeners:
               allow_fc: [3]
 ```
 
+Each area is represented as a single scalar `start`/`count` range. When a unit has multiple non-contiguous segments internally, the compiler spans them into the widest contiguous range for the MMA binary. The `segments:` wrapper key is **not** part of the MMA2 schema and must never appear in generated config.
+
 ---
 
 ## Mapping Rules

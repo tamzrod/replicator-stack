@@ -11,7 +11,7 @@ replicator:
           quantity: 10
       targets:
         - id: 1
-          endpoint: "127.0.0.1:502"
+          endpoint: "mma:502"
           unit_id: 1
           memories:
             - memory_id: 1
