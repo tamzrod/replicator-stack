@@ -894,6 +894,24 @@ app.delete('/memory/port/:portId/unit/:unitId/area/:areaId', (req, res) => {
     }
 });
 
+// Helper: detect the first overlapping pair in a segments array.
+// Returns { a: labelA, b: labelB } or null when all segments are non-overlapping.
+function checkSegmentOverlaps(segments) {
+    if (!Array.isArray(segments) || segments.length < 2) return null;
+    const tagged = segments.map((s, i) => ({
+        i,
+        label: s.name || `HR_${i}`,
+        start: s.start,
+        end: s.start + s.count - 1,
+    })).sort((x, y) => x.start - y.start || x.end - y.end);
+    for (let i = 0; i < tagged.length - 1; i++) {
+        if (tagged[i].end >= tagged[i + 1].start) {
+            return { a: tagged[i].label, b: tagged[i + 1].label };
+        }
+    }
+    return null;
+}
+
 // POST /memory/port/:portId/unit/:unitId/area/:areaId/segment — add a segment to an area
 app.post('/memory/port/:portId/unit/:unitId/area/:areaId/segment', (req, res) => {
     try {
@@ -915,7 +933,14 @@ app.post('/memory/port/:portId/unit/:unitId/area/:areaId/segment', (req, res) =>
         const area = (unit.areas || []).find(a => a.id === areaId);
         if (!area) return res.status(404).json({ error: `Area ${areaId} not found on unit ${unitId}` });
         if (!Array.isArray(area.segments)) area.segments = [];
-        area.segments.push({ start, count });
+        const newSeg = { start, count };
+        if (segment.name !== undefined) newSeg.name = String(segment.name).trim() || undefined;
+        area.segments.push(newSeg);
+        const collision = checkSegmentOverlaps(area.segments);
+        if (collision) {
+            area.segments.pop();
+            return res.status(409).json({ error: `Segment "${collision.a}" overlaps with segment "${collision.b}"` });
+        }
         writeModel(model);
         scheduleCompile();
         res.status(201).json({ ok: true, segmentIndex: area.segments.length - 1 });
@@ -956,6 +981,18 @@ app.put('/memory/port/:portId/unit/:unitId/area/:areaId/segment/:segIdx', (req, 
                 return res.status(400).json({ error: 'segment.count must be a positive integer' });
             }
             area.segments[idx].count = count;
+        }
+        if (segment.name !== undefined) {
+            const name = String(segment.name).trim();
+            if (name) {
+                area.segments[idx].name = name;
+            } else {
+                delete area.segments[idx].name;
+            }
+        }
+        const collision = checkSegmentOverlaps(area.segments);
+        if (collision) {
+            return res.status(409).json({ error: `Segment "${collision.a}" overlaps with segment "${collision.b}"` });
         }
         writeModel(model);
         scheduleCompile();

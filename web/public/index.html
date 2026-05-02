@@ -4102,6 +4102,11 @@ function renderUnit(portId, unit) {
     const rows = (segments || []).map((seg, i) => `
       <tr class="mem-seg-row" data-seg-idx="${i}">
         <td>
+          <input class="mem-seg-name inline-input" type="text" value="${escapeHtml(seg.name || '')}" placeholder="${escapeHtml(`HR_${i}`)}"
+            data-port-id="${escapeHtml(portId)}" data-unit-id="${escapeHtml(unitDbId)}"
+            data-area-id="${escapeHtml(areaId)}" data-seg-idx="${i}" style="width:90px" />
+        </td>
+        <td>
           <input class="mem-seg-start inline-input" type="number" min="0" value="${escapeHtml(String(seg.start))}"
             data-port-id="${escapeHtml(portId)}" data-unit-id="${escapeHtml(unitDbId)}"
             data-area-id="${escapeHtml(areaId)}" data-seg-idx="${i}" style="width:80px" />
@@ -4111,7 +4116,7 @@ function renderUnit(portId, unit) {
             data-port-id="${escapeHtml(portId)}" data-unit-id="${escapeHtml(unitDbId)}"
             data-area-id="${escapeHtml(areaId)}" data-seg-idx="${i}" style="width:70px" />
         </td>
-        <td style="color:#6B7280;font-size:.72rem">${seg.start}–${seg.start + seg.count - 1}</td>
+        <td class="mem-seg-range" style="color:#6B7280;font-size:.72rem">${seg.start}–${seg.start + seg.count - 1}</td>
         <td>
           <button class="btn-mem-danger mem-del-segment" style="font-size:.7rem;padding:2px 6px"
             data-port-id="${escapeHtml(portId)}" data-unit-id="${escapeHtml(unitDbId)}"
@@ -4122,6 +4127,7 @@ function renderUnit(portId, unit) {
     return `<table class="mem-seg-table" style="width:100%;border-collapse:collapse;font-size:.8rem">
       <thead>
         <tr style="color:#6B7280;font-size:.7rem">
+          <th style="text-align:left;padding:2px 4px">Name</th>
           <th style="text-align:left;padding:2px 4px">Start</th>
           <th style="text-align:left;padding:2px 4px">Count</th>
           <th style="text-align:left;padding:2px 4px">Range</th>
@@ -4161,7 +4167,14 @@ function renderUnit(portId, unit) {
           <div class="mem-segs-view" style="width:100%">
             ${segs.length === 0
               ? '<span style="color:#9CA3AF;font-size:.75rem">No segments</span>'
-              : segs.map(seg => `<span style="display:inline-block;background:#F3F4F6;border:1px solid #E5E7EB;border-radius:3px;padding:1px 6px;margin:1px;font-size:.75rem"><code>${seg.start}–${seg.start + seg.count - 1}</code> <span style="color:#6B7280">(${seg.count})</span></span>`).join('')}
+              : segs.map((seg, i) => {
+                  const label = escapeHtml(seg.name || `HR_${i}`);
+                  const end = seg.start + seg.count - 1;
+                  return `<div style="display:flex;align-items:center;gap:10px;padding:2px 0;font-size:.75rem">
+                    <span style="color:#374151;font-weight:600;min-width:90px;font-family:monospace">${label}</span>
+                    <span style="color:#6B7280">${seg.start} → ${end}</span>
+                  </div>`;
+                }).join('')}
           </div>
         </div>
         <!-- Edit mode (hidden by default) -->
@@ -4186,8 +4199,13 @@ function renderUnit(portId, unit) {
           <div class="mem-segs-edit" data-area-id="${escapeHtml(area.id)}">
             ${renderSegmentsTable(portId, unitDbIdEsc, area.id, segs, area.type)}
           </div>
+          <div class="mem-seg-overlap-banner" style="display:none;color:#EF4444;font-size:.75rem;padding:4px 0;font-weight:500"></div>
           <form class="mem-add-seg-form" data-port-id="${escapeHtml(portId)}" data-unit-id="${unitDbIdEsc}" data-area-id="${escapeHtml(area.id)}"
             style="display:flex;align-items:flex-end;gap:6px;flex-wrap:wrap;padding-top:6px;border-top:1px dashed #E5E7EB">
+            <div class="field" style="display:flex;flex-direction:column;gap:2px">
+              <label style="font-size:.65rem;font-weight:700;color:#6B7280;text-transform:uppercase">Name</label>
+              <input class="mem-new-seg-name" type="text" placeholder="optional" style="width:90px;font-size:.82rem;padding:3px 6px;border:1px solid #D1D5DB;border-radius:4px" />
+            </div>
             <div class="field" style="display:flex;flex-direction:column;gap:2px">
               <label style="font-size:.65rem;font-weight:700;color:#6B7280;text-transform:uppercase">Start</label>
               <input class="mem-new-seg-start" type="number" min="0" value="0" style="width:80px;font-size:.82rem;padding:3px 6px;border:1px solid #D1D5DB;border-radius:4px" />
@@ -4784,7 +4802,55 @@ function _attachMemoryTabHandlers(container) {
     });
   });
 
-  // ── Save individual segment (start/count on blur) ────────────────────
+  // ── Segment overlap detection ─────────────────────────────────────────
+  // Reads current DOM values from a .mem-seg-table and returns a Set of
+  // row indices that are involved in at least one overlap.
+  // Also updates the inline overlap banner.
+  function _checkSegmentOverlaps(tableEl) {
+    const editSection = tableEl.closest('.mem-area-edit');
+    const banner = editSection ? editSection.querySelector('.mem-seg-overlap-banner') : null;
+    const rows = Array.from(tableEl.querySelectorAll('.mem-seg-row'));
+    const entries = rows.map((row, i) => {
+      const start = Number(row.querySelector('.mem-seg-start')?.value ?? NaN);
+      const count = Number(row.querySelector('.mem-seg-count')?.value ?? NaN);
+      const nameEl = row.querySelector('.mem-seg-name');
+      const label = (nameEl?.value?.trim()) || `HR_${i}`;
+      return { i, label, start, end: Number.isFinite(start) && Number.isFinite(count) && count >= 1 ? start + count - 1 : NaN };
+    });
+
+    const badSet = new Set();
+    const sorted = entries.filter(e => !isNaN(e.end)).slice().sort((a, b) => a.start - b.start || a.end - b.end);
+    let firstMsg = null;
+    for (let k = 0; k < sorted.length - 1; k++) {
+      if (sorted[k].end >= sorted[k + 1].start) {
+        badSet.add(sorted[k].i);
+        badSet.add(sorted[k + 1].i);
+        if (!firstMsg) firstMsg = `⚠ Segment "${sorted[k].label}" overlaps with segment "${sorted[k + 1].label}"`;
+      }
+    }
+
+    // Highlight rows
+    rows.forEach((row, i) => {
+      row.style.background = badSet.has(i) ? '#FEF2F2' : '';
+      row.querySelectorAll('.mem-seg-start, .mem-seg-count').forEach(inp => {
+        inp.style.borderColor = badSet.has(i) ? '#EF4444' : '';
+      });
+    });
+
+    if (banner) {
+      if (firstMsg) {
+        banner.textContent = firstMsg;
+        banner.style.display = 'block';
+      } else {
+        banner.textContent = '';
+        banner.style.display = 'none';
+      }
+    }
+
+    return badSet;
+  }
+
+  // ── Save individual segment (start/count/name on change) ────────────────────
   async function _saveSegment(inp) {
     const portId  = inp.dataset.portId;
     const unitId  = inp.dataset.unitId;
@@ -4792,27 +4858,44 @@ function _attachMemoryTabHandlers(container) {
     const segIdx  = inp.dataset.segIdx;
     const row     = inp.closest('.mem-seg-row');
     if (!row) return;
+    const nameEl  = row.querySelector('.mem-seg-name');
     const startEl = row.querySelector('.mem-seg-start');
     const countEl = row.querySelector('.mem-seg-count');
     const start   = Number(startEl.value);
     const count   = Number(countEl.value);
     if (!Number.isFinite(start) || start < 0 || !Number.isFinite(count) || count < 1) return;
+
+    // Block save if any overlap exists in the current table
+    const tableEl = row.closest('.mem-seg-table');
+    if (tableEl) {
+      const badSet = _checkSegmentOverlaps(tableEl);
+      if (badSet.size > 0) return; // overlap banner already shown
+    }
+
+    const segment = { start, count, name: nameEl?.value };
     const { ok, data } = await api(
       'PUT',
       `/memory/port/${encodeURIComponent(portId)}/unit/${encodeURIComponent(unitId)}/area/${encodeURIComponent(areaId)}/segment/${encodeURIComponent(segIdx)}`,
-      { segment: { start, count } }
+      { segment }
     );
     if (!ok) { alert(`Error: ${data.error || 'Unknown error'}`); return; }
     // Update the range preview cell
-    const rangeCell = row.querySelector('td:nth-child(3)');
+    const rangeCell = row.querySelector('.mem-seg-range');
     if (rangeCell) rangeCell.textContent = `${start}–${start + count - 1}`;
     setDirty(true);
     _appendMmaLog(`[memory] Segment updated — start:${start} count:${count}`);
     await _bus.emit(EV.MODEL_MUTATED);
   }
 
-  container.querySelectorAll('.mem-seg-start, .mem-seg-count').forEach(inp => {
+  container.querySelectorAll('.mem-seg-start, .mem-seg-count, .mem-seg-name').forEach(inp => {
     inp.addEventListener('change', () => _saveSegment(inp));
+    // Real-time overlap highlight (no save)
+    if (inp.classList.contains('mem-seg-start') || inp.classList.contains('mem-seg-count')) {
+      inp.addEventListener('input', () => {
+        const tableEl = inp.closest('.mem-seg-table');
+        if (tableEl) _checkSegmentOverlaps(tableEl);
+      });
+    }
   });
 
   // ── Delete segment ───────────────────────────────────────────────────
@@ -4842,6 +4925,7 @@ function _attachMemoryTabHandlers(container) {
       const areaId = form.dataset.areaId;
       const banner = form.querySelector('.mem-seg-banner');
       banner.className = 'mem-seg-banner banner';
+      const name  = (form.querySelector('.mem-new-seg-name')?.value || '').trim();
       const start = Number(form.querySelector('.mem-new-seg-start').value);
       const count = Number(form.querySelector('.mem-new-seg-count').value);
       if (!Number.isFinite(start) || start < 0) {
@@ -4854,10 +4938,30 @@ function _attachMemoryTabHandlers(container) {
         banner.className = 'mem-seg-banner banner show err';
         return;
       }
+      // Pre-flight overlap check: test new segment against existing DOM rows
+      const editSection = form.closest('.mem-area-edit');
+      const tableEl = editSection ? editSection.querySelector('.mem-seg-table') : null;
+      if (tableEl) {
+        const rows = Array.from(tableEl.querySelectorAll('.mem-seg-row'));
+        const newEnd = start + count - 1;
+        for (let i = 0; i < rows.length; i++) {
+          const s = Number(rows[i].querySelector('.mem-seg-start')?.value ?? NaN);
+          const c = Number(rows[i].querySelector('.mem-seg-count')?.value ?? NaN);
+          if (!Number.isFinite(s) || !Number.isFinite(c) || c < 1) continue;
+          const end = s + c - 1;
+          const nameEl = rows[i].querySelector('.mem-seg-name');
+          const rowLabel = (nameEl?.value?.trim()) || `HR_${i}`;
+          if (start <= end && newEnd >= s) {
+            banner.textContent = `✗ "${name || 'new segment'}" overlaps with "${rowLabel}"`;
+            banner.className = 'mem-seg-banner banner show err';
+            return;
+          }
+        }
+      }
       const { ok, data } = await api(
         'POST',
         `/memory/port/${encodeURIComponent(portId)}/unit/${encodeURIComponent(unitId)}/area/${encodeURIComponent(areaId)}/segment`,
-        { segment: { start, count } }
+        { segment: { name: name || undefined, start, count } }
       );
       if (ok) {
         _appendMmaLog(`[memory] Segment added — start:${start} count:${count}`);
