@@ -35,14 +35,9 @@ const AREA_TO_FC = {
     input_status: 2,
 };
 
-// All valid Modbus function codes per area type (read + write).
-// Used to build an "allow-all" policy that covers every valid operation for the area.
-const AREA_ALL_FCS = {
-    coils:             [1, 5, 15],
-    discrete_inputs:   [2],
-    holding_registers: [3, 6, 16],
-    input_registers:   [4],
-};
+// All valid Modbus function codes across all area types.
+// "Allow-all" always includes every FC — MMA enforces area-specific validity at runtime.
+const ALL_VALID_FCS = [1, 2, 3, 4, 5, 6, 15, 16];
 
 // ---------------------------------------------------------------------------
 // Exported functions
@@ -107,22 +102,14 @@ function toReplicatorYaml(model, excludedPortNums = new Set()) {
 }
 
 /**
- * Compute the union of all valid function codes (read + write) for a set of area types.
- * Returns a sorted array suitable for an allow-all policy rule's allow_fc field.
+ * Return the full allow-all function code list: all 8 valid Modbus FCs.
+ * "Allow-all" is always [1,2,3,4,5,6,15,16] regardless of which area types
+ * are present — MMA enforces per-area validity at runtime.
  *
- * @param {Iterable<string>} areaTypes  e.g. ['holding_registers', 'coils']
- * @returns {number[]}  sorted unique FCs covering every valid operation for the given areas
+ * @returns {number[]}
  */
-function allowAllFcsForAreas(areaTypes) {
-    const fcs = new Set();
-    for (const area of areaTypes) {
-        for (const fc of (AREA_ALL_FCS[area] || [])) fcs.add(fc);
-    }
-    // If no recognised area types supplied, include every known FC.
-    if (fcs.size === 0) {
-        for (const arr of Object.values(AREA_ALL_FCS)) for (const fc of arr) fcs.add(fc);
-    }
-    return [...fcs].sort((a, b) => a - b);
+function allowAllFcs() {
+    return ALL_VALID_FCS.slice();
 }
 
 /**
@@ -315,8 +302,8 @@ function toMmaYaml(model) {
                 }
 
                 // Emit policy.  When user has configured a custom policy, use it.
-                // Otherwise emit an explicit allow-all default whose allow_fc list
-                // covers every valid read and write function code for the present domains.
+                // Otherwise emit the explicit allow-all default: all 8 valid Modbus FCs
+                // from any source IP.  MMA enforces per-area FC validity at runtime.
                 const customPolicy = policyByUnitId[unit.unitId];
                 if (customPolicy) {
                     lines.push(`        policy:`);
@@ -330,7 +317,7 @@ function toMmaYaml(model) {
                         lines.push(`              allow_fc: [${rule.allow_fc.join(', ')}]`);
                     }
                 } else {
-                    const fcs = allowAllFcsForAreas([...unit.domains.keys()]);
+                    const fcs = allowAllFcs();
                     lines.push(`        policy:`);
                     lines.push(`          rules:`);
                     lines.push(`            - id: allow-all`);

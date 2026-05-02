@@ -23,35 +23,23 @@ const STATUS_SLOT_SIZE = 30;
 // Chosen to avoid collision with typical device unit_id values (usually small integers).
 const DEFAULT_STATUS_UNIT_ID = 246;
 
-// All valid Modbus function codes per area type (read + write).
-const AREA_ALL_FCS = {
-    coils:             [1, 5, 15],
-    discrete_inputs:   [2],
-    holding_registers: [3, 6, 16],
-    input_registers:   [4],
-};
+// All valid Modbus function codes (read + write, all area types).
+// "Allow-all" always includes every FC — MMA enforces per-area validity at runtime.
+const ALL_VALID_FCS = [1, 2, 3, 4, 5, 6, 15, 16];
 
 /**
- * Build the default explicit allow-all policy for a unit given its area types.
- * The allow_fc list covers every valid read and write function code for the
- * supplied areas.  When areaTypes is empty, all known FCs are included.
+ * Build the default explicit allow-all policy.
+ * allow_fc is always the full set of 8 valid Modbus function codes regardless
+ * of which area types the unit has — MMA enforces per-area validity at runtime.
  *
- * @param {string[]} areaTypes  e.g. ['holding_registers', 'coils']
  * @returns {{ rules: Array }}
  */
-function makeDefaultPolicy(areaTypes) {
-    const fcs = new Set();
-    for (const area of (areaTypes || [])) {
-        for (const fc of (AREA_ALL_FCS[area] || [])) fcs.add(fc);
-    }
-    if (fcs.size === 0) {
-        for (const arr of Object.values(AREA_ALL_FCS)) for (const fc of arr) fcs.add(fc);
-    }
+function makeDefaultPolicy() {
     return {
         rules: [{
             id: 'allow-all',
             source_ip: ['0.0.0.0/0', '::/0'],
-            allow_fc: [...fcs].sort((a, b) => a - b),
+            allow_fc: ALL_VALID_FCS.slice(),
         }],
     };
 }
@@ -558,7 +546,7 @@ function ensureTargetMemory(model, device) {
     // no policy has been configured yet — preserves any user-defined rules.
     if (!unit.policy) {
         const areaTypes = unit.areas.map(a => a.type);
-        unit.policy = makeDefaultPolicy(areaTypes);
+        unit.policy = makeDefaultPolicy();
         console.log(`[ensureTargetMemory] Set default allow-all policy for unit_id ${unitId} on port ${portNum}`);
     }
 }

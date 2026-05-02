@@ -596,7 +596,7 @@ app.post('/memory/port/:portId/unit', (req, res) => {
         if (!port) {
             return res.status(404).json({ error: `Memory port ${portId} not found` });
         }
-        const newUnit = { id: randomUUID(), unit_id: unitIdNum, areas: [], policy: makeDefaultPolicy([]) };
+        const newUnit = { id: randomUUID(), unit_id: unitIdNum, areas: [], policy: makeDefaultPolicy() };
         port.units.push(newUnit);
         writeModel(model);
         scheduleCompile();
