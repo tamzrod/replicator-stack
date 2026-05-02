@@ -2794,14 +2794,43 @@ function renderDeviceWorkspace() {
     document.getElementById('ws-btn-save-device').addEventListener('click', async () => {
       const banner = document.getElementById('ws-device-banner');
       banner.className = 'banner';
+
+      const srcEndpoint = document.getElementById('ws-ed-src-endpoint').value.trim();
+      const tgtEndpoint = document.getElementById('ws-tgt-endpoint').value.trim();
+      const srcUnitRaw  = document.getElementById('ws-ed-src-unit').value.trim();
+      const tgtUnitRaw  = document.getElementById('ws-tgt-unit').value.trim();
+
+      if (!srcEndpoint) {
+        banner.textContent = '✗ Source Endpoint is required';
+        banner.className = 'banner show err';
+        return;
+      }
+      if (!tgtEndpoint) {
+        banner.textContent = '✗ Target Endpoint is required';
+        banner.className = 'banner show err';
+        return;
+      }
+      const srcUnitId = Number(srcUnitRaw);
+      if (srcUnitRaw === '' || !Number.isFinite(srcUnitId) || srcUnitId < 0) {
+        banner.textContent = '✗ Source Unit ID must be a non-negative integer';
+        banner.className = 'banner show err';
+        return;
+      }
+      const tgtUnitId = Number(tgtUnitRaw);
+      if (tgtUnitRaw === '' || !Number.isFinite(tgtUnitId) || tgtUnitId < 0) {
+        banner.textContent = '✗ MMA Unit ID must be a non-negative integer';
+        banner.className = 'banner show err';
+        return;
+      }
+
       const payload = {
         device: {
           name:            document.getElementById('ws-ed-name').value.trim(),
-          source_endpoint: document.getElementById('ws-ed-src-endpoint').value.trim(),
-          source_unit_id:  Number(document.getElementById('ws-ed-src-unit').value),
+          source_endpoint: srcEndpoint,
+          source_unit_id:  srcUnitId,
           groupId:         document.getElementById('ws-ed-group').value || null,
-          target_endpoint: document.getElementById('ws-tgt-endpoint').value.trim(),
-          unitId:          Number(document.getElementById('ws-tgt-unit').value),
+          target_endpoint: tgtEndpoint,
+          unitId:          tgtUnitId,
         }
       };
       const { ok, data } = await api('PUT', `/device/${encodeURIComponent(device.id)}`, payload);
