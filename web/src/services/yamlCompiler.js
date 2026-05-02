@@ -1,0 +1,409 @@
+'use strict';
+
+// ---------------------------------------------------------------------------
+// yamlCompiler.js — pure YAML generation + validation functions.
+// No side effects, no I/O, no Express dependencies.
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Private helpers (copies of shared utilities from index.js)
+// ---------------------------------------------------------------------------
+
+// Number of holding registers consumed by each device's status slot.
+const STATUS_SLOT_SIZE = 30;
+
+// Extract the port number from an endpoint string. Returns null on failure.
+function endpointPort(endpoint) {
+    if (typeof endpoint !== 'string') return null;
+    const lastColon = endpoint.lastIndexOf(':');
+    if (lastColon < 0) return null;
+    const port = Number(endpoint.slice(lastColon + 1));
+    return Number.isFinite(port) && port >= 1 && port <= 65535 ? port : null;
+}
+
+/**
+ * Return the widest range that covers both (start1, count1) and (start2, count2).
+ */
+function widenRange(start1, count1, start2, count2) {
+    const newStart = Math.min(start1, start2);
+    const newEnd   = Math.max(start1 + count1 - 1, start2 + count2 - 1);
+    return { start: newStart, count: newEnd - newStart + 1 };
+}
+
+// ---------------------------------------------------------------------------
+// Module-level constants
+// ---------------------------------------------------------------------------
+
+// Maps Modbus area names to function codes (per Modbus protocol spec).
+const AREA_TO_FC = {
+    holding_registers: 3,
+    coils: 1,
+    input_registers: 4,
+    discrete_inputs: 2,
+    input_status: 2,
+};
+
+// ---------------------------------------------------------------------------
+// Exported functions
+// ---------------------------------------------------------------------------
+
+function toReplicatorYaml(model, excludedPortNums = new Set()) {
+    // Replicator orchestration config.
+    // Format per docs/sample yaml/replicator.yaml:
+    //   - top-level replicator: block
+    //   - replicator.units: list, one per device
+    //   - each unit: source (endpoint, unit_id, device_name, status_slot),
+    //                reads (fc, address, quantity),
+    //                targets (id, endpoint, unit_id, memories),
+    //                poll (interval_ms)
+    const devices = model.devices || [];
+
+    const lines = ['replicator:', '  units:'];
+
+    for (const device of devices) {
+        // Skip devices whose target port has been explicitly excluded (user declined creation)
+        const targetPort = endpointPort(device.target_endpoint);
+        if (targetPort !== null && excludedPortNums.has(targetPort)) continue;
+        const deviceReads = device.reads || [];
+        if (deviceReads.length === 0) continue;
+
+        const sourceEndpoint = device.source_endpoint || '';
+        const targetEndpoint = device.target_endpoint || '';
+        const statusSlot = device.status_slot != null ? Number(device.status_slot) : 0;
+
+        // Poll interval: use minimum across all reads for this device.
+        const pollMs = Math.min(...deviceReads.map(r => Number(r.poll_interval) || 1000));
+
+        lines.push(`    - id: "${device.id}"`);
+        lines.push(`      source:`);
+        lines.push(`        endpoint: "${sourceEndpoint}"`);
+        lines.push(`        unit_id: ${device.source_unit_id}`);
+        lines.push(`        device_name: "${device.name || device.id}"`);
+        if (device.status_unit_id != null) {
+            lines.push(`        status_slot: ${statusSlot}`);
+        }
+        lines.push(`      reads:`);
+        for (const read of deviceReads) {
+            const fc = AREA_TO_FC[read.source_area] || 3;
+            lines.push(`        - fc: ${fc}`);
+            lines.push(`          address: ${read.source_address}`);
+            lines.push(`          quantity: ${read.source_count}`);
+        }
+        lines.push(`      targets:`);
+        lines.push(`        - id: ${device.unitId}`);
+        lines.push(`          endpoint: "${targetEndpoint}"`);
+        lines.push(`          unit_id: ${device.unitId}`);
+        if (device.status_unit_id != null) {
+            lines.push(`          status_unit_id: ${Number(device.status_unit_id)}`);
+        }
+        lines.push(`          memories:`);
+        lines.push(`            - memory_id: ${device.unitId}`);
+        lines.push(`              offsets: {}`);
+        lines.push(`      poll:`);
+        lines.push(`        interval_ms: ${pollMs}`);
+    }
+    return lines.join('\n') + '\n';
+}
+
+/**
+ * Return the primary Modbus read function code for an area type.
+ * FC 1 = Read Coils, FC 2 = Read Discrete Inputs,
+ * FC 3 = Read Holding Registers, FC 4 = Read Input Registers.
+ */
+function domainReadFc(area) {
+    switch (area) {
+        case 'coils':             return 1;
+        case 'discrete_inputs':   return 2;
+        case 'input_registers':   return 4;
+        default:                  return 3; // holding_registers
+    }
+}
+
+/**
+ * MMA2 CONFIG COMPILER
+ *
+ * unit_id is a CONTAINER ID — not a strict unique memory block.  A single
+ * unit_id may own multiple memory domains (holding_registers, input_registers,
+ * coils, discrete_inputs).  When multiple blocks share the same unit_id on
+ * the same listener port they are MERGED into one unit object rather than
+ * flagged as errors.
+ *
+ * Merge rules:
+ *   - Domains are combined into the same unit entry.
+ *   - When two blocks for the same (unit_id, area) exist the widest address
+ *     range is preserved (lowest start, highest end).
+ *   - Policy rules are unioned and deduplicated by rule id.
+ *   - Status units (driven by status_unit_id) always receive the read-write
+ *     policy; regular units receive a read-only policy whose allow_fc list
+ *     covers all present domain types.
+ *
+ * @param {Array}  blocks    - port.blocks entries (unit_id, area, address, count)
+ * @param {Map}    statusMap - Map<statusUnitId, deviceCount> for status blocks
+ * @returns {{ mergedUnits: Array, mergeLog: Array }}
+ *   mergedUnits  — ordered list of merged unit objects ready for YAML emission
+ *   mergeLog     — diagnostic records: source entries merged, fields combined,
+ *                  rules deduplicated
+ */
+function compileMma2Config(blocks, statusMap = new Map()) {
+    // byUnitId: unit_id → { unitId, isStatus, domains: Map<area,{start,count}>, sourceCount }
+    const byUnitId = new Map();
+    const mergeLog = [];
+
+    function mergeBlock(uid, area, address, count, isStatus) {
+        if (!byUnitId.has(uid)) {
+            byUnitId.set(uid, { unitId: uid, isStatus: false, domains: new Map(), sourceCount: 0 });
+        }
+        const entry = byUnitId.get(uid);
+        entry.sourceCount += 1;
+        if (isStatus) entry.isStatus = true;
+
+        if (entry.domains.has(area)) {
+            // Preserve widest range across duplicate (unit_id, area) blocks.
+            const existing = entry.domains.get(area);
+            const oldEntry = { start: existing.start, count: existing.count };
+            ({ start: existing.start, count: existing.count } = widenRange(existing.start, existing.count, address, count));
+            if (existing.start !== oldEntry.start || existing.count !== oldEntry.count) {
+                mergeLog.push({
+                    unit_id: uid,
+                    area,
+                    action: 'range_widened',
+                    from: oldEntry,
+                    to: { start: existing.start, count: existing.count },
+                });
+            }
+        } else {
+            entry.domains.set(area, { start: address, count });
+        }
+    }
+
+    // Process regular device-read blocks.
+    for (const block of blocks) {
+        mergeBlock(
+            Number(block.unit_id),
+            block.area || 'holding_registers',
+            block.address,
+            block.count,
+            false
+        );
+    }
+
+    // Process status memory entries (derived from devices with status_unit_id).
+    for (const [suid, deviceCount] of statusMap) {
+        mergeBlock(suid, 'holding_registers', 0, deviceCount * STATUS_SLOT_SIZE, true);
+    }
+
+    // Build merge log entries for unit_ids that had more than one source block.
+    for (const entry of byUnitId.values()) {
+        if (entry.sourceCount > 1) {
+            mergeLog.push({
+                unit_id:             entry.unitId,
+                action:              'units_merged',
+                sourceEntriesMerged: entry.sourceCount,
+                fieldsCombined:      [...entry.domains.keys()],
+                rulesDeduped:        0, // rules are synthesised from domain types at emit time, not taken from raw source blocks
+            });
+        }
+    }
+
+    // Return units sorted by unit_id for deterministic output.
+    const mergedUnits = [...byUnitId.values()].sort((a, b) => a.unitId - b.unitId);
+    return { mergedUnits, mergeLog };
+}
+
+function toMmaYaml(model) {
+    // MMA runtime config generated from Memory tab ports.
+    // Format per docs/sample yaml/mma.yaml:
+    //   - top-level listeners: array
+    //   - each listener has id, listen (":PORT"), and memory
+    //   - memory is a list of unit entries with unit_id, one or more domain
+    //     sections (holding_registers / input_registers / coils / discrete_inputs),
+    //     and a policy block.
+    //
+    // Source priority:
+    //   1. port.units[] — manually configured unit/area tree (Memory Tab editor)
+    //   2. port.blocks[] — auto-derived from device reads (legacy/fallback)
+    //
+    // unit_id is a CONTAINER ID.  Multiple entries sharing the same unit_id on
+    // the same port are merged by compileMma2Config before YAML emission.
+    const memoryPorts = (model.memory && model.memory.ports) || [];
+
+    if (memoryPorts.length === 0) {
+        return { yaml: 'listeners: []\n', mergeLog: [] };
+    }
+
+    // Pre-compute status memory requirements from devices:
+    //   statusByPort: portNum → Map<statusUnitId, deviceCount>
+    // Status blocks are sized as device_count × STATUS_SLOT_SIZE registers, starting at address 0.
+    const statusByPort = {};
+    for (const device of (model.devices || [])) {
+        if (device.status_unit_id == null) continue;
+        const targetPort = endpointPort(device.target_endpoint);
+        if (!targetPort) continue;
+        if (!statusByPort[targetPort]) statusByPort[targetPort] = new Map();
+        const suid = Number(device.status_unit_id);
+        statusByPort[targetPort].set(suid, (statusByPort[targetPort].get(suid) || 0) + 1);
+    }
+
+    const lines = ['listeners:'];
+    const allMergeLog = [];
+
+    for (let pi = 0; pi < memoryPorts.length; pi++) {
+        const port = memoryPorts[pi];
+        const portNum = Number(port.port) || 502;
+        // First listener is named "main" (matches sample YAML convention); additional
+        // listeners use port-based IDs to stay unique.
+        const listenerId = pi === 0 ? 'main' : `port-${portNum}`;
+        lines.push(`  - id: ${listenerId}`);
+        lines.push(`    listen: ":${portNum}"`);
+        lines.push(`    memory:`);
+
+        const statusMap = statusByPort[portNum] || new Map();
+
+        // Determine source: use units[] when manually configured, fall back to blocks[]
+        const hasManualUnits = (port.units || []).length > 0;
+        let blocksForCompile;
+        // Build maps from unit_id → state_sealing / policy for manual units (first match wins).
+        const stateSealingByUnitId = {};
+        const policyByUnitId = {};
+        if (hasManualUnits) {
+            // Flatten units[] → blocks format for compileMma2Config
+            blocksForCompile = (port.units || []).flatMap(u => {
+                if (u.state_sealing && !(u.unit_id in stateSealingByUnitId)) {
+                    stateSealingByUnitId[u.unit_id] = u.state_sealing;
+                }
+                if (u.policy && !(u.unit_id in policyByUnitId)) {
+                    policyByUnitId[u.unit_id] = u.policy;
+                }
+                return (u.areas || []).map(a => ({
+                    unit_id: u.unit_id,
+                    area: a.type || 'holding_registers',
+                    address: a.start,
+                    count: a.count,
+                }));
+            });
+        } else {
+            // Fall back to auto-derived blocks from device reads
+            blocksForCompile = port.blocks || [];
+        }
+
+        // Run the MMA2 compiler: group + merge all blocks for this port.
+        const { mergedUnits, mergeLog } = compileMma2Config(blocksForCompile, statusMap);
+        for (const entry of mergeLog) {
+            allMergeLog.push({ listener: listenerId, port: portNum, ...entry });
+        }
+
+        if (mergedUnits.length === 0) {
+            lines.push(`      []`);
+        } else {
+            for (const unit of mergedUnits) {
+                lines.push(`      - unit_id: ${unit.unitId}`);
+
+                // Emit each domain section present in this unit.
+                for (const [area, range] of unit.domains) {
+                    lines.push(`        ${area}:`);
+                    lines.push(`          start: ${range.start}`);
+                    lines.push(`          count: ${range.count}`);
+                }
+
+                // Emit state_sealing if configured on this unit.
+                const ss = stateSealingByUnitId[unit.unitId];
+                if (ss && ss.area === 'coil') {
+                    lines.push(`        state_sealing:`);
+                    lines.push(`          area: coil`);
+                    lines.push(`          address: ${ss.address}`);
+                }
+
+                // Emit policy.  When user has configured a custom policy, use it.
+                // Otherwise auto-generate: status units are read-write, regular
+                // units are read-only with the union of read FCs for all domains.
+                const customPolicy = policyByUnitId[unit.unitId];
+                if (customPolicy) {
+                    lines.push(`        policy:`);
+                    lines.push(`          rules:`);
+                    for (const rule of (customPolicy.rules || [])) {
+                        lines.push(`            - id: ${rule.id}`);
+                        lines.push(`              source_ip:`);
+                        for (const ip of rule.source_ip) {
+                            lines.push(`                - ${ip}`);
+                        }
+                        lines.push(`              allow_fc: [${rule.allow_fc.join(', ')}]`);
+                    }
+                } else {
+                    lines.push(`        policy:`);
+                    lines.push(`          rules:`);
+                    if (unit.isStatus) {
+                        lines.push(`            - id: read-write`);
+                        lines.push(`              source_ip:`);
+                        lines.push(`                - 0.0.0.0/0`);
+                        lines.push(`                - ::/0`);
+                        lines.push(`              allow_fc: [3, 16]`);
+                    } else {
+                        const fcs = [...new Set(
+                            [...unit.domains.keys()].map(domainReadFc)
+                        )].sort((a, b) => a - b);
+                        lines.push(`            - id: read-only`);
+                        lines.push(`              source_ip:`);
+                        lines.push(`                - 0.0.0.0/0`);
+                        lines.push(`                - ::/0`);
+                        lines.push(`              allow_fc: [${fcs.join(', ')}]`);
+                    }
+                }
+            }
+        }
+    }
+    return { yaml: lines.join('\n') + '\n', mergeLog: allMergeLog };
+}
+
+// MMA config must contain ONLY runtime listener definitions — no orchestration data.
+// Format: top-level listeners: block with memory definitions per unit.
+function validateMmaConfig(yaml) {
+    const errors = [];
+    if (!/^listeners\s*:/m.test(yaml)) {
+        errors.push('MMA config must have a top-level listeners block — use listeners: format');
+    }
+    if (/^replicator\s*:/m.test(yaml)) {
+        errors.push('MMA config must not contain a replicator block — that belongs in Replicator config');
+    }
+    if (/^routes\s*:/m.test(yaml)) {
+        errors.push('MMA config must not contain routes — routes belong in Replicator config');
+    }
+    if (/\bdevice_id\s*:/m.test(yaml)) {
+        errors.push('MMA config must not contain device_id — device references belong in Replicator config');
+    }
+    if (/\bread_id\s*:/m.test(yaml)) {
+        errors.push('MMA config must not contain read_id — read references belong in Replicator config');
+    }
+    if (/\bblock_id\s*:/m.test(yaml)) {
+        errors.push('MMA config must not contain block_id — block references belong in Replicator config');
+    }
+
+    // NOTE: duplicate unit_id values within a listener are intentional — unit_id is a
+    // CONTAINER ID that may hold multiple memory domains.  compileMma2Config merges them
+    // before YAML emission, so duplicates in hand-crafted YAML are left to the runtime.
+
+    return errors;
+}
+
+// Replicator config must contain orchestration data only — no MMA listener/memory definitions.
+// Format: top-level replicator: block with units list.
+function validateReplicatorConfig(yaml) {
+    const errors = [];
+    if (!/^replicator\s*:/m.test(yaml)) {
+        errors.push('Replicator config must have a top-level replicator block — use replicator: format');
+    }
+    if (/^listeners\s*:/m.test(yaml)) {
+        errors.push('Replicator config must not contain a top-level listeners block — listeners belong in MMA config');
+    }
+    if (/^memory\s*:/m.test(yaml)) {
+        errors.push('Replicator config must not contain a top-level memory block — memory definitions belong in MMA config');
+    }
+    return errors;
+}
+
+module.exports = {
+    toReplicatorYaml,
+    toMmaYaml,
+    compileMma2Config,
+    validateMmaConfig,
+    validateReplicatorConfig,
+};
