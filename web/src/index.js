@@ -1813,6 +1813,183 @@ app.get('/config', rateLimit, (req, res) => {
     }
 });
 
+// ---------------------------------------------------------------------------
+// Global Config Import / Export
+// ---------------------------------------------------------------------------
+
+// GET /config/global-export — export full model as a unified versioned config envelope.
+// The envelope contains the raw model.json together with a ui section for any
+// UI-specific state that is not stored in the model.  The format is:
+//
+//   {
+//     "version": "global-config/v1",
+//     "exported_at": "<ISO-8601 timestamp>",
+//     "model": { ...model.json content... },
+//     "ui": { "layout": { "groups": [] }, "preferences": {} }
+//   }
+//
+// The model section includes:
+//   - model.groups     → replicator group / UI topology
+//   - model.devices    → replicator device + read definitions
+//   - model.memory     → MMA listener / memory layout
+//   - model.system     → system-level overrides (e.g. mma_endpoint)
+//
+// The file is served as a downloadable attachment named "global-config.json".
+app.get('/config/global-export', rateLimit, (req, res) => {
+    try {
+        const model = readModel();
+        const envelope = {
+            version: 'global-config/v1',
+            exported_at: new Date().toISOString(),
+            model: {
+                system:  model.system  || {},
+                groups:  model.groups  || [],
+                devices: model.devices || [],
+                memory:  model.memory  || { ports: [] },
+            },
+            ui: {
+                layout: {
+                    groups: (model.groups || []).map(g => ({ id: g.id, name: g.name })),
+                },
+                preferences: {},
+            },
+        };
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        res.setHeader('Content-Disposition', 'attachment; filename="global-config.json"');
+        res.json(envelope);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /config/global-import — restore model from a global config envelope.
+//
+// Accepted body: the JSON object produced by GET /config/global-export.
+//
+// Validation:
+//   - version must equal "global-config/v1"
+//   - model.devices, model.groups, model.memory.ports must be arrays
+//   - each device must have a valid source_endpoint, target_endpoint, source_unit_id, and unitId
+//   - system-managed fields (status_slot, status_unit_id) are stripped and recomputed
+//
+// On success, the imported model replaces the current model.json and a
+// background compile is scheduled.  The response includes counts of imported
+// devices, groups, and memory ports.
+app.post('/config/global-import', rateLimit, (req, res) => {
+    try {
+        const body = req.body;
+
+        // Validate envelope version
+        if (!body || body.version !== 'global-config/v1') {
+            return res.status(400).json({
+                error: 'Invalid global config: missing or unsupported version — expected "global-config/v1"',
+            });
+        }
+
+        const importedModel = body.model;
+        if (!importedModel || typeof importedModel !== 'object' || Array.isArray(importedModel)) {
+            return res.status(400).json({ error: 'Invalid global config: model section is missing or not an object' });
+        }
+
+        // Validate structural requirements
+        if (!Array.isArray(importedModel.devices)) {
+            return res.status(400).json({ error: 'Invalid global config: model.devices must be an array' });
+        }
+        if (!Array.isArray(importedModel.groups)) {
+            return res.status(400).json({ error: 'Invalid global config: model.groups must be an array' });
+        }
+        if (!importedModel.memory || !Array.isArray(importedModel.memory.ports)) {
+            return res.status(400).json({ error: 'Invalid global config: model.memory.ports must be an array' });
+        }
+
+        // Validate each device has the required topology fields
+        for (const device of importedModel.devices) {
+            if (!device.id || typeof device.id !== 'string') {
+                return res.status(400).json({ error: 'Invalid global config: each device must have a string id' });
+            }
+            if (!isValidEndpoint(device.source_endpoint)) {
+                return res.status(400).json({
+                    error: `Invalid global config: device "${device.id}" has an invalid source_endpoint`,
+                });
+            }
+            if (!isValidEndpoint(device.target_endpoint)) {
+                return res.status(400).json({
+                    error: `Invalid global config: device "${device.id}" has an invalid target_endpoint`,
+                });
+            }
+            if (!isRequiredNonNegativeInt(device.source_unit_id)) {
+                return res.status(400).json({
+                    error: `Invalid global config: device "${device.id}" has an invalid source_unit_id`,
+                });
+            }
+            if (!isRequiredNonNegativeInt(device.unitId)) {
+                return res.status(400).json({
+                    error: `Invalid global config: device "${device.id}" has an invalid unitId`,
+                });
+            }
+        }
+
+        // Validate each group has an id and name
+        for (const group of importedModel.groups) {
+            if (!group.id || typeof group.id !== 'string') {
+                return res.status(400).json({ error: 'Invalid global config: each group must have a string id' });
+            }
+            if (typeof group.name !== 'string') {
+                return res.status(400).json({ error: `Invalid global config: group "${group.id}" must have a string name` });
+            }
+        }
+
+        // Validate each memory port has a numeric port number
+        for (const port of importedModel.memory.ports) {
+            const portNum = Number(port && port.port);
+            if (!Number.isFinite(portNum) || portNum < 1 || portNum > 65535) {
+                return res.status(400).json({ error: 'Invalid global config: each memory port must have a valid port number (1–65535)' });
+            }
+        }
+
+        // Strip system-managed status fields — they are recomputed below to
+        // ensure correctness and prevent importing stale/invalid slot assignments.
+        for (const device of importedModel.devices) {
+            delete device.status_slot;
+            delete device.status_unit_id;
+        }
+
+        // Normalise optional top-level fields
+        if (!importedModel.system || typeof importedModel.system !== 'object') {
+            importedModel.system = {};
+        }
+
+        // Ensure memory ports have the required blocks[] and units[] arrays.
+        // blocks[] is the auto-derived list populated by rehydrateFromYaml on compile.
+        // units[] is the manual unit-based config layer introduced in a later schema version.
+        for (const port of importedModel.memory.ports) {
+            if (!Array.isArray(port.blocks)) port.blocks = [];
+            if (!Array.isArray(port.units))  port.units  = [];
+        }
+
+        // Reassign canonical status_unit_id for every device based on its
+        // target_endpoint group, then compute slot indices.
+        for (const device of importedModel.devices) {
+            device.status_unit_id = getCanonicalStatusUnitId(importedModel, device.target_endpoint);
+        }
+        recompileStatusSlots(importedModel);
+
+        writeModel(importedModel);
+        scheduleCompile();
+
+        res.json({
+            ok: true,
+            imported: {
+                devices: importedModel.devices.length,
+                groups:  importedModel.groups.length,
+                ports:   importedModel.memory.ports.length,
+            },
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // GET /compile/precheck — return port numbers referenced by devices that don't exist in memory yet.
 // The frontend uses this to present confirmation dialogs before triggering the full compile.
 app.get('/compile/precheck', (req, res) => {
