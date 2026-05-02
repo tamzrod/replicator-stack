@@ -502,6 +502,23 @@
     .btn-cancel-inline { background: #E5E7EB; color: #374151; font-size: 0.75rem; padding: 4px 10px; }
     .btn-cancel-inline:not(:disabled):hover { background: #D1D5DB; }
 
+    /* ── Test Connection button & inline result ─────────────────────── */
+    .btn-test-conn {
+      background: #F3F4F6; color: #374151; font-size: 0.72rem; padding: 4px 10px;
+      border: 1px solid #D1D5DB; white-space: nowrap; flex-shrink: 0;
+    }
+    .btn-test-conn:not(:disabled):hover { background: #E5E7EB; }
+    .conn-test-wrap {
+      display: flex; align-items: center; gap: 6px; width: 100%;
+    }
+    .conn-test-wrap .info-edit-input { flex: 1; min-width: 0; }
+    .conn-test-result {
+      font-size: .75rem; font-weight: 600; white-space: nowrap; display: none;
+    }
+    .conn-test-result.ok  { color: #166534; }
+    .conn-test-result.err { color: #B91C1C; }
+    .conn-test-result.show { display: inline; }
+
     /* ── Top-level Tab Bar ──────────────────────────────────────────── */
     #tab-bar {
       background: #0B3C5D;
@@ -1937,7 +1954,11 @@
       <div class="row">
         <div class="field">
           <label>Target Endpoint</label>
-          <input id="ad-tgt-endpoint" type="text" placeholder="127.0.0.1:502" title="MMA server address in host:port format, e.g. 127.0.0.1:502" required />
+          <div class="conn-test-wrap">
+            <input id="ad-tgt-endpoint" type="text" placeholder="127.0.0.1:502" title="MMA server address in host:port format, e.g. 127.0.0.1:502" required style="flex:1;min-width:0" />
+            <button type="button" class="btn-test-conn" id="ad-tgt-test-btn" title="Test TCP connectivity to this endpoint">Test</button>
+          </div>
+          <span class="conn-test-result" id="ad-tgt-test-result"></span>
         </div>
         <div class="field">
           <label>MMA Unit ID <span style="color:#6B7280;font-size:.75rem;font-weight:400">(memory unit)</span></label>
@@ -2152,6 +2173,57 @@ async function api(method, path, body) {
   const res = await fetch(path, opts);
   const data = await res.json().catch(() => ({}));
   return { ok: res.ok, status: res.status, data };
+}
+
+/**
+ * Trigger a TCP reachability check for the endpoint value in `inputEl`.
+ * Shows an inline result in `resultEl` and auto-clears it after `clearMs`.
+ * @param {HTMLInputElement} inputEl   - The endpoint text input
+ * @param {HTMLElement}      resultEl  - The <span> that receives the result
+ * @param {HTMLButtonElement} btnEl    - The Test button (disabled while running)
+ * @param {number} [clearMs=6000]     - Auto-clear delay in ms
+ */
+async function testConnection(inputEl, resultEl, btnEl, clearMs = 6000) {
+  const endpoint = inputEl.value.trim();
+
+  // Validate format: must contain host:port
+  const lastColon = endpoint.lastIndexOf(':');
+  const port = lastColon >= 1 ? Number(endpoint.slice(lastColon + 1)) : NaN;
+  if (!endpoint || lastColon < 1 || !Number.isFinite(port) || port < 1 || port > 65535) {
+    resultEl.textContent = '⚠ Invalid endpoint format';
+    resultEl.className = 'conn-test-result err show';
+    clearTimeout(resultEl._clearTimer);
+    resultEl._clearTimer = setTimeout(() => { resultEl.className = 'conn-test-result'; }, clearMs);
+    return;
+  }
+
+  // Loading state
+  btnEl.disabled = true;
+  inputEl.disabled = true;
+  resultEl.textContent = '⏳ Testing…';
+  resultEl.className = 'conn-test-result show';
+
+  try {
+    const { ok, data } = await api('POST', '/test-connection', { endpoint });
+    if (ok && data.success) {
+      const ms = Number.isFinite(data.latency_ms) ? ` (${data.latency_ms}ms)` : '';
+      resultEl.textContent = `✓ Connected${ms}`;
+      resultEl.className = 'conn-test-result ok show';
+    } else {
+      const reason = (data && data.error) ? data.error : 'Unreachable';
+      resultEl.textContent = `✗ ${reason}`;
+      resultEl.className = 'conn-test-result err show';
+    }
+  } catch (_) {
+    resultEl.textContent = '✗ Request failed';
+    resultEl.className = 'conn-test-result err show';
+  } finally {
+    btnEl.disabled = false;
+    inputEl.disabled = false;
+  }
+
+  clearTimeout(resultEl._clearTimer);
+  resultEl._clearTimer = setTimeout(() => { resultEl.className = 'conn-test-result'; }, clearMs);
 }
 
 function escapeHtml(str) {
@@ -2796,8 +2868,12 @@ function renderDeviceWorkspace() {
       ${isEditing ? `
         <div class="info-field">
           <label>Target Endpoint</label>
-          <input class="info-edit-input" type="text" id="ws-tgt-endpoint" value="${escapeHtml(device.target_endpoint || '')}"
-            placeholder="e.g. 127.0.0.1:502" title="MMA server address in host:port format" required />
+          <div class="conn-test-wrap">
+            <input class="info-edit-input" type="text" id="ws-tgt-endpoint" value="${escapeHtml(device.target_endpoint || '')}"
+              placeholder="e.g. 127.0.0.1:502" title="MMA server address in host:port format" required />
+            <button type="button" class="btn-test-conn" id="ws-tgt-test-btn" title="Test TCP connectivity to this endpoint">Test</button>
+          </div>
+          <span class="conn-test-result" id="ws-tgt-test-result"></span>
         </div>
         <div class="info-field">
           <label>Unit ID <span style="color:#9CA3AF;font-weight:400">(MMA unit)</span></label>
@@ -2821,6 +2897,14 @@ function renderDeviceWorkspace() {
 
   // ── Edit / Save / Cancel device ───────────────────────────────────
   if (isEditing) {
+    document.getElementById('ws-tgt-test-btn').addEventListener('click', () => {
+      testConnection(
+        document.getElementById('ws-tgt-endpoint'),
+        document.getElementById('ws-tgt-test-result'),
+        document.getElementById('ws-tgt-test-btn')
+      );
+    });
+
     document.getElementById('ws-btn-save-device').addEventListener('click', async () => {
       const banner = document.getElementById('ws-device-banner');
       banner.className = 'banner';
@@ -3200,6 +3284,14 @@ document.getElementById('add-device-form').addEventListener('submit', async e =>
 
 document.getElementById('ad-cancel').addEventListener('click', () => {
   document.getElementById('add-device-dialog').close();
+});
+
+document.getElementById('ad-tgt-test-btn').addEventListener('click', () => {
+  testConnection(
+    document.getElementById('ad-tgt-endpoint'),
+    document.getElementById('ad-tgt-test-result'),
+    document.getElementById('ad-tgt-test-btn')
+  );
 });
 
 // Recalculate MMA unit ID when target endpoint changes.
