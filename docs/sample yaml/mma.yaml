@@ -10,8 +10,8 @@ listeners:
       - unit_id: 1
 
         holding_registers:
-          start: 998
-          count: 200   # 998–1116
+          - start: 998
+            count: 200   # 998–1116
 
         policy:
           rules:
@@ -28,8 +28,8 @@ listeners:
       - unit_id: 2
 
         holding_registers:
-          start: 998
-          count: 200
+          - start: 998
+            count: 200
 
         policy:
           rules:
@@ -46,8 +46,8 @@ listeners:
       - unit_id: 3
 
         holding_registers:
-          start: 998
-          count: 200
+          - start: 998
+            count: 200
 
         policy:
           rules:
@@ -67,8 +67,8 @@ listeners:
       - unit_id: 100
 
         holding_registers:
-          start: 0
-          count: 400
+          - start: 0
+            count: 400
 
         policy:
           rules:

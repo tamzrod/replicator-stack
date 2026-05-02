@@ -281,13 +281,12 @@ function toMmaYaml(model) {
             for (const unit of mergedUnits) {
                 lines.push(`      - unit_id: ${unit.unitId}`);
 
-                // Emit each domain section present in this unit as a segments list.
+                // Emit each domain section as a list of ranges (MMA2 schema — no segments wrapper).
                 for (const [area, segments] of unit.domains) {
                     lines.push(`        ${area}:`);
-                    lines.push(`          segments:`);
                     for (const seg of segments) {
-                        lines.push(`            - start: ${seg.start}`);
-                        lines.push(`              count: ${seg.count}`);
+                        lines.push(`          - start: ${seg.start}`);
+                        lines.push(`            count: ${seg.count}`);
                     }
                 }
 
@@ -366,6 +365,13 @@ function validateMmaConfig(yaml) {
     // NOTE: duplicate unit_id values within a listener are intentional — unit_id is a
     // CONTAINER ID that may hold multiple memory domains.  compileMma2Config merges them
     // before YAML emission, so duplicates in hand-crafted YAML are left to the runtime.
+
+    // Reject any use of the deprecated `segments:` wrapper key.  Register ranges must be
+    // expressed as a direct YAML list under the area key (e.g. `holding_registers: [...]`),
+    // never wrapped in a `segments:` block.
+    if (/^\s+segments\s*:/m.test(yaml)) {
+        errors.push('MMA config must not use segments: wrapper — register ranges must be a direct list under the area key (e.g. holding_registers: - start: 0 count: 10)');
+    }
 
     return errors;
 }
