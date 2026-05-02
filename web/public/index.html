@@ -858,6 +858,42 @@
       border-radius: 4px;
       padding: 1px 5px;
     }
+    .mem-area-view {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 1;
+      flex-wrap: wrap;
+    }
+    .mem-area-edit {
+      display: none;
+      align-items: flex-end;
+      gap: 6px;
+      flex: 1;
+      flex-wrap: wrap;
+    }
+    .mem-area-type-label {
+      font-size: .82rem;
+      font-weight: 600;
+      color: #1E3A5F;
+      background: #EFF6FF;
+      border-radius: 4px;
+      padding: 2px 8px;
+    }
+    .mem-area-view-val {
+      font-size: .82rem;
+      color: #374151;
+    }
+    .mem-unit-id-view {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .mem-unit-id-editrow {
+      display: none;
+      align-items: center;
+      gap: 6px;
+    }
 
     /* ── Add-area inline form ────────────────────────────────────────── */
     .mem-add-area-form {
@@ -3928,28 +3964,48 @@ function renderUnit(portId, unit) {
   const areasHtml = areas.length === 0
     ? `<div class="empty-state" style="padding:6px 0;font-size:.78rem">No areas — add one below.</div>`
     : areas.map(area => `
-      <div class="mem-area-row" data-area-id="${escapeHtml(area.id)}">
-        <div class="mem-area-field" style="flex:2;min-width:140px">
-          <label>Area Type</label>
-          <select class="mem-area-type-sel" data-port-id="${escapeHtml(portId)}" data-unit-id="${unitDbIdEsc}" data-area-id="${escapeHtml(area.id)}">
-            ${Object.entries(AREA_TYPE_LABELS).map(([v, l]) =>
-              `<option value="${v}"${area.type === v ? ' selected' : ''}>${l}</option>`
-            ).join('')}
-          </select>
+      <div class="mem-area-row" data-area-id="${escapeHtml(area.id)}"
+        data-orig-type="${escapeHtml(area.type)}"
+        data-orig-start="${escapeHtml(String(area.start))}"
+        data-orig-count="${escapeHtml(String(area.count))}">
+        <!-- View mode -->
+        <div class="mem-area-view">
+          <span class="mem-area-type-label">${escapeHtml(AREA_TYPE_LABELS[area.type] || area.type)}</span>
+          <span class="mem-area-view-val">Start: <strong>${escapeHtml(String(area.start))}</strong></span>
+          <span class="mem-area-view-val">Count: <strong>${escapeHtml(String(area.count))}</strong></span>
+          <button class="btn-mem-sm mem-edit-area" style="margin-left:auto"
+            data-area-id="${escapeHtml(area.id)}" title="Edit this area">✏ Edit</button>
+          <button class="btn-mem-danger mem-del-area"
+            data-port-id="${escapeHtml(portId)}" data-unit-id="${unitDbIdEsc}" data-area-id="${escapeHtml(area.id)}"
+            title="Remove this area">✕</button>
         </div>
-        <div class="mem-area-field" style="max-width:100px">
-          <label>Start Addr</label>
-          <input class="mem-area-start-inp" type="number" min="0" value="${escapeHtml(String(area.start))}"
-            data-port-id="${escapeHtml(portId)}" data-unit-id="${unitDbIdEsc}" data-area-id="${escapeHtml(area.id)}" />
+        <!-- Edit mode (hidden by default) -->
+        <div class="mem-area-edit">
+          <div class="mem-area-field" style="flex:2;min-width:140px">
+            <label>Area Type</label>
+            <select class="mem-area-type-sel" data-port-id="${escapeHtml(portId)}" data-unit-id="${unitDbIdEsc}" data-area-id="${escapeHtml(area.id)}">
+              ${Object.entries(AREA_TYPE_LABELS).map(([v, l]) =>
+                `<option value="${v}"${area.type === v ? ' selected' : ''}>${l}</option>`
+              ).join('')}
+            </select>
+          </div>
+          <div class="mem-area-field" style="max-width:100px">
+            <label>Start Addr</label>
+            <input class="mem-area-start-inp" type="number" min="0" value="${escapeHtml(String(area.start))}"
+              data-port-id="${escapeHtml(portId)}" data-unit-id="${unitDbIdEsc}" data-area-id="${escapeHtml(area.id)}" />
+          </div>
+          <div class="mem-area-field" style="max-width:90px">
+            <label>Count</label>
+            <input class="mem-area-count-inp" type="number" min="1" value="${escapeHtml(String(area.count))}"
+              data-port-id="${escapeHtml(portId)}" data-unit-id="${unitDbIdEsc}" data-area-id="${escapeHtml(area.id)}" />
+          </div>
+          <button class="btn-mem-sm mem-save-area"
+            data-port-id="${escapeHtml(portId)}" data-unit-id="${unitDbIdEsc}" data-area-id="${escapeHtml(area.id)}"
+            style="align-self:flex-end;margin-bottom:1px">✔ Save</button>
+          <button class="btn-mem-sm mem-cancel-area"
+            data-area-id="${escapeHtml(area.id)}"
+            style="align-self:flex-end;margin-bottom:1px;background:#F3F4F6;color:#374151">✖ Cancel</button>
         </div>
-        <div class="mem-area-field" style="max-width:90px">
-          <label>Count</label>
-          <input class="mem-area-count-inp" type="number" min="1" value="${escapeHtml(String(area.count))}"
-            data-port-id="${escapeHtml(portId)}" data-unit-id="${unitDbIdEsc}" data-area-id="${escapeHtml(area.id)}" />
-        </div>
-        <button class="btn-mem-danger mem-del-area"
-          data-port-id="${escapeHtml(portId)}" data-unit-id="${unitDbIdEsc}" data-area-id="${escapeHtml(area.id)}"
-          title="Remove this area">✕</button>
       </div>`).join('');
 
   // Add-area inline form
@@ -4052,13 +4108,26 @@ function renderUnit(portId, unit) {
         <span style="color:#9CA3AF;font-size:.75rem">(${areas.length} area${areas.length !== 1 ? 's' : ''})</span>
       </div>
       <div class="mem-unit-actions" onclick="event.stopPropagation()">
-        <label style="font-size:.72rem;color:#6B7280;white-space:nowrap">unit_id:</label>
-        <input class="mem-unit-id-input mem-unit-id-edit"
-          type="number" min="0" max="65535" value="${unitIdEsc}"
-          data-port-id="${escapeHtml(portId)}" data-unit-id="${unitDbIdEsc}"
-          title="Edit unit_id" style="width:70px" />
-        <button class="btn-mem-sm mem-save-unit-id"
-          data-port-id="${escapeHtml(portId)}" data-unit-id="${unitDbIdEsc}" title="Save unit_id">✓</button>
+        <!-- View mode -->
+        <div class="mem-unit-id-view">
+          <label style="font-size:.72rem;color:#6B7280;white-space:nowrap">unit_id:</label>
+          <span class="mem-unit-id-display mem-unit-id-badge">${unitIdEsc}</span>
+          <button class="btn-mem-sm mem-edit-unit-id"
+            data-unit-id="${unitDbIdEsc}" title="Edit unit_id">✏</button>
+        </div>
+        <!-- Edit mode (hidden by default) -->
+        <div class="mem-unit-id-editrow">
+          <label style="font-size:.72rem;color:#6B7280;white-space:nowrap">unit_id:</label>
+          <input class="mem-unit-id-input mem-unit-id-edit"
+            type="number" min="0" max="65535" value="${unitIdEsc}"
+            data-port-id="${escapeHtml(portId)}" data-unit-id="${unitDbIdEsc}"
+            title="Edit unit_id" style="width:70px" />
+          <button class="btn-mem-sm mem-save-unit-id"
+            data-port-id="${escapeHtml(portId)}" data-unit-id="${unitDbIdEsc}" title="Save unit_id">✔</button>
+          <button class="btn-mem-sm mem-cancel-unit-id"
+            data-unit-id="${unitDbIdEsc}" title="Cancel"
+            style="background:#F3F4F6;color:#374151">✖</button>
+        </div>
         <button class="btn-mem-danger mem-del-unit"
           data-port-id="${escapeHtml(portId)}" data-unit-id="${unitDbIdEsc}" title="Remove unit">✕</button>
       </div>
@@ -4344,6 +4413,17 @@ function _attachMemoryTabHandlers(container) {
     });
   });
 
+  // ── Edit unit_id (enter edit mode) ──────────────────────────────────
+  container.querySelectorAll('.mem-edit-unit-id').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const unitId = btn.dataset.unitId;
+      const card = container.querySelector(`.mem-unit-card[data-unit-id="${unitId}"]`);
+      if (!card) return;
+      card.querySelector('.mem-unit-id-view').style.display = 'none';
+      card.querySelector('.mem-unit-id-editrow').style.display = 'flex';
+    });
+  });
+
   // ── Save unit_id ─────────────────────────────────────────────────────
   container.querySelectorAll('.mem-save-unit-id').forEach(btn => {
     btn.addEventListener('click', async () => {
@@ -4360,6 +4440,23 @@ function _attachMemoryTabHandlers(container) {
       _appendMmaLog(`[memory] Unit updated — new unit_id: ${newUnitId}`);
       setDirty(true);
       await _bus.emit(EV.MODEL_MUTATED);
+    });
+  });
+
+  // ── Cancel unit_id edit ──────────────────────────────────────────────
+  container.querySelectorAll('.mem-cancel-unit-id').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const unitId = btn.dataset.unitId;
+      const card = container.querySelector(`.mem-unit-card[data-unit-id="${unitId}"]`);
+      if (!card) return;
+      const viewDiv = card.querySelector('.mem-unit-id-view');
+      const editDiv = card.querySelector('.mem-unit-id-editrow');
+      // Restore original value from the view display span
+      const display = viewDiv && viewDiv.querySelector('.mem-unit-id-display');
+      const inp = editDiv && editDiv.querySelector('.mem-unit-id-edit');
+      if (inp && display) inp.value = display.textContent;
+      if (editDiv) editDiv.style.display = 'none';
+      if (viewDiv) viewDiv.style.display = 'flex';
     });
   });
 
@@ -4415,21 +4512,48 @@ function _attachMemoryTabHandlers(container) {
   });
 
   // ── Area field change (type/start/count) — auto-save on blur ─────────
-  function makeAreaSaveHandler(field) {
-    return async function() {
-      const portId = this.dataset.portId;
-      const unitId = this.dataset.unitId;
-      const areaId = this.dataset.areaId;
-      const row = this.closest('.mem-area-row');
+  // (Removed: changes are now saved explicitly via the Save button in edit mode)
 
-      const typeEl  = row.querySelector('.mem-area-type-sel');
-      const startEl = row.querySelector('.mem-area-start-inp');
-      const countEl = row.querySelector('.mem-area-count-inp');
+  // ── Edit area (enter edit mode) ──────────────────────────────────────
+  container.querySelectorAll('.mem-edit-area').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const areaId = btn.dataset.areaId;
+      const row = container.querySelector(`.mem-area-row[data-area-id="${areaId}"]`);
+      if (!row) return;
+      row.querySelector('.mem-area-view').style.display = 'none';
+      row.querySelector('.mem-area-edit').style.display = 'flex';
+    });
+  });
+
+  // ── Save area ────────────────────────────────────────────────────────
+  container.querySelectorAll('.mem-save-area').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const portId = btn.dataset.portId;
+      const unitId = btn.dataset.unitId;
+      const areaId = btn.dataset.areaId;
+      const row = container.querySelector(`.mem-area-row[data-area-id="${areaId}"]`);
+      if (!row) return;
+      const editDiv = row.querySelector('.mem-area-edit');
+
+      const typeEl  = editDiv.querySelector('.mem-area-type-sel');
+      const startEl = editDiv.querySelector('.mem-area-start-inp');
+      const countEl = editDiv.querySelector('.mem-area-count-inp');
+
+      const newType  = typeEl.value;
+      const newStart = Number(startEl.value);
+      const newCount = Number(countEl.value);
 
       const patch = {};
-      if (field === 'type')  patch.type  = typeEl.value;
-      if (field === 'start') patch.start = Number(startEl.value);
-      if (field === 'count') patch.count = Number(countEl.value);
+      if (newType  !== row.dataset.origType)          patch.type  = newType;
+      if (newStart !== Number(row.dataset.origStart)) patch.start = newStart;
+      if (newCount !== Number(row.dataset.origCount)) patch.count = newCount;
+
+      if (Object.keys(patch).length === 0) {
+        // No changes — just exit edit mode
+        editDiv.style.display = 'none';
+        row.querySelector('.mem-area-view').style.display = 'flex';
+        return;
+      }
 
       const { ok, data } = await api(
         'PUT',
@@ -4440,23 +4564,30 @@ function _attachMemoryTabHandlers(container) {
         alert(`Error saving area: ${data.error || 'Unknown error'}`);
         return;
       }
-      if (field === 'type')  _appendMmaLog(`[memory] Memory area moved — type changed to ${patch.type}`);
-      if (field === 'start') _appendMmaLog(`[memory] Memory area updated — start address set to ${patch.start}`);
-      if (field === 'count') _appendMmaLog(`[memory] Memory area updated — count set to ${patch.count}`);
+      if (patch.type  !== undefined) _appendMmaLog(`[memory] Memory area moved — type changed to ${patch.type}`);
+      if (patch.start !== undefined) _appendMmaLog(`[memory] Memory area updated — start address set to ${patch.start}`);
+      if (patch.count !== undefined) _appendMmaLog(`[memory] Memory area updated — count set to ${patch.count}`);
       setDirty(true);
-      // Reload to refresh area count in unit header
+      // Re-render refreshes the row with updated values and resets to view mode
       await _bus.emit(EV.MODEL_MUTATED);
-    };
-  }
+    });
+  });
 
-  container.querySelectorAll('.mem-area-type-sel').forEach(sel => {
-    sel.addEventListener('change', makeAreaSaveHandler('type').bind(sel));
-  });
-  container.querySelectorAll('.mem-area-start-inp').forEach(inp => {
-    inp.addEventListener('change', makeAreaSaveHandler('start').bind(inp));
-  });
-  container.querySelectorAll('.mem-area-count-inp').forEach(inp => {
-    inp.addEventListener('change', makeAreaSaveHandler('count').bind(inp));
+  // ── Cancel area edit ─────────────────────────────────────────────────
+  container.querySelectorAll('.mem-cancel-area').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const areaId = btn.dataset.areaId;
+      const row = container.querySelector(`.mem-area-row[data-area-id="${areaId}"]`);
+      if (!row) return;
+      const editDiv = row.querySelector('.mem-area-edit');
+      // Restore original values
+      editDiv.querySelector('.mem-area-type-sel').value  = row.dataset.origType;
+      editDiv.querySelector('.mem-area-start-inp').value = row.dataset.origStart;
+      editDiv.querySelector('.mem-area-count-inp').value = row.dataset.origCount;
+      // Switch back to view mode
+      editDiv.style.display = 'none';
+      row.querySelector('.mem-area-view').style.display = 'flex';
+    });
   });
 
   // ── Delete area ──────────────────────────────────────────────────────
