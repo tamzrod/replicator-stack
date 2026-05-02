@@ -1639,6 +1639,16 @@
           📄 Report
         </button>
         <div class="burger-dropdown-divider"></div>
+        <button class="burger-dropdown-item" id="btn-global-export" role="menuitem"
+          title="Export the full configuration (model + memory + UI) as a single JSON file">
+          ⬇ Export Config
+        </button>
+        <button class="burger-dropdown-item" id="btn-global-import" role="menuitem"
+          title="Import a previously exported global configuration file (replaces current model)">
+          ⬆ Import Config
+        </button>
+        <input type="file" id="input-global-import" accept=".json,application/json" style="display:none" aria-hidden="true" />
+        <div class="burger-dropdown-divider"></div>
         <button class="burger-dropdown-item" id="btn-change-password" role="menuitem"
           title="Change your login password">
           🔑 Change Password
@@ -7063,6 +7073,92 @@ document.getElementById('btn-report').addEventListener('click', () => {
   document.getElementById('btn-burger').setAttribute('aria-expanded', 'false');
   generateReport();
 });
+
+// ── Global Config Export ──────────────────────────────────────────────────────
+document.getElementById('btn-global-export').addEventListener('click', async () => {
+  document.getElementById('burger-dropdown').classList.remove('open');
+  document.getElementById('btn-burger').setAttribute('aria-expanded', 'false');
+
+  const btn = document.getElementById('btn-global-export');
+  const orig = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '⏳ Exporting…';
+  try {
+    const res = await fetch('/config/global-export');
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      alert('Export failed: ' + (err.error || res.statusText));
+      return;
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    // Generate a filename that includes the current date for easy identification.
+    const date = new Date().toISOString().slice(0, 10);
+    a.href = url;
+    a.download = `global-config-${date}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    alert('Export error: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = orig;
+  }
+});
+
+// ── Global Config Import ──────────────────────────────────────────────────────
+document.getElementById('btn-global-import').addEventListener('click', () => {
+  document.getElementById('burger-dropdown').classList.remove('open');
+  document.getElementById('btn-burger').setAttribute('aria-expanded', 'false');
+  document.getElementById('input-global-import').click();
+});
+
+document.getElementById('input-global-import').addEventListener('change', async (e) => {
+  const file = e.target.files && e.target.files[0];
+  // Reset so the same file can be re-selected if needed.
+  e.target.value = '';
+  if (!file) return;
+
+  const confirmed = confirm(
+    `Import "${file.name}"?\n\n` +
+    'This will REPLACE the current model with the contents of the selected file.\n' +
+    'The current configuration will be overwritten. This action cannot be undone.'
+  );
+  if (!confirmed) return;
+
+  let envelope;
+  try {
+    const text = await file.text();
+    envelope = JSON.parse(text);
+  } catch (parseErr) {
+    alert('Import failed: could not parse JSON — ' + parseErr.message);
+    return;
+  }
+
+  const btn = document.getElementById('btn-global-import');
+  const orig = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '⏳ Importing…';
+  try {
+    const { ok, data } = await api('POST', '/config/global-import', envelope);
+    if (!ok) {
+      alert('Import failed: ' + (data.error || 'Unknown error'));
+      return;
+    }
+    const { devices = 0, groups = 0, ports = 0 } = data.imported || {};
+    await _bus.emit(EV.MODEL_MUTATED);
+    alert(`✓ Import successful\n${devices} device(s), ${groups} group(s), ${ports} memory port(s) loaded.`);
+  } catch (err) {
+    alert('Import error: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = orig;
+  }
+});
+
 
 // ── Burger Menu Toggle ────────────────────────────────────────────────────────
 (function () {
