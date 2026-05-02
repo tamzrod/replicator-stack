@@ -392,6 +392,17 @@
     .ctx-menu-item.ctx-menu-item-danger { color: #DC2626; }
     .ctx-menu-item.ctx-menu-item-danger:hover { background: #FEF2F2; color: #B91C1C; }
     .ctx-menu-item .ctx-icon { font-size: .9rem; }
+    .ctx-menu-has-sub { position: relative; }
+    .ctx-submenu-arrow { margin-left: auto; font-size: .75rem; color: #9CA3AF; }
+    .ctx-submenu {
+      display: none; position: absolute;
+      left: 100%; top: -4px;
+      background: #fff; border: 1px solid #E5E7EB; border-radius: 6px;
+      box-shadow: 0 4px 16px rgba(0,0,0,.12); min-width: 160px; padding: 4px 0;
+      z-index: 10000;
+    }
+    .ctx-menu-has-sub:hover .ctx-submenu { display: block; }
+    .ctx-submenu-new-group { color: #145DA0; font-style: italic; }
 
     /* ── Device Workspace ───────────────────────────────────────────── */
     #device-workspace { display: grid; gap: 0; }
@@ -1980,6 +1991,11 @@
   <div class="ctx-menu-item" id="ctx-duplicate-device" role="menuitem">
     <span class="ctx-icon">⎘</span> Duplicate
   </div>
+  <div class="ctx-menu-item ctx-menu-has-sub" id="ctx-move-to-group" role="menuitem" aria-haspopup="true">
+    <span class="ctx-icon">📂</span> Move to Group
+    <span class="ctx-submenu-arrow">›</span>
+    <div class="ctx-submenu" id="ctx-move-group-submenu" role="menu" aria-label="Select group"></div>
+  </div>
   <div class="ctx-menu-item ctx-menu-item-danger" id="ctx-delete-device" role="menuitem">
     <span class="ctx-icon">🗑</span> Delete
   </div>
@@ -2565,6 +2581,7 @@ function groupName(model, groupId) {
 
 let _editingReadId = null;
 let _pendingReadId = null;
+let _editingDeviceId = null;
 
 function generateUniqueReadId(reads) {
   const existingIds = new Set((reads || []).map(r => r.id));
@@ -2596,18 +2613,27 @@ function renderDeviceWorkspace() {
 
   const grpName = groupName(model, device.groupId) || '— Ungrouped —';
   const reads = device.reads || [];
+  const isEditing = (_editingDeviceId === device.id);
+  const groups = (model.groups || []);
+  const groupOpts = `<option value="">— Ungrouped —</option>` +
+    groups.map(g => `<option value="${escapeHtml(g.id)}"${device.groupId === g.id ? ' selected' : ''}>${escapeHtml(g.name)}</option>`).join('');
 
   // ── A. SOURCE Section ──────────────────────────────────────────────
   let html = `<div class="card pipeline-section pipeline-section-source">
     <div class="ws-card-header">
       <h2><span class="pipeline-label pipeline-label-source">SOURCE</span>📟 ${escapeHtml(device.name || device.id)}</h2>
       <div class="ws-card-actions">
+        ${isEditing
+          ? `<button id="ws-btn-save-device" class="btn-save-inline" type="button">✔ Save</button>
+             <button id="ws-btn-cancel-device" class="btn-cancel-inline" type="button">✖ Cancel</button>`
+          : `<button id="ws-btn-edit-device" class="btn-edit" type="button">✏ Edit</button>`
+        }
         <button class="btn-danger" id="ws-btn-del-device">✕ Delete</button>
       </div>
     </div>
-    <form id="ws-config-form">
-      <div class="info-grid">
-        <div class="info-field"><label>Device ID</label><div class="info-val" title="Unique system-generated device identifier">${escapeHtml(device.id)}</div></div>
+    <div class="info-grid">
+      <div class="info-field"><label>Device ID</label><div class="info-val" title="Unique system-generated device identifier">${escapeHtml(device.id)}</div></div>
+      ${isEditing ? `
         <div class="info-field">
           <label>Name</label>
           <input class="info-edit-input" type="text" id="ws-ed-name" value="${escapeHtml(device.name || '')}" placeholder="My Device" title="Display name for this device" />
@@ -2615,15 +2641,24 @@ function renderDeviceWorkspace() {
         <div class="info-field">
           <label>Source Endpoint</label>
           <input class="info-edit-input" type="text" id="ws-ed-src-endpoint" value="${escapeHtml(device.source_endpoint || '')}"
-            placeholder="e.g. 10.5.1.29:502 or mydevice:502" title="Source device address in host:port format, e.g. 10.5.1.29:502" required />
+            placeholder="e.g. 10.5.1.29:502 or mydevice:502" title="Source device address in host:port format" required />
         </div>
         <div class="info-field">
           <label>Source Unit ID <span style="color:#ef4444;font-weight:600">*</span></label>
           <input class="info-edit-input" type="number" id="ws-ed-src-unit" value="${escapeHtml(String(device.source_unit_id ?? ''))}" placeholder="e.g. 1" min="0" title="Modbus unit ID of the source device" required />
         </div>
+        <div class="info-field">
+          <label>Group</label>
+          <select class="info-edit-input" id="ws-ed-group" title="Device group">${groupOpts}</select>
+        </div>
+      ` : `
+        <div class="info-field"><label>Name</label><div class="info-val" title="Display name">${escapeHtml(device.name || '—')}</div></div>
+        <div class="info-field"><label>Source Endpoint</label><div class="info-val" title="Source device address">${escapeHtml(device.source_endpoint || '—')}</div></div>
+        <div class="info-field"><label>Source Unit ID</label><div class="info-val" title="Modbus unit ID">${escapeHtml(String(device.source_unit_id ?? '—'))}</div></div>
         <div class="info-field"><label>Group</label><div class="info-val" title="Device group">${escapeHtml(grpName)}</div></div>
-      </div>
-    </form>
+      `}
+    </div>
+    ${isEditing ? `<div id="ws-device-banner" class="banner" style="margin-top:8px"></div>` : ''}
   </div>`;
 
   // ── Pipeline Arrow ─────────────────────────────────────────────────
@@ -2728,15 +2763,23 @@ function renderDeviceWorkspace() {
       <h2><span class="pipeline-label pipeline-label-target">TARGET</span>🎯 Target <span style="color:#9CA3AF;font-size:.8rem;font-weight:400">(MMA destination)</span></h2>
     </div>
     <div class="info-grid">
-      <div class="info-field">
-        <label>Target Endpoint</label>
-        <input class="info-edit-input" type="text" id="ws-tgt-endpoint" value="${escapeHtml(device.target_endpoint || '')}"
-          form="ws-config-form" placeholder="e.g. 127.0.0.1:502" title="MMA server address in host:port format, e.g. 127.0.0.1:502" required />
-      </div>
-      <div class="info-field">
-        <label>Unit ID <span style="color:#9CA3AF;font-weight:400">(MMA unit)</span></label>
-        <input class="info-edit-input" type="number" id="ws-tgt-unit" value="${escapeHtml(String(device.unitId ?? ''))}" form="ws-config-form" min="0" title="MMA memory unit ID" required />
-      </div>
+      ${isEditing ? `
+        <div class="info-field">
+          <label>Target Endpoint</label>
+          <input class="info-edit-input" type="text" id="ws-tgt-endpoint" value="${escapeHtml(device.target_endpoint || '')}"
+            placeholder="e.g. 127.0.0.1:502" title="MMA server address in host:port format" required />
+        </div>
+        <div class="info-field">
+          <label>Unit ID <span style="color:#9CA3AF;font-weight:400">(MMA unit)</span></label>
+          <input class="info-edit-input" type="number" id="ws-tgt-unit" value="${escapeHtml(String(device.unitId ?? ''))}" min="0" title="MMA memory unit ID" required />
+        </div>
+      ` : `
+        <div class="info-field"><label>Target Endpoint</label><div class="info-val" title="MMA server address">${escapeHtml(device.target_endpoint || '—')}</div></div>
+        <div class="info-field">
+          <label>Unit ID <span style="color:#9CA3AF;font-weight:400">(MMA unit)</span></label>
+          <div class="info-val" title="MMA memory unit ID">${escapeHtml(String(device.unitId ?? '—'))}</div>
+        </div>
+      `}
     </div>
   </div>`;
 
@@ -2746,19 +2789,41 @@ function renderDeviceWorkspace() {
 
   document.getElementById('ws-btn-del-device').addEventListener('click', () => deleteDevice(device.id));
 
-  // ── Dirty tracking: mark dirty when any device form field changes ──
-  const _trackDirty = () => {
-    _appState.pendingDeviceId = device.id;
-    setDirty(true);
-  };
-  ['ws-ed-name','ws-ed-src-endpoint','ws-ed-src-unit',
-   'ws-tgt-endpoint','ws-tgt-unit'].forEach(id => {
-    document.getElementById(id)?.addEventListener('input', _trackDirty);
-  });
-  // Also track advanced MMA endpoint toggle / inputs
-  document.getElementById('adv-override-toggle')?.addEventListener('change', _trackDirty);
-  document.getElementById('adv-mma-host')?.addEventListener('input', _trackDirty);
-  document.getElementById('adv-mma-port')?.addEventListener('input', _trackDirty);
+  // ── Edit / Save / Cancel device ───────────────────────────────────
+  if (isEditing) {
+    document.getElementById('ws-btn-save-device').addEventListener('click', async () => {
+      const banner = document.getElementById('ws-device-banner');
+      banner.className = 'banner';
+      const payload = {
+        device: {
+          name:            document.getElementById('ws-ed-name').value.trim(),
+          source_endpoint: document.getElementById('ws-ed-src-endpoint').value.trim(),
+          source_unit_id:  Number(document.getElementById('ws-ed-src-unit').value),
+          groupId:         document.getElementById('ws-ed-group').value || null,
+          target_endpoint: document.getElementById('ws-tgt-endpoint').value.trim(),
+          unitId:          Number(document.getElementById('ws-tgt-unit').value),
+        }
+      };
+      const { ok, data } = await api('PUT', `/device/${encodeURIComponent(device.id)}`, payload);
+      if (ok) {
+        _editingDeviceId = null;
+        setDirty(true);
+        await _bus.emit(EV.MODEL_MUTATED);
+      } else {
+        banner.textContent = `✗ ${data.error || 'Unknown error'}`;
+        banner.className = 'banner show err';
+      }
+    });
+    document.getElementById('ws-btn-cancel-device').addEventListener('click', () => {
+      _editingDeviceId = null;
+      renderDeviceWorkspace();
+    });
+  } else {
+    document.getElementById('ws-btn-edit-device').addEventListener('click', () => {
+      _editingDeviceId = device.id;
+      renderDeviceWorkspace();
+    });
+  }
 
   // Show/hide add-read panel
   document.getElementById('ws-btn-show-add-read').addEventListener('click', () => {
@@ -2985,6 +3050,9 @@ _bus.on(EV.MODEL_MUTATED, async () => { await loadModel(); });
 function _capturePendingDeviceFormSilent() {
   const deviceId = _appState.pendingDeviceId;
   if (!deviceId) return;
+  // In the view/edit mode design, inputs only exist when _editingDeviceId matches.
+  // Nothing to capture if the device is not actively being edited.
+  if (_editingDeviceId !== deviceId) { _appState.pendingDeviceId = null; return; }
   const device = (_currentModel?.devices || []).find(d => d.id === deviceId);
   if (!device) { _appState.pendingDeviceId = null; return; }
 
@@ -3390,6 +3458,7 @@ async function deleteDevice(id) {
   const { ok, data } = await api('DELETE', `/device/${encodeURIComponent(id)}`);
   if (ok) {
     if (_selectedDeviceId === id) _selectedDeviceId = null;
+    if (_editingDeviceId === id) _editingDeviceId = null;
     // Remove any staged (unsaved) form payload for this device — it is now
     // permanently deleted and the payload is stale.  Leaving it would cause
     // globalSave() to attempt a /config/save call for a non-existent device.
@@ -3411,6 +3480,18 @@ async function duplicateDevice(id) {
     await _bus.emit(EV.MODEL_MUTATED);
   } else {
     alert(`Error duplicating device: ${data.error || 'Unknown error'}`);
+  }
+}
+
+// ── Move Device to Group ──────────────────────────────────────────────────────
+
+async function moveDeviceToGroup(deviceId, groupId) {
+  const { ok, data } = await api('PUT', `/device/${encodeURIComponent(deviceId)}`, { device: { groupId: groupId || null } });
+  if (ok) {
+    setDirty(true);
+    await _bus.emit(EV.MODEL_MUTATED);
+  } else {
+    alert(`Error moving device: ${data.error || 'Unknown error'}`);
   }
 }
 
@@ -3446,6 +3527,37 @@ document.getElementById('ctx-duplicate-device').addEventListener('click', async 
   const id = _ctxMenuDeviceId;
   _hideDeviceContextMenu();
   if (id) await duplicateDevice(id);
+});
+
+// ── Move to Group submenu ─────────────────────────────────────────────────────
+document.getElementById('ctx-move-to-group').addEventListener('mouseenter', () => {
+  const submenu = document.getElementById('ctx-move-group-submenu');
+  const groups = (_currentModel && _currentModel.groups) || [];
+  submenu.innerHTML = [
+    `<div class="ctx-menu-item ctx-submenu-item" data-group-id="">— Ungrouped —</div>`,
+    ...groups.map(g =>
+      `<div class="ctx-menu-item ctx-submenu-item" data-group-id="${escapeHtml(g.id)}">${escapeHtml(g.name)}</div>`
+    ),
+    `<div class="ctx-menu-item ctx-submenu-item ctx-submenu-new-group" data-group-id="__new__">+ New Group</div>`,
+  ].join('');
+
+  submenu.querySelectorAll('.ctx-submenu-item').forEach(item => {
+    item.addEventListener('click', async () => {
+      const id = _ctxMenuDeviceId;
+      const rawGroupId = item.dataset.groupId;
+      _hideDeviceContextMenu();
+      if (!id) return;
+      if (rawGroupId === '__new__') {
+        const name = prompt('New group name:');
+        if (!name || !name.trim()) return;
+        const { ok: gok, data: gdata } = await api('POST', '/group', { group: { name: name.trim() } });
+        if (!gok) { alert(`Error creating group: ${gdata.error || 'Unknown error'}`); return; }
+        await moveDeviceToGroup(id, gdata.group.id);
+      } else {
+        await moveDeviceToGroup(id, rawGroupId || null);
+      }
+    });
+  });
 });
 
 document.getElementById('ctx-delete-device').addEventListener('click', async () => {
