@@ -545,7 +545,6 @@ function ensureTargetMemory(model, device) {
     // Ensure an explicit policy is stored.  Set the default allow-all only when
     // no policy has been configured yet — preserves any user-defined rules.
     if (!unit.policy) {
-        const areaTypes = unit.areas.map(a => a.type);
         unit.policy = makeDefaultPolicy();
         console.log(`[ensureTargetMemory] Set default allow-all policy for unit_id ${unitId} on port ${portNum}`);
     }

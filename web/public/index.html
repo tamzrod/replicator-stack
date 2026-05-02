@@ -4350,6 +4350,7 @@ function renderUnit(portId, unit) {
           <input type="checkbox" class="mem-policy-enable"
             data-unit-id="${unitDbIdEsc}" ${policyEnabled ? 'checked' : ''} />
           Enable Policy Rules
+          <span style="color:#9CA3AF;font-size:.72rem;font-weight:400">(unchecked = default allow-all)</span>
         </label>
       </div>
       <div class="mem-policy-fields" data-policy-fields="${unitDbIdEsc}" style="${policyEnabled ? '' : 'display:none'}">
