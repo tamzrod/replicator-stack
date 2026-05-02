@@ -4624,10 +4624,10 @@ function _attachMemoryTabHandlers(container) {
       if (ok) {
         const msg = enabled
           ? `✓ Policy saved (${policyPayload.rules.length} rule${policyPayload.rules.length !== 1 ? 's' : ''})`
-          : '✓ Policy cleared (no rules)';
+          : '✓ Policy reset to default allow-all';
         banner.textContent = msg;
         banner.className = 'mem-adv-banner banner show ok';
-        _appendMmaLog(`[memory] Access policy ${enabled ? `updated (${policyPayload.rules.length} rule(s))` : 'cleared'}`);
+        _appendMmaLog(`[memory] Access policy ${enabled ? `updated (${policyPayload.rules.length} rule(s))` : 'reverted to default allow-all'}`);
         setDirty(true);
         await _bus.emit(EV.MODEL_MUTATED);
       } else {
