@@ -61,8 +61,8 @@ listeners:
     memory:
       - unit_id: <device.unitId>
         holding_registers:
-          - start: <min source_address across blocks for this unit>
-            count: <span of address range for holding register blocks>
+          start: <min source_address across blocks for this unit>
+          count: <span of address range for holding register blocks>
         policy:
           rules:
             - id: read-only
@@ -72,17 +72,7 @@ listeners:
               allow_fc: [3]
 ```
 
-Register ranges are expressed as a **list** under the area key. Multiple non-contiguous ranges are supported:
-
-```yaml
-holding_registers:
-  - start: 0
-    count: 10
-  - start: 500
-    count: 50
-```
-
-The `segments:` wrapper key is **not** part of the MMA2 schema and must never appear in generated config.
+Each area is represented as a single scalar `start`/`count` range. When a unit has multiple non-contiguous segments internally, the compiler spans them into the widest contiguous range for the MMA binary. The `segments:` wrapper key is **not** part of the MMA2 schema and must never appear in generated config.
 
 ---
 
@@ -122,8 +112,8 @@ The `segments:` wrapper key is **not** part of the MMA2 schema and must never ap
 | Field | Source |
 |---|---|
 | `unit_id` | `device.unitId` |
-| `holding_registers[].start` | `min(block.source_address)` for holding register blocks on this unit |
-| `holding_registers[].count` | `max(block.source_address + block.source_count) - start` |
+| `holding_registers.start` | `min(block.source_address)` for holding register blocks on this unit |
+| `holding_registers.count` | `max(block.source_address + block.source_count) - start` |
 
 ---
 
@@ -199,8 +189,8 @@ listeners:
     memory:
       - unit_id: 1
         holding_registers:
-          - start: 100
-            count: 4
+          start: 100
+          count: 4
         policy:
           rules:
             - id: read-only

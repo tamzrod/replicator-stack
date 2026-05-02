@@ -281,13 +281,15 @@ function toMmaYaml(model) {
             for (const unit of mergedUnits) {
                 lines.push(`      - unit_id: ${unit.unitId}`);
 
-                // Emit each domain section as a list of ranges (MMA2 schema — no segments wrapper).
+                // Emit each domain section as a scalar range (MMA2 v2.3.4 schema).
+                // MMA2 accepts one contiguous start/count range per area — not a list.
+                // When multiple segments exist, span them into the widest contiguous range.
                 for (const [area, segments] of unit.domains) {
+                    const start = Math.min(...segments.map(s => s.start));
+                    const end   = Math.max(...segments.map(s => s.start + s.count));
                     lines.push(`        ${area}:`);
-                    for (const seg of segments) {
-                        lines.push(`          - start: ${seg.start}`);
-                        lines.push(`            count: ${seg.count}`);
-                    }
+                    lines.push(`          start: ${start}`);
+                    lines.push(`          count: ${end - start}`);
                 }
 
                 // Emit state_sealing if configured on this unit.
@@ -366,11 +368,13 @@ function validateMmaConfig(yaml) {
     // CONTAINER ID that may hold multiple memory domains.  compileMma2Config merges them
     // before YAML emission, so duplicates in hand-crafted YAML are left to the runtime.
 
-    // Reject any use of the deprecated `segments:` wrapper key.  Register ranges must be
-    // expressed as a direct YAML list under the area key (e.g. `holding_registers: [...]`),
-    // never wrapped in a `segments:` block.
+    // Reject any use of the deprecated `segments:` wrapper key or YAML sequence lists
+    // under area keys.  MMA2 v2.3.4 requires a scalar start/count pair per area:
+    //   holding_registers:
+    //     start: 0
+    //     count: 10
     if (/^\s+segments\s*:/m.test(yaml)) {
-        errors.push('MMA config must not use segments: wrapper — register ranges must be a direct list under the area key (e.g. holding_registers: - start: 0 count: 10)');
+        errors.push('MMA config must not use segments: wrapper — each area must use scalar start/count fields (e.g. holding_registers: start: 0 count: 10)');
     }
 
     return errors;
