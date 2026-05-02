@@ -23,6 +23,27 @@ const STATUS_SLOT_SIZE = 30;
 // Chosen to avoid collision with typical device unit_id values (usually small integers).
 const DEFAULT_STATUS_UNIT_ID = 246;
 
+// All valid Modbus function codes (read + write, all area types).
+// "Allow-all" always includes every FC — MMA enforces per-area validity at runtime.
+const ALL_VALID_FCS = [1, 2, 3, 4, 5, 6, 15, 16];
+
+/**
+ * Build the default explicit allow-all policy.
+ * allow_fc is always the full set of 8 valid Modbus function codes regardless
+ * of which area types the unit has — MMA enforces per-area validity at runtime.
+ *
+ * @returns {{ rules: Array }}
+ */
+function makeDefaultPolicy() {
+    return {
+        rules: [{
+            id: 'allow-all',
+            source_ip: ['0.0.0.0/0', '::/0'],
+            allow_fc: ALL_VALID_FCS.slice(),
+        }],
+    };
+}
+
 // ---------------------------------------------------------------------------
 // In-memory model cache — eliminates repeated fs.readFileSync / JSON.parse
 // on every request.  Invalidated (and re-populated) on every writeModel().
@@ -520,6 +541,13 @@ function ensureTargetMemory(model, device) {
         });
         console.log(`[ensureTargetMemory] Added area ${areaType} with ${segments.length} segment(s) to unit_id ${unitId}`);
     }
+
+    // Ensure an explicit policy is stored.  Set the default allow-all only when
+    // no policy has been configured yet — preserves any user-defined rules.
+    if (!unit.policy) {
+        unit.policy = makeDefaultPolicy();
+        console.log(`[ensureTargetMemory] Set default allow-all policy for unit_id ${unitId} on port ${portNum}`);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -748,6 +776,8 @@ module.exports = {
     ensureTargetMemory,
     widenRange,
     mergeSegments,
+    // Policy helpers
+    makeDefaultPolicy,
     // Slot management
     pickCanonicalSuid,
     getCanonicalStatusUnitId,

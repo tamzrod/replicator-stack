@@ -4,7 +4,7 @@ const path = require('path');
 const { randomUUID, randomBytes } = require('crypto');
 
 const { _sessions, SESSION_TTL_MS, SALT_BYTES, hashPassword, verifyPassword, readAuth, writeAuth, parseCookies, requireAuth } = require('./services/authService');
-const { _idx, DATA_DIR, TARGET_HOST, MODEL_PATH, REPLICATOR_CONFIG_PATH, MMA_CONFIG_PATH, DEFAULT_SYSTEM, STATUS_SLOT_SIZE, DEFAULT_STATUS_UNIT_ID, getCanonicalVersion, getYamlHash, bumpCanonicalVersion, setYamlHash, invalidateCache, atomicWrite, readModel, writeModel, isRequiredNonNegativeInt, isValidIp, isValidEndpoint, endpointPort, getMissingTargetPorts, findGroup, findDevice, findMemoryPort, findUnit, readsOverlap, ensureTargetMemory, mergeSegments, pickCanonicalSuid, getCanonicalStatusUnitId, assignNextSlot, recompileStatusSlots, csvCell, parseCSVRow, generateUniqueReadId } = require('./services/modelStore');
+const { _idx, DATA_DIR, TARGET_HOST, MODEL_PATH, REPLICATOR_CONFIG_PATH, MMA_CONFIG_PATH, DEFAULT_SYSTEM, STATUS_SLOT_SIZE, DEFAULT_STATUS_UNIT_ID, getCanonicalVersion, getYamlHash, bumpCanonicalVersion, setYamlHash, invalidateCache, atomicWrite, readModel, writeModel, isRequiredNonNegativeInt, isValidIp, isValidEndpoint, endpointPort, getMissingTargetPorts, findGroup, findDevice, findMemoryPort, findUnit, readsOverlap, ensureTargetMemory, mergeSegments, makeDefaultPolicy, pickCanonicalSuid, getCanonicalStatusUnitId, assignNextSlot, recompileStatusSlots, csvCell, parseCSVRow, generateUniqueReadId } = require('./services/modelStore');
 const { scheduleCompile, flushPendingCompile, autoCompile, mergeRanges, rehydrateFromYaml, resolveIdentityConflicts, autoFixDuplicateUnitIds, buildErrorSummary, compileAndWrite } = require('./services/compileService');
 const { DOCKER_SOCKET, ALLOWED_SERVICES, DOCKER_LOG_TAIL_LINES, getAppVersion, getDockerDigest, dockerApi, restartServices, streamContainerLogs, discoverVersion } = require('./services/dockerService');
 const { modbusReadHoldingRegisters, readDevicesStatus } = require('./services/modbusService');
@@ -596,7 +596,7 @@ app.post('/memory/port/:portId/unit', (req, res) => {
         if (!port) {
             return res.status(404).json({ error: `Memory port ${portId} not found` });
         }
-        const newUnit = { id: randomUUID(), unit_id: unitIdNum, areas: [] };
+        const newUnit = { id: randomUUID(), unit_id: unitIdNum, areas: [], policy: makeDefaultPolicy() };
         port.units.push(newUnit);
         writeModel(model);
         scheduleCompile();

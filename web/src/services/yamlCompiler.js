@@ -35,6 +35,10 @@ const AREA_TO_FC = {
     input_status: 2,
 };
 
+// All valid Modbus function codes across all area types.
+// "Allow-all" always includes every FC — MMA enforces area-specific validity at runtime.
+const ALL_VALID_FCS = [1, 2, 3, 4, 5, 6, 15, 16];
+
 // ---------------------------------------------------------------------------
 // Exported functions
 // ---------------------------------------------------------------------------
@@ -98,17 +102,14 @@ function toReplicatorYaml(model, excludedPortNums = new Set()) {
 }
 
 /**
- * Return the primary Modbus read function code for an area type.
- * FC 1 = Read Coils, FC 2 = Read Discrete Inputs,
- * FC 3 = Read Holding Registers, FC 4 = Read Input Registers.
+ * Return the full allow-all function code list: all 8 valid Modbus FCs.
+ * "Allow-all" is always [1,2,3,4,5,6,15,16] regardless of which area types
+ * are present — MMA enforces per-area validity at runtime.
+ *
+ * @returns {number[]}
  */
-function domainReadFc(area) {
-    switch (area) {
-        case 'coils':             return 1;
-        case 'discrete_inputs':   return 2;
-        case 'input_registers':   return 4;
-        default:                  return 3; // holding_registers
-    }
+function allowAllFcs() {
+    return ALL_VALID_FCS.slice();
 }
 
 /**
@@ -301,8 +302,8 @@ function toMmaYaml(model) {
                 }
 
                 // Emit policy.  When user has configured a custom policy, use it.
-                // Otherwise auto-generate: status units are read-write, regular
-                // units are read-only with the union of read FCs for all domains.
+                // Otherwise emit the explicit allow-all default: all 8 valid Modbus FCs
+                // from any source IP.  MMA enforces per-area FC validity at runtime.
                 const customPolicy = policyByUnitId[unit.unitId];
                 if (customPolicy) {
                     lines.push(`        policy:`);
@@ -316,24 +317,14 @@ function toMmaYaml(model) {
                         lines.push(`              allow_fc: [${rule.allow_fc.join(', ')}]`);
                     }
                 } else {
+                    const fcs = allowAllFcs();
                     lines.push(`        policy:`);
                     lines.push(`          rules:`);
-                    if (unit.isStatus) {
-                        lines.push(`            - id: read-write`);
-                        lines.push(`              source_ip:`);
-                        lines.push(`                - 0.0.0.0/0`);
-                        lines.push(`                - ::/0`);
-                        lines.push(`              allow_fc: [3, 16]`);
-                    } else {
-                        const fcs = [...new Set(
-                            [...unit.domains.keys()].map(domainReadFc)
-                        )].sort((a, b) => a - b);
-                        lines.push(`            - id: read-only`);
-                        lines.push(`              source_ip:`);
-                        lines.push(`                - 0.0.0.0/0`);
-                        lines.push(`                - ::/0`);
-                        lines.push(`              allow_fc: [${fcs.join(', ')}]`);
-                    }
+                    lines.push(`            - id: allow-all`);
+                    lines.push(`              source_ip:`);
+                    lines.push(`                - 0.0.0.0/0`);
+                    lines.push(`                - ::/0`);
+                    lines.push(`              allow_fc: [${fcs.join(', ')}]`);
                 }
             }
         }

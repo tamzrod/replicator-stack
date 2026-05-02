@@ -1158,6 +1158,39 @@
       margin-bottom: 6px;
     }
 
+    /* ── Open-access risk indicator ─────────────────────────────────── */
+    .mem-open-access-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      font-size: .7rem;
+      font-weight: 600;
+      color: #92400E;
+      background: #FEF3C7;
+      border: 1px solid #FCD34D;
+      border-radius: 999px;
+      padding: 1px 8px;
+      white-space: nowrap;
+      margin-left: 6px;
+    }
+    .mem-open-access-warning {
+      font-size: .75rem;
+      color: #92400E;
+      background: #FFFBEB;
+      border: 1px solid #FCD34D;
+      border-radius: 4px;
+      padding: 6px 10px;
+      margin-bottom: 8px;
+    }
+    .mem-open-access-ack {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: .78rem;
+      color: #374151;
+      margin-top: 6px;
+    }
+
     /* ── Memory Reconciliation Tool ─────────────────────────────────── */
     #mem-reconcile-card {
       margin-bottom: 20px;
@@ -3992,6 +4025,29 @@ const FC_LABELS = [
   [16, 'Write Multiple Registers'],
 ];
 
+// Write-capable function codes — presence of any of these alongside an open
+// source_ip (0.0.0.0/0 or ::/0) triggers the open-access risk indicator.
+const WRITE_FCS = new Set([5, 6, 15, 16]);
+
+/**
+ * Returns true when the policy has at least one rule that allows any source IP
+ * (0.0.0.0/0 or ::/0) and permits at least one write function code.
+ * Used to drive the non-intrusive open-access risk indicator in the UI.
+ *
+ * @param {{ rules?: Array }} policy
+ * @returns {boolean}
+ */
+function isOpenAccessPolicy(policy) {
+  if (!policy || !Array.isArray(policy.rules)) return false;
+  return policy.rules.some(rule => {
+    const hasOpenIp = Array.isArray(rule.source_ip) &&
+      rule.source_ip.some(ip => ip === '0.0.0.0/0' || ip === '::/0');
+    const hasWrite = Array.isArray(rule.allow_fc) &&
+      rule.allow_fc.some(fc => WRITE_FCS.has(Number(fc)));
+    return hasOpenIp && hasWrite;
+  });
+}
+
 // Returns an HTML string for one policy rule card.
 // Used both in initial render (template literal) and dynamic add (innerHTML).
 function renderPolicyRuleCardHtml(rule) {
@@ -4250,6 +4306,7 @@ function renderUnit(portId, unit) {
   const customPolicy   = unit.policy || null;
   const policyEnabled  = !!(customPolicy && Array.isArray(customPolicy.rules));
   const policyRules    = policyEnabled ? customPolicy.rules : [];
+  const openAccess     = isOpenAccessPolicy(customPolicy);
 
   const advancedSection = `
     <div class="mem-adv-header" data-adv-toggle="${unitDbIdEsc}"
@@ -4292,11 +4349,12 @@ function renderUnit(portId, unit) {
         <label class="mem-seal-toggle-label">
           <input type="checkbox" class="mem-policy-enable"
             data-unit-id="${unitDbIdEsc}" ${policyEnabled ? 'checked' : ''} />
-          Enable Custom Policy
-          <span style="color:#9CA3AF;font-size:.72rem;font-weight:400">(unchecked = auto-generated)</span>
+          Enable Policy Rules
+          <span style="color:#9CA3AF;font-size:.72rem;font-weight:400">(unchecked = default allow-all)</span>
         </label>
       </div>
       <div class="mem-policy-fields" data-policy-fields="${unitDbIdEsc}" style="${policyEnabled ? '' : 'display:none'}">
+        ${openAccess ? `<div class="mem-open-access-warning">⚠ This policy permits write access from any IP address. Restrict <code>source_ip</code> or remove write function codes to limit exposure.</div>` : ''}
         <div class="mem-policy-rules-list" data-policy-rules="${unitDbIdEsc}">
           ${policyRules.map(rule => renderPolicyRuleCardHtml(rule)).join('')}
         </div>
@@ -4306,6 +4364,10 @@ function renderUnit(portId, unit) {
           <button type="button" class="btn-mem-sm mem-policy-save"
             data-port-id="${escapeHtml(portId)}" data-unit-id="${unitDbIdEsc}"
             style="background:#DCFCE7;color:#166534">Save Policy</button>
+        </div>
+        <div class="mem-open-access-ack" data-ack-row="${unitDbIdEsc}" style="display:none">
+          <input type="checkbox" class="mem-policy-ack-chk" id="ack-${unitDbIdEsc}" />
+          <label for="ack-${unitDbIdEsc}">I acknowledge that this policy allows unrestricted write access from any IP</label>
         </div>
         <div class="mem-adv-banner banner" data-policy-banner="${unitDbIdEsc}"></div>
       </div>
@@ -4319,6 +4381,7 @@ function renderUnit(portId, unit) {
         <span>Unit</span>
         <span class="mem-unit-id-badge">ID: ${unitIdEsc}</span>
         <span style="color:#9CA3AF;font-size:.75rem">(${areas.length} area${areas.length !== 1 ? 's' : ''})</span>
+        ${openAccess ? '<span class="mem-open-access-badge" title="Policy allows write access from any IP">⚠ Open Access</span>' : ''}
       </div>
       <div class="mem-unit-actions" onclick="event.stopPropagation()">
         <!-- View mode -->
@@ -4535,6 +4598,23 @@ function _attachMemoryTabHandlers(container) {
           rules.push({ id, source_ip, allow_fc });
         }
         policyPayload = { rules };
+
+        // Open-access acknowledgment: require confirmation before saving a policy
+        // that allows unrestricted write access from any IP.
+        if (isOpenAccessPolicy(policyPayload)) {
+          const ackRow = container.querySelector(`[data-ack-row="${unitId}"]`);
+          const ackChk = ackRow && ackRow.querySelector('.mem-policy-ack-chk');
+          if (ackRow) ackRow.style.display = 'flex';
+          if (ackChk && !ackChk.checked) {
+            banner.textContent = '⚠ Acknowledge the open-access risk below before saving';
+            banner.className = 'mem-adv-banner banner show err';
+            return;
+          }
+        } else {
+          // Hide ack row if policy is no longer open-access
+          const ackRow = container.querySelector(`[data-ack-row="${unitId}"]`);
+          if (ackRow) ackRow.style.display = 'none';
+        }
       }
 
       const { ok, data } = await api(
@@ -4545,10 +4625,10 @@ function _attachMemoryTabHandlers(container) {
       if (ok) {
         const msg = enabled
           ? `✓ Policy saved (${policyPayload.rules.length} rule${policyPayload.rules.length !== 1 ? 's' : ''})`
-          : '✓ Policy reset to auto-generated';
+          : '✓ Policy reset to default allow-all';
         banner.textContent = msg;
         banner.className = 'mem-adv-banner banner show ok';
-        _appendMmaLog(`[memory] Access policy ${enabled ? `updated (${policyPayload.rules.length} rule(s))` : 'reset to auto-generated'}`);
+        _appendMmaLog(`[memory] Access policy ${enabled ? `updated (${policyPayload.rules.length} rule(s))` : 'reverted to default allow-all'}`);
         setDirty(true);
         await _bus.emit(EV.MODEL_MUTATED);
       } else {
