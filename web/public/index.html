@@ -944,6 +944,8 @@
     .btn-mem-sm:hover { background: #BAE6FD; }
     .btn-mem-danger { background: #FEE2E2; color: #B91C1C; font-size: .72rem; padding: 3px 8px; font-weight: 600; border-radius: 4px; border: none; cursor: pointer; }
     .btn-mem-danger:hover { background: #FECACA; }
+    .btn-mem-secondary { background: #EDE9FE; color: #5B21B6; font-size: .72rem; padding: 3px 8px; font-weight: 600; border-radius: 4px; border: none; cursor: pointer; }
+    .btn-mem-secondary:hover { background: #DDD6FE; }
 
     /* ── Advanced Settings collapsible panel ─────────────────────────── */
     .mem-adv-header {
@@ -1134,6 +1136,7 @@
     .mem-recon-section-title.missing { background: #FEF9C3; color: #854D0E; border-left: 4px solid #EAB308; }
     .mem-recon-section-title.orphaned { background: #FEE2E2; color: #991B1B; border-left: 4px solid #EF4444; }
     .mem-recon-section-title.valid { background: #DCFCE7; color: #166534; border-left: 4px solid #22C55E; }
+    .mem-recon-section-title.ignored { background: #EDE9FE; color: #5B21B6; border-left: 4px solid #8B5CF6; }
     .mem-recon-row {
       display: flex;
       align-items: center;
@@ -1150,6 +1153,7 @@
     .mem-recon-row.orphaned { border-color: #FECACA; background: #FFF5F5; }
     .mem-recon-row.valid { border-color: #BBF7D0; background: #F0FDF4; }
     .mem-recon-row.warning { border-color: #FCD34D; background: #FFFBEB; }
+    .mem-recon-row.ignored { border-color: #DDD6FE; background: #F5F3FF; }
     .mem-recon-field {
       display: flex;
       flex-direction: column;
@@ -1180,6 +1184,7 @@
     .mem-recon-badge.missing { background: #FEF9C3; color: #854D0E; }
     .mem-recon-badge.orphaned { background: #FEE2E2; color: #991B1B; }
     .mem-recon-badge.valid { background: #DCFCE7; color: #166534; }
+    .mem-recon-badge.ignored { background: #EDE9FE; color: #5B21B6; }
     #mem-reconcile-btn {
       background: #1E3A5F;
       color: #fff;
@@ -2281,6 +2286,31 @@ function _patchStatusDots(prevStatus, nextStatus) {
 // ---------------------------------------------------------------------------
 
 let _lastRenderedModelSnapshot = null;
+
+// ---------------------------------------------------------------------------
+// Ignored-units state — purely MCS-layer; never touches MMA YAML.
+// Persisted to localStorage under 'mcs_ignored_units'.
+// Key format: "${unit_id}:${portNum}" e.g. "1:505"
+// ---------------------------------------------------------------------------
+const _ignoredUnitsMap = (() => {
+  try {
+    const stored = localStorage.getItem('mcs_ignored_units');
+    if (!stored) return new Map();
+    const entries = JSON.parse(stored);
+    return new Map(entries.map(e => [e.key, e.entry]));
+  } catch (_) { return new Map(); }
+})();
+
+function _getUnitKey(unitId, portNum) {
+  return `${unitId}:${portNum}`;
+}
+
+function _saveIgnoredUnits() {
+  try {
+    const entries = [..._ignoredUnitsMap.entries()].map(([key, entry]) => ({ key, entry }));
+    localStorage.setItem('mcs_ignored_units', JSON.stringify(entries));
+  } catch (_) {}
+}
 
 // Returns a compact, stable string key representing the tree domain:
 // device identity/name/group and the group list.  Order matches server order.
@@ -4495,21 +4525,60 @@ document.getElementById('mem-reconcile-btn').addEventListener('click', async () 
   const statusMissing = status_missing || [];
   const statusSizeMismatch = status_size_mismatch || [];
   const statusSlotSize = status_slot_size || 30;
-  const total = missing.length + orphaned.length + valid.length + areaMismatch.length;
+
+  // Safety rule: if an ignored unit is now used by replicator (valid/area_mismatch),
+  // auto-remove it from the ignored list.
+  let safetyRemoved = false;
+  for (const entry of [...(valid || []), ...areaMismatch]) {
+    const key = _getUnitKey(entry.unit.unit_id, entry.portNum);
+    if (_ignoredUnitsMap.has(key)) {
+      _ignoredUnitsMap.delete(key);
+      safetyRemoved = true;
+    }
+  }
+
+  // Build a Map of server-reported orphaned units for O(1) lookup.
+  const serverOrphanedByKey = new Map(
+    (orphaned || []).map(e => [_getUnitKey(e.unit.unit_id, e.portNum), e])
+  );
+
+  // Prune ignored entries that are no longer orphaned (deleted or became valid).
+  for (const key of [..._ignoredUnitsMap.keys()]) {
+    if (!serverOrphanedByKey.has(key)) {
+      _ignoredUnitsMap.delete(key);
+      safetyRemoved = true;
+    }
+  }
+
+  // Refresh stored entry data with the latest from the server and split orphaned list.
+  const stillOrphaned = [];
+  for (const [key, entry] of serverOrphanedByKey) {
+    if (_ignoredUnitsMap.has(key)) {
+      _ignoredUnitsMap.set(key, entry); // update with fresh data
+    } else {
+      stillOrphaned.push(entry);
+    }
+  }
+
+  if (safetyRemoved) _saveIgnoredUnits();
+
+  const ignoredList = [..._ignoredUnitsMap.values()];
+  const total = missing.length + (orphaned || []).length + valid.length + areaMismatch.length;
   const issues = missing.length + areaMismatch.length + statusMissing.length + statusSizeMismatch.length;
   const bannerClass = issues > 0 ? 'banner show err' : 'banner show ok';
-  banner.textContent = `✓ Scan complete — ${total} device/unit pair(s) analyzed: ${missing.length} missing, ${areaMismatch.length} area mismatch, ${orphaned.length} orphaned, ${valid.length} valid. Status memory: ${statusMissing.length} missing, ${statusSizeMismatch.length} size mismatch.`;
+  banner.textContent = `✓ Scan complete — ${total} device/unit pair(s) analyzed: ${missing.length} missing, ${areaMismatch.length} area mismatch, ${stillOrphaned.length} orphaned, ${ignoredList.length} kept, ${valid.length} valid. Status memory: ${statusMissing.length} missing, ${statusSizeMismatch.length} size mismatch.`;
   banner.className = bannerClass;
 
-  results.innerHTML = renderReconcileResults(missing, orphaned, valid, areaMismatch, statusMissing, statusSizeMismatch, statusSlotSize);
+  results.innerHTML = renderReconcileResults(missing, stillOrphaned, valid, areaMismatch, statusMissing, statusSizeMismatch, statusSlotSize, ignoredList);
   _attachReconcileHandlers(results);
 });
 
-function renderReconcileResults(missing, orphaned, valid, area_mismatch, status_missing, status_size_mismatch, statusSlotSize) {
+function renderReconcileResults(missing, orphaned, valid, area_mismatch, status_missing, status_size_mismatch, statusSlotSize, ignoredList) {
   const areaMismatch = area_mismatch || [];
   const statusMissing = status_missing || [];
   const statusSizeMismatch = status_size_mismatch || [];
   const slotSize = statusSlotSize || 30;
+  const ignored = ignoredList || [];
   const missingHtml = missing.length === 0
     ? '<div class="mem-recon-empty">None — all devices have a memory allocation.</div>'
     : missing.map(entry => {
@@ -4617,6 +4686,14 @@ function renderReconcileResults(missing, orphaned, valid, area_mismatch, status_
             <span>${escapeHtml(String(unit.areas.length))}</span>
           </div>
           <div class="mem-recon-actions">
+            <button class="btn-mem-secondary mem-recon-keep-btn"
+              data-unit-id="${escapeHtml(String(unit.unit_id))}"
+              data-port-num="${escapeHtml(String(entry.portNum))}"
+              data-port-id="${escapeHtml(entry.portId)}"
+              data-unit-db-id="${escapeHtml(unit.id)}"
+              data-areas="${escapeHtml(JSON.stringify(unit.areas))}">
+              ✔ Keep
+            </button>
             <button class="btn-mem-danger mem-recon-delete-btn"
               data-port-id="${escapeHtml(entry.portId)}"
               data-unit-db-id="${escapeHtml(unit.id)}"
@@ -4729,6 +4806,36 @@ function renderReconcileResults(missing, orphaned, valid, area_mismatch, status_
         </div>`;
       }).join('');
 
+  const ignoredHtml = ignored.length === 0
+    ? '<div class="mem-recon-empty">None — no units have been marked as intentionally kept.</div>'
+    : ignored.map(entry => {
+        const unit = entry.unit;
+        return `<div class="mem-recon-row ignored"
+            data-port-id="${escapeHtml(entry.portId)}"
+            data-unit-db-id="${escapeHtml(unit.id)}">
+          <span class="mem-recon-badge ignored">KEPT</span>
+          <div class="mem-recon-field">
+            <label>Unit ID</label>
+            <span>${escapeHtml(String(unit.unit_id))}</span>
+          </div>
+          <div class="mem-recon-field">
+            <label>Port</label>
+            <span>${escapeHtml(String(entry.portNum))}</span>
+          </div>
+          <div class="mem-recon-field">
+            <label>Areas</label>
+            <span>${escapeHtml(String(unit.areas.length))}</span>
+          </div>
+          <div class="mem-recon-actions">
+            <button class="btn-mem-sm mem-recon-undo-keep-btn"
+              data-unit-id="${escapeHtml(String(unit.unit_id))}"
+              data-port-num="${escapeHtml(String(entry.portNum))}">
+              Undo Keep
+            </button>
+          </div>
+        </div>`;
+      }).join('');
+
   return `
     <div class="mem-recon-section">
       <div class="mem-recon-section-title missing">⚠ Missing Memory — ${missing.length} device(s) need allocation</div>
@@ -4749,6 +4856,10 @@ function renderReconcileResults(missing, orphaned, valid, area_mismatch, status_
     <div class="mem-recon-section">
       <div class="mem-recon-section-title orphaned">✗ Unused Memory — ${orphaned.length} orphaned unit(s)</div>
       ${orphanedHtml}
+    </div>
+    <div class="mem-recon-section">
+      <div class="mem-recon-section-title ignored">✔ Ignored Memory (User Kept) — ${ignored.length} unit(s)</div>
+      ${ignoredHtml}
     </div>
     <div class="mem-recon-section">
       <div class="mem-recon-section-title valid">✔ Valid Memory — ${valid.length} correctly mapped pair(s)</div>
@@ -4781,6 +4892,43 @@ function _attachReconcileHandlers(container) {
         btn.textContent = '+ Create Allocation';
         alert(`Error: ${data.error || 'Unknown error'}`);
       }
+    });
+  });
+
+  // Keep orphaned unit (mark as intentionally unused)
+  container.querySelectorAll('.mem-recon-keep-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const unitId = Number(btn.dataset.unitId);
+      const portNum = Number(btn.dataset.portNum);
+      const portId = btn.dataset.portId;
+      const unitDbId = btn.dataset.unitDbId;
+      let areas = [];
+      try { areas = JSON.parse(btn.dataset.areas || '[]'); } catch (_) {}
+      const key = _getUnitKey(unitId, portNum);
+      // Store the full entry so the ignored section can display it accurately
+      _ignoredUnitsMap.set(key, {
+        unit: { id: unitDbId, unit_id: unitId, areas },
+        portId,
+        portNum,
+      });
+      _saveIgnoredUnits();
+      _appendMmaLog(`[memory reconcile] Marked unit_id ${unitId} on port ${portNum} as intentionally kept`);
+      // Re-run scan to refresh results
+      document.getElementById('mem-reconcile-btn').click();
+    });
+  });
+
+  // Undo Keep — return unit to orphaned list
+  container.querySelectorAll('.mem-recon-undo-keep-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const unitId = Number(btn.dataset.unitId);
+      const portNum = Number(btn.dataset.portNum);
+      const key = _getUnitKey(unitId, portNum);
+      _ignoredUnitsMap.delete(key);
+      _saveIgnoredUnits();
+      _appendMmaLog(`[memory reconcile] Removed keep override for unit_id ${unitId} on port ${portNum} — will appear as orphaned`);
+      // Re-run scan to refresh results
+      document.getElementById('mem-reconcile-btn').click();
     });
   });
 
