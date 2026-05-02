@@ -35,6 +35,15 @@ const AREA_TO_FC = {
     input_status: 2,
 };
 
+// All valid Modbus function codes per area type (read + write).
+// Used to build an "allow-all" policy that covers every valid operation for the area.
+const AREA_ALL_FCS = {
+    coils:             [1, 5, 15],
+    discrete_inputs:   [2],
+    holding_registers: [3, 6, 16],
+    input_registers:   [4],
+};
+
 // ---------------------------------------------------------------------------
 // Exported functions
 // ---------------------------------------------------------------------------
@@ -98,17 +107,22 @@ function toReplicatorYaml(model, excludedPortNums = new Set()) {
 }
 
 /**
- * Return the primary Modbus read function code for an area type.
- * FC 1 = Read Coils, FC 2 = Read Discrete Inputs,
- * FC 3 = Read Holding Registers, FC 4 = Read Input Registers.
+ * Compute the union of all valid function codes (read + write) for a set of area types.
+ * Returns a sorted array suitable for an allow-all policy rule's allow_fc field.
+ *
+ * @param {Iterable<string>} areaTypes  e.g. ['holding_registers', 'coils']
+ * @returns {number[]}  sorted unique FCs covering every valid operation for the given areas
  */
-function domainReadFc(area) {
-    switch (area) {
-        case 'coils':             return 1;
-        case 'discrete_inputs':   return 2;
-        case 'input_registers':   return 4;
-        default:                  return 3; // holding_registers
+function allowAllFcsForAreas(areaTypes) {
+    const fcs = new Set();
+    for (const area of areaTypes) {
+        for (const fc of (AREA_ALL_FCS[area] || [])) fcs.add(fc);
     }
+    // If no recognised area types supplied, include every known FC.
+    if (fcs.size === 0) {
+        for (const arr of Object.values(AREA_ALL_FCS)) for (const fc of arr) fcs.add(fc);
+    }
+    return [...fcs].sort((a, b) => a - b);
 }
 
 /**
@@ -301,8 +315,8 @@ function toMmaYaml(model) {
                 }
 
                 // Emit policy.  When user has configured a custom policy, use it.
-                // Otherwise auto-generate: status units are read-write, regular
-                // units are read-only with the union of read FCs for all domains.
+                // Otherwise emit an explicit allow-all default whose allow_fc list
+                // covers every valid read and write function code for the present domains.
                 const customPolicy = policyByUnitId[unit.unitId];
                 if (customPolicy) {
                     lines.push(`        policy:`);
@@ -316,24 +330,14 @@ function toMmaYaml(model) {
                         lines.push(`              allow_fc: [${rule.allow_fc.join(', ')}]`);
                     }
                 } else {
+                    const fcs = allowAllFcsForAreas([...unit.domains.keys()]);
                     lines.push(`        policy:`);
                     lines.push(`          rules:`);
-                    if (unit.isStatus) {
-                        lines.push(`            - id: read-write`);
-                        lines.push(`              source_ip:`);
-                        lines.push(`                - 0.0.0.0/0`);
-                        lines.push(`                - ::/0`);
-                        lines.push(`              allow_fc: [3, 16]`);
-                    } else {
-                        const fcs = [...new Set(
-                            [...unit.domains.keys()].map(domainReadFc)
-                        )].sort((a, b) => a - b);
-                        lines.push(`            - id: read-only`);
-                        lines.push(`              source_ip:`);
-                        lines.push(`                - 0.0.0.0/0`);
-                        lines.push(`                - ::/0`);
-                        lines.push(`              allow_fc: [${fcs.join(', ')}]`);
-                    }
+                    lines.push(`            - id: allow-all`);
+                    lines.push(`              source_ip:`);
+                    lines.push(`                - 0.0.0.0/0`);
+                    lines.push(`                - ::/0`);
+                    lines.push(`              allow_fc: [${fcs.join(', ')}]`);
                 }
             }
         }
