@@ -1607,7 +1607,7 @@ app.post('/read/:deviceId/import-csv', express.text({ type: 'text/plain' }), (re
 });
 
 // GET /config — return raw YAML snapshots for Config Viewer (read-only)
-app.get('/config', (req, res) => {
+app.get('/config', rateLimit, (req, res) => {
     try {
         const replicatorYaml = fs.existsSync(REPLICATOR_CONFIG_PATH)
             ? fs.readFileSync(REPLICATOR_CONFIG_PATH, 'utf-8')
