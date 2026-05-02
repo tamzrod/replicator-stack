@@ -21,14 +21,6 @@ function endpointPort(endpoint) {
     return Number.isFinite(port) && port >= 1 && port <= 65535 ? port : null;
 }
 
-/**
- * Return the widest range that covers both (start1, count1) and (start2, count2).
- */
-function widenRange(start1, count1, start2, count2) {
-    const newStart = Math.min(start1, start2);
-    const newEnd   = Math.max(start1 + count1 - 1, start2 + count2 - 1);
-    return { start: newStart, count: newEnd - newStart + 1 };
-}
 
 // ---------------------------------------------------------------------------
 // Module-level constants
@@ -145,11 +137,11 @@ function domainReadFc(area) {
  *                  rules deduplicated
  */
 function compileMma2Config(blocks, statusMap = new Map()) {
-    // byUnitId: unit_id → { unitId, isStatus, domains: Map<area,{start,count}>, sourceCount }
+    // byUnitId: unit_id → { unitId, isStatus, domains: Map<area, segments[]>, sourceCount }
     const byUnitId = new Map();
     const mergeLog = [];
 
-    function mergeBlock(uid, area, address, count, isStatus) {
+    function addSegments(uid, area, segments, isStatus) {
         if (!byUnitId.has(uid)) {
             byUnitId.set(uid, { unitId: uid, isStatus: false, domains: new Map(), sourceCount: 0 });
         }
@@ -157,39 +149,26 @@ function compileMma2Config(blocks, statusMap = new Map()) {
         entry.sourceCount += 1;
         if (isStatus) entry.isStatus = true;
 
-        if (entry.domains.has(area)) {
-            // Preserve widest range across duplicate (unit_id, area) blocks.
-            const existing = entry.domains.get(area);
-            const oldEntry = { start: existing.start, count: existing.count };
-            ({ start: existing.start, count: existing.count } = widenRange(existing.start, existing.count, address, count));
-            if (existing.start !== oldEntry.start || existing.count !== oldEntry.count) {
-                mergeLog.push({
-                    unit_id: uid,
-                    area,
-                    action: 'range_widened',
-                    from: oldEntry,
-                    to: { start: existing.start, count: existing.count },
-                });
-            }
-        } else {
-            entry.domains.set(area, { start: address, count });
+        if (!entry.domains.has(area)) {
+            entry.domains.set(area, []);
         }
+        // Accumulate segments — never auto-merge.
+        entry.domains.get(area).push(...segments);
     }
 
-    // Process regular device-read blocks.
+    // Process regular device-read blocks (each block is one segment).
     for (const block of blocks) {
-        mergeBlock(
+        addSegments(
             Number(block.unit_id),
             block.area || 'holding_registers',
-            block.address,
-            block.count,
+            [{ start: block.address, count: block.count }],
             false
         );
     }
 
     // Process status memory entries (derived from devices with status_unit_id).
     for (const [suid, deviceCount] of statusMap) {
-        mergeBlock(suid, 'holding_registers', 0, deviceCount * STATUS_SLOT_SIZE, true);
+        addSegments(suid, 'holding_registers', [{ start: 0, count: deviceCount * STATUS_SLOT_SIZE }], true);
     }
 
     // Build merge log entries for unit_ids that had more than one source block.
@@ -197,10 +176,10 @@ function compileMma2Config(blocks, statusMap = new Map()) {
         if (entry.sourceCount > 1) {
             mergeLog.push({
                 unit_id:             entry.unitId,
-                action:              'units_merged',
+                action:              'segments_accumulated',
                 sourceEntriesMerged: entry.sourceCount,
                 fieldsCombined:      [...entry.domains.keys()],
-                rulesDeduped:        0, // rules are synthesised from domain types at emit time, not taken from raw source blocks
+                rulesDeduped:        0,
             });
         }
     }
@@ -266,7 +245,8 @@ function toMmaYaml(model) {
         const stateSealingByUnitId = {};
         const policyByUnitId = {};
         if (hasManualUnits) {
-            // Flatten units[] → blocks format for compileMma2Config
+            // Flatten units[] → blocks format for compileMma2Config.
+            // Each area's segments become individual blocks (one per segment).
             blocksForCompile = (port.units || []).flatMap(u => {
                 if (u.state_sealing && !(u.unit_id in stateSealingByUnitId)) {
                     stateSealingByUnitId[u.unit_id] = u.state_sealing;
@@ -274,19 +254,22 @@ function toMmaYaml(model) {
                 if (u.policy && !(u.unit_id in policyByUnitId)) {
                     policyByUnitId[u.unit_id] = u.policy;
                 }
-                return (u.areas || []).map(a => ({
-                    unit_id: u.unit_id,
-                    area: a.type || 'holding_registers',
-                    address: a.start,
-                    count: a.count,
-                }));
+                return (u.areas || []).flatMap(a => {
+                    const segs = Array.isArray(a.segments) ? a.segments : [];
+                    return segs.map(seg => ({
+                        unit_id: u.unit_id,
+                        area: a.type || 'holding_registers',
+                        address: seg.start,
+                        count: seg.count,
+                    }));
+                });
             });
         } else {
             // Fall back to auto-derived blocks from device reads
             blocksForCompile = port.blocks || [];
         }
 
-        // Run the MMA2 compiler: group + merge all blocks for this port.
+        // Run the MMA2 compiler: group all segments for this port.
         const { mergedUnits, mergeLog } = compileMma2Config(blocksForCompile, statusMap);
         for (const entry of mergeLog) {
             allMergeLog.push({ listener: listenerId, port: portNum, ...entry });
@@ -298,11 +281,14 @@ function toMmaYaml(model) {
             for (const unit of mergedUnits) {
                 lines.push(`      - unit_id: ${unit.unitId}`);
 
-                // Emit each domain section present in this unit.
-                for (const [area, range] of unit.domains) {
+                // Emit each domain section present in this unit as a segments list.
+                for (const [area, segments] of unit.domains) {
                     lines.push(`        ${area}:`);
-                    lines.push(`          start: ${range.start}`);
-                    lines.push(`          count: ${range.count}`);
+                    lines.push(`          segments:`);
+                    for (const seg of segments) {
+                        lines.push(`            - start: ${seg.start}`);
+                        lines.push(`              count: ${seg.count}`);
+                    }
                 }
 
                 // Emit state_sealing if configured on this unit.

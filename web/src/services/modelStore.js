@@ -188,8 +188,23 @@ function initialModel() {
 }
 
 /**
+ * Merge all segments in an area into a single contiguous block spanning
+ * min(start) → max(start+count).  Used only for the explicit user-triggered
+ * "Merge Segments" operation — never called automatically.
+ *
+ * @param {{ start: number, count: number }[]} segments
+ * @returns {{ start: number, count: number }[]}  single-element array
+ */
+function mergeSegments(segments) {
+    if (!segments || segments.length === 0) return [];
+    const minStart = Math.min(...segments.map(s => s.start));
+    const maxEnd   = Math.max(...segments.map(s => s.start + s.count));
+    return [{ start: minStart, count: maxEnd - minStart }];
+}
+
+/**
  * Return the widest range that covers both (start1, count1) and (start2, count2).
- * Used wherever two address ranges for the same area type must be merged.
+ * Retained for backward-compatibility with callers that explicitly merge ranges.
  */
 function widenRange(start1, count1, start2, count2) {
     const newStart = Math.min(start1, start2);
@@ -217,24 +232,19 @@ function migrateModel(model) {
         }
     }
     let migrated = false;
-    // Normalize duplicate area types within units: merge same-type areas using widest range.
-    // This ensures the model is always consistent with the MMA config compiler's merge behaviour.
+    // Migrate areas that still use legacy scalar start+count → segments: [{start, count}].
+    // This preserves existing configurations when upgrading from the old single-block model.
     for (const port of model.memory.ports) {
         for (const unit of (port.units || [])) {
-            if (!Array.isArray(unit.areas) || unit.areas.length < 2) continue;
-            const byType = new Map();
-            let hasDuplicates = false;
-            for (const area of unit.areas) {
-                if (!byType.has(area.type)) {
-                    byType.set(area.type, { ...area });
-                } else {
-                    const ex = byType.get(area.type);
-                    ({ start: ex.start, count: ex.count } = widenRange(ex.start, ex.count, area.start, area.count));
-                    hasDuplicates = true;
+            for (const area of (unit.areas || [])) {
+                if (!Array.isArray(area.segments) &&
+                        area.start !== undefined && area.count !== undefined) {
+                    area.segments = [{ start: Number(area.start), count: Number(area.count) }];
+                    delete area.start;
+                    delete area.count;
                     migrated = true;
                 }
             }
-            if (hasDuplicates) unit.areas = [...byType.values()];
         }
     }
     for (const device of model.devices) {
@@ -496,22 +506,18 @@ function ensureTargetMemory(model, device) {
     }
 
     // Add areas for types that are now required but not yet present.
-    // Use the single widest range (min start → max end) so the model always
-    // holds exactly one area per type per unit — matching what compileMma2Config
-    // emits in the YAML and preventing the Memory tab from showing a different
-    // number of entries than the generated config.
+    // Each read range becomes its own segment — segments are never auto-merged.
+    // Existing areas are left untouched so user-configured segments are preserved.
     const existingAreaTypes = new Set(unit.areas.map(a => a.type));
     for (const [areaType, ranges] of Object.entries(readsByArea)) {
-        if (existingAreaTypes.has(areaType)) continue; // already present — preserve user's start/count
-        const minStart = Math.min(...ranges.map(r => r.start));
-        const maxEnd   = Math.max(...ranges.map(r => r.end));
+        if (existingAreaTypes.has(areaType)) continue; // already present — preserve user's segments
+        const segments = ranges.map(r => ({ start: r.start, count: r.end - r.start + 1 }));
         unit.areas.push({
             id: randomUUID(),
             type: areaType,
-            start: minStart,
-            count: maxEnd - minStart + 1,
+            segments,
         });
-        console.log(`[ensureTargetMemory] Added area ${areaType} start=${minStart} count=${maxEnd - minStart + 1} to unit_id ${unitId}`);
+        console.log(`[ensureTargetMemory] Added area ${areaType} with ${segments.length} segment(s) to unit_id ${unitId}`);
     }
 }
 
@@ -740,6 +746,7 @@ module.exports = {
     readsOverlap,
     ensureTargetMemory,
     widenRange,
+    mergeSegments,
     // Slot management
     pickCanonicalSuid,
     getCanonicalStatusUnitId,

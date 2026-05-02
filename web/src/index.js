@@ -4,7 +4,7 @@ const path = require('path');
 const { randomUUID, randomBytes } = require('crypto');
 
 const { _sessions, SESSION_TTL_MS, SALT_BYTES, hashPassword, verifyPassword, readAuth, writeAuth, parseCookies, requireAuth } = require('./services/authService');
-const { _idx, DATA_DIR, TARGET_HOST, MODEL_PATH, REPLICATOR_CONFIG_PATH, MMA_CONFIG_PATH, DEFAULT_SYSTEM, STATUS_SLOT_SIZE, DEFAULT_STATUS_UNIT_ID, getCanonicalVersion, getYamlHash, bumpCanonicalVersion, setYamlHash, invalidateCache, atomicWrite, readModel, writeModel, isRequiredNonNegativeInt, isValidIp, isValidEndpoint, endpointPort, getMissingTargetPorts, findGroup, findDevice, findMemoryPort, findUnit, readsOverlap, ensureTargetMemory, widenRange, pickCanonicalSuid, getCanonicalStatusUnitId, assignNextSlot, recompileStatusSlots, csvCell, parseCSVRow, generateUniqueReadId } = require('./services/modelStore');
+const { _idx, DATA_DIR, TARGET_HOST, MODEL_PATH, REPLICATOR_CONFIG_PATH, MMA_CONFIG_PATH, DEFAULT_SYSTEM, STATUS_SLOT_SIZE, DEFAULT_STATUS_UNIT_ID, getCanonicalVersion, getYamlHash, bumpCanonicalVersion, setYamlHash, invalidateCache, atomicWrite, readModel, writeModel, isRequiredNonNegativeInt, isValidIp, isValidEndpoint, endpointPort, getMissingTargetPorts, findGroup, findDevice, findMemoryPort, findUnit, readsOverlap, ensureTargetMemory, mergeSegments, pickCanonicalSuid, getCanonicalStatusUnitId, assignNextSlot, recompileStatusSlots, csvCell, parseCSVRow, generateUniqueReadId } = require('./services/modelStore');
 const { scheduleCompile, flushPendingCompile, autoCompile, mergeRanges, rehydrateFromYaml, resolveIdentityConflicts, autoFixDuplicateUnitIds, buildErrorSummary, compileAndWrite } = require('./services/compileService');
 const { DOCKER_SOCKET, ALLOWED_SERVICES, DOCKER_LOG_TAIL_LINES, getAppVersion, getDockerDigest, dockerApi, restartServices, streamContainerLogs, discoverVersion } = require('./services/dockerService');
 const { modbusReadHoldingRegisters, readDevicesStatus } = require('./services/modbusService');
@@ -753,14 +753,35 @@ app.post('/memory/port/:portId/unit/:unitId/area', (req, res) => {
         if (!VALID_AREA_TYPES.has(areaType)) {
             return res.status(400).json({ error: `area.type must be one of: ${[...VALID_AREA_TYPES].join(', ')}` });
         }
-        const start = Number(area.start);
-        const count = Number(area.count);
-        if (!Number.isFinite(start) || start < 0) {
-            return res.status(400).json({ error: 'area.start must be a non-negative integer' });
+
+        // Accept segments[] as primary format; accept legacy start+count for backward compat.
+        let segments;
+        if (Array.isArray(area.segments) && area.segments.length > 0) {
+            for (const seg of area.segments) {
+                const s = Number(seg.start);
+                const c = Number(seg.count);
+                if (!Number.isFinite(s) || s < 0) {
+                    return res.status(400).json({ error: 'Each segment.start must be a non-negative integer' });
+                }
+                if (!Number.isFinite(c) || c < 1) {
+                    return res.status(400).json({ error: 'Each segment.count must be a positive integer' });
+                }
+            }
+            segments = area.segments.map(s => ({ start: Number(s.start), count: Number(s.count) }));
+        } else if (area.start !== undefined || area.count !== undefined) {
+            const start = Number(area.start);
+            const count = Number(area.count);
+            if (!Number.isFinite(start) || start < 0) {
+                return res.status(400).json({ error: 'area.start must be a non-negative integer' });
+            }
+            if (!Number.isFinite(count) || count < 1) {
+                return res.status(400).json({ error: 'area.count must be a positive integer' });
+            }
+            segments = [{ start, count }];
+        } else {
+            return res.status(400).json({ error: 'area.segments (array) or area.start + area.count required' });
         }
-        if (!Number.isFinite(count) || count < 1) {
-            return res.status(400).json({ error: 'area.count must be a positive integer' });
-        }
+
         const model = readModel();
         const port = findMemoryPort(model, portId);
         if (!port) {
@@ -770,18 +791,16 @@ app.post('/memory/port/:portId/unit/:unitId/area', (req, res) => {
         if (!unit) {
             return res.status(404).json({ error: `Unit ${unitId} not found on port ${portId}` });
         }
-        // If an area of the same type already exists in this unit, merge ranges
-        // (widest range: same algorithm as compileMma2Config) so the model never
-        // holds duplicate area types per unit, keeping the memory tab consistent
-        // with the generated MMA config.
+        // If an area of the same type already exists, append segments (no auto-merge).
         const existingArea = (unit.areas || []).find(a => a.type === areaType);
         if (existingArea) {
-            ({ start: existingArea.start, count: existingArea.count } = widenRange(existingArea.start, existingArea.count, start, count));
+            if (!Array.isArray(existingArea.segments)) existingArea.segments = [];
+            existingArea.segments.push(...segments);
             writeModel(model);
             scheduleCompile();
-            return res.status(200).json({ ok: true, id: existingArea.id, merged: true });
+            return res.status(200).json({ ok: true, id: existingArea.id, appended: true });
         }
-        const newArea = { id: randomUUID(), type: areaType, start, count };
+        const newArea = { id: randomUUID(), type: areaType, segments };
         unit.areas.push(newArea);
         writeModel(model);
         scheduleCompile();
@@ -816,33 +835,30 @@ app.put('/memory/port/:portId/unit/:unitId/area/:areaId', (req, res) => {
             if (!VALID_AREA_TYPES.has(area.type)) {
                 return res.status(400).json({ error: `area.type must be one of: ${[...VALID_AREA_TYPES].join(', ')}` });
             }
-            // If the new type already exists in another area of this unit, merge ranges
-            // (widest range) into that area and remove this one to maintain uniqueness per type.
-            if (area.type !== existing.type) {
-                const duplicate = (unit.areas || []).find(a => a.id !== areaId && a.type === area.type);
-                if (duplicate) {
-                    ({ start: duplicate.start, count: duplicate.count } = widenRange(duplicate.start, duplicate.count, existing.start, existing.count));
-                    unit.areas = unit.areas.filter(a => a.id !== areaId);
-                    writeModel(model);
-                    scheduleCompile();
-                    return res.json({ ok: true, id: duplicate.id, merged: true });
-                }
-            }
             existing.type = area.type;
         }
-        if (area.start !== undefined) {
-            const start = Number(area.start);
-            if (!Number.isFinite(start) || start < 0) {
-                return res.status(400).json({ error: 'area.start must be a non-negative integer' });
+        if (area.segments !== undefined) {
+            if (!Array.isArray(area.segments) || area.segments.length === 0) {
+                return res.status(400).json({ error: 'area.segments must be a non-empty array' });
             }
-            existing.start = start;
+            for (const seg of area.segments) {
+                const s = Number(seg.start);
+                const c = Number(seg.count);
+                if (!Number.isFinite(s) || s < 0) {
+                    return res.status(400).json({ error: 'Each segment.start must be a non-negative integer' });
+                }
+                if (!Number.isFinite(c) || c < 1) {
+                    return res.status(400).json({ error: 'Each segment.count must be a positive integer' });
+                }
+            }
+            existing.segments = area.segments.map(s => ({ start: Number(s.start), count: Number(s.count) }));
         }
-        if (area.count !== undefined) {
-            const count = Number(area.count);
-            if (!Number.isFinite(count) || count < 1) {
-                return res.status(400).json({ error: 'area.count must be a positive integer' });
+        if (area.mode !== undefined) {
+            if (area.mode === null || area.mode === '') {
+                delete existing.mode;
+            } else {
+                existing.mode = area.mode;
             }
-            existing.count = count;
         }
         writeModel(model);
         scheduleCompile();
@@ -878,6 +894,133 @@ app.delete('/memory/port/:portId/unit/:unitId/area/:areaId', (req, res) => {
     }
 });
 
+// POST /memory/port/:portId/unit/:unitId/area/:areaId/segment — add a segment to an area
+app.post('/memory/port/:portId/unit/:unitId/area/:areaId/segment', (req, res) => {
+    try {
+        const { portId, unitId, areaId } = req.params;
+        const { segment } = req.body;
+        const start = Number(segment && segment.start);
+        const count = Number(segment && segment.count);
+        if (!Number.isFinite(start) || start < 0) {
+            return res.status(400).json({ error: 'segment.start must be a non-negative integer' });
+        }
+        if (!Number.isFinite(count) || count < 1) {
+            return res.status(400).json({ error: 'segment.count must be a positive integer' });
+        }
+        const model = readModel();
+        const port = findMemoryPort(model, portId);
+        if (!port) return res.status(404).json({ error: `Memory port ${portId} not found` });
+        const unit = findUnit(port, unitId);
+        if (!unit) return res.status(404).json({ error: `Unit ${unitId} not found on port ${portId}` });
+        const area = (unit.areas || []).find(a => a.id === areaId);
+        if (!area) return res.status(404).json({ error: `Area ${areaId} not found on unit ${unitId}` });
+        if (!Array.isArray(area.segments)) area.segments = [];
+        area.segments.push({ start, count });
+        writeModel(model);
+        scheduleCompile();
+        res.status(201).json({ ok: true, segmentIndex: area.segments.length - 1 });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// PUT /memory/port/:portId/unit/:unitId/area/:areaId/segment/:segIdx — update a segment
+app.put('/memory/port/:portId/unit/:unitId/area/:areaId/segment/:segIdx', (req, res) => {
+    try {
+        const { portId, unitId, areaId, segIdx } = req.params;
+        const { segment } = req.body;
+        const idx = Number(segIdx);
+        if (!Number.isFinite(idx) || idx < 0) {
+            return res.status(400).json({ error: 'segIdx must be a non-negative integer' });
+        }
+        const model = readModel();
+        const port = findMemoryPort(model, portId);
+        if (!port) return res.status(404).json({ error: `Memory port ${portId} not found` });
+        const unit = findUnit(port, unitId);
+        if (!unit) return res.status(404).json({ error: `Unit ${unitId} not found on port ${portId}` });
+        const area = (unit.areas || []).find(a => a.id === areaId);
+        if (!area) return res.status(404).json({ error: `Area ${areaId} not found on unit ${unitId}` });
+        if (!Array.isArray(area.segments) || idx >= area.segments.length) {
+            return res.status(404).json({ error: `Segment index ${idx} not found on area ${areaId}` });
+        }
+        if (segment.start !== undefined) {
+            const start = Number(segment.start);
+            if (!Number.isFinite(start) || start < 0) {
+                return res.status(400).json({ error: 'segment.start must be a non-negative integer' });
+            }
+            area.segments[idx].start = start;
+        }
+        if (segment.count !== undefined) {
+            const count = Number(segment.count);
+            if (!Number.isFinite(count) || count < 1) {
+                return res.status(400).json({ error: 'segment.count must be a positive integer' });
+            }
+            area.segments[idx].count = count;
+        }
+        writeModel(model);
+        scheduleCompile();
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// DELETE /memory/port/:portId/unit/:unitId/area/:areaId/segment/:segIdx — remove a segment
+app.delete('/memory/port/:portId/unit/:unitId/area/:areaId/segment/:segIdx', (req, res) => {
+    try {
+        const { portId, unitId, areaId, segIdx } = req.params;
+        const idx = Number(segIdx);
+        if (!Number.isFinite(idx) || idx < 0) {
+            return res.status(400).json({ error: 'segIdx must be a non-negative integer' });
+        }
+        const model = readModel();
+        const port = findMemoryPort(model, portId);
+        if (!port) return res.status(404).json({ error: `Memory port ${portId} not found` });
+        const unit = findUnit(port, unitId);
+        if (!unit) return res.status(404).json({ error: `Unit ${unitId} not found on port ${portId}` });
+        const area = (unit.areas || []).find(a => a.id === areaId);
+        if (!area) return res.status(404).json({ error: `Area ${areaId} not found on unit ${unitId}` });
+        if (!Array.isArray(area.segments) || idx >= area.segments.length) {
+            return res.status(404).json({ error: `Segment index ${idx} not found on area ${areaId}` });
+        }
+        if (area.segments.length === 1) {
+            return res.status(400).json({ error: 'Cannot remove the last segment — delete the area instead' });
+        }
+        area.segments.splice(idx, 1);
+        writeModel(model);
+        scheduleCompile();
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /memory/port/:portId/unit/:unitId/area/:areaId/merge-segments
+// Merge all segments of an area into a single contiguous block (user-triggered only).
+// Sets area.mode = "merged" to record the intent.
+app.post('/memory/port/:portId/unit/:unitId/area/:areaId/merge-segments', (req, res) => {
+    try {
+        const { portId, unitId, areaId } = req.params;
+        const model = readModel();
+        const port = findMemoryPort(model, portId);
+        if (!port) return res.status(404).json({ error: `Memory port ${portId} not found` });
+        const unit = findUnit(port, unitId);
+        if (!unit) return res.status(404).json({ error: `Unit ${unitId} not found on port ${portId}` });
+        const area = (unit.areas || []).find(a => a.id === areaId);
+        if (!area) return res.status(404).json({ error: `Area ${areaId} not found on unit ${unitId}` });
+        if (!Array.isArray(area.segments) || area.segments.length === 0) {
+            return res.status(400).json({ error: 'Area has no segments to merge' });
+        }
+        area.segments = mergeSegments(area.segments);
+        area.mode = 'merged';
+        writeModel(model);
+        scheduleCompile();
+        res.json({ ok: true, segment: area.segments[0] });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // POST /memory/port/:portId/units/populate — auto-populate units[] from current device reads
 // Derives unit structure from auto-computed blocks[], grouping areas by unit_id.
 // Existing manually-defined units are merged/preserved — duplicate unit_ids are merged.
@@ -897,34 +1040,37 @@ app.post('/memory/port/:portId/units/populate', (req, res) => {
         }
 
         // Derive new units from blocks[] (auto-computed from device reads)
+        // Group blocks by unit_id; within each unit group by area type,
+        // collecting individual segment ranges (no merging).
         const derivedByUnitId = new Map();
         for (const block of (port.blocks || [])) {
             const uid = Number(block.unit_id);
             if (!derivedByUnitId.has(uid)) {
-                derivedByUnitId.set(uid, []);
+                derivedByUnitId.set(uid, new Map()); // area type → segments[]
             }
-            derivedByUnitId.get(uid).push({
-                id: randomUUID(),
-                type: block.area || 'holding_registers',
-                start: block.address,
-                count: block.count,
-            });
+            const areaMap = derivedByUnitId.get(uid);
+            const areaType = block.area || 'holding_registers';
+            if (!areaMap.has(areaType)) areaMap.set(areaType, []);
+            areaMap.get(areaType).push({ start: block.address, count: block.count });
         }
 
         let added = 0;
-        for (const [uid, areas] of derivedByUnitId) {
+        for (const [uid, areaMap] of derivedByUnitId) {
+            const areas = [...areaMap.entries()].map(([type, segments]) => ({
+                id: randomUUID(),
+                type,
+                segments,
+            }));
+
             if (existingByUnitId.has(uid)) {
-                // Merge areas into existing unit.  Check uniqueness by type only — if a
-                // derived area has the same type as an existing one but a different range,
-                // widen the existing area to cover both.  This keeps the model at most one
-                // area per type per unit, matching the YAML compiler (compileMma2Config)
-                // and preventing the Memory tab from showing a different layout than the
-                // generated config.
+                // Merge areas into existing unit.  Append new segments to existing
+                // areas of the same type; create new areas for types not yet present.
                 const existing = existingByUnitId.get(uid);
                 for (const area of areas) {
                     const existingArea = (existing.areas || []).find(a => a.type === area.type);
                     if (existingArea) {
-                        ({ start: existingArea.start, count: existingArea.count } = widenRange(existingArea.start, existingArea.count, area.start, area.count));
+                        if (!Array.isArray(existingArea.segments)) existingArea.segments = [];
+                        existingArea.segments.push(...area.segments);
                     } else {
                         existing.areas.push(area);
                         added++;
@@ -1012,7 +1158,7 @@ app.get('/memory/reconcile', (req, res) => {
                 const missingAreas = [...requiredAreas].filter(a => !configuredAreas.has(a));
 
                 // For area types that are present, check that each read's address range
-                // is actually covered by the unit area (start <= readStart, start+count >= readEnd).
+                // is actually covered by at least one segment of the unit area.
                 const rangeIssues = [];
                 for (const read of (device.reads || [])) {
                     const areaType = read.source_area || 'holding_registers';
@@ -1021,22 +1167,27 @@ app.get('/memory/reconcile', (req, res) => {
                     const readCount = Number(read.source_count) || 1;
                     const readEnd = readStart + readCount - 1;
                     const matchingAreas = (unit.areas || []).filter(a => a.type === areaType);
-                    const covered = matchingAreas.some(a => {
-                        const aStart = Number(a.start);
-                        const aEnd = aStart + Number(a.count) - 1;
-                        return aStart <= readStart && aEnd >= readEnd;
-                    });
+                    // A read is covered if any segment in any matching area fully contains it.
+                    const covered = matchingAreas.some(a =>
+                        (a.segments || []).some(seg => {
+                            const sStart = Number(seg.start);
+                            const sEnd = sStart + Number(seg.count) - 1;
+                            return sStart <= readStart && sEnd >= readEnd;
+                        })
+                    );
                     if (!covered) {
                         const bestArea = matchingAreas[0] || null;
+                        const bestSeg = (bestArea && bestArea.segments && bestArea.segments[0]) || null;
                         rangeIssues.push({
                             readId: read.id,
                             readName: read.name || read.id,
                             areaType,
                             readStart,
                             readEnd,
-                            areaStart: bestArea != null ? Number(bestArea.start) : null,
-                            areaEnd: bestArea != null ? Number(bestArea.start) + Number(bestArea.count) - 1 : null,
-                            areaCount: bestArea != null ? Number(bestArea.count) : null,
+                            areaSegments: bestArea ? (bestArea.segments || []) : [],
+                            areaStart: bestSeg != null ? Number(bestSeg.start) : null,
+                            areaEnd: bestSeg != null ? Number(bestSeg.start) + Number(bestSeg.count) - 1 : null,
+                            areaCount: bestSeg != null ? Number(bestSeg.count) : null,
                         });
                     }
                 }
@@ -1136,12 +1287,16 @@ app.get('/memory/reconcile', (req, res) => {
                 });
             } else if (unit) {
                 // Unit explicitly stored in port.units[] — verify it has a correctly-sized
-                // holding_registers area (start=0, count >= requiredCount).
+                // holding_registers area: at least one segment with start=0 and
+                // count >= requiredCount.
                 const hrAreas = (unit.areas || []).filter(a => a.type === 'holding_registers');
                 const hrArea = hrAreas[0] || null;
-                const configuredStart = hrArea != null ? Number(hrArea.start) : null;
-                const configuredCount = hrArea != null ? Number(hrArea.count) : null;
-                const sizeOk = hrArea != null && configuredStart === 0 && configuredCount >= requiredCount;
+                const firstSeg = hrArea && (hrArea.segments || [])[0] || null;
+                const configuredStart = firstSeg != null ? Number(firstSeg.start) : null;
+                const configuredCount = firstSeg != null ? Number(firstSeg.count) : null;
+                const sizeOk = hrArea != null && (hrArea.segments || []).some(
+                    seg => Number(seg.start) === 0 && Number(seg.count) >= requiredCount
+                );
                 if (!sizeOk) {
                     status_size_mismatch.push({
                         statusUnitId,
@@ -1229,12 +1384,11 @@ app.post('/memory/reconcile/fix-status', (req, res) => {
         // Remove any existing holding_registers areas for this unit.
         unit.areas = unit.areas.filter(a => a.type !== 'holding_registers');
 
-        // Add the correctly-sized holding_registers area.
+        // Add the correctly-sized holding_registers area using segments format.
         unit.areas.push({
             id: randomUUID(),
             type: 'holding_registers',
-            start: 0,
-            count: requiredCount,
+            segments: [{ start: 0, count: requiredCount }],
         });
 
         writeModel(model);
