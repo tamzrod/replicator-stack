@@ -1,817 +1,84 @@
 const express = require('express');
 const fs = require('fs');
-const http = require('http');
-const net = require('net');
-const os = require('os');
 const path = require('path');
-const { randomUUID, scryptSync, randomBytes, timingSafeEqual, createHash } = require('crypto');
+const { randomUUID, randomBytes } = require('crypto');
 
-const {
-    toReplicatorYaml,
-    toMmaYaml,
-    compileMma2Config,
-    validateMmaConfig,
-    validateReplicatorConfig,
-} = require('./services/yamlCompiler');
+const { _sessions, SESSION_TTL_MS, SALT_BYTES, hashPassword, verifyPassword, readAuth, writeAuth, parseCookies, requireAuth } = require('./services/authService');
+const { _idx, DATA_DIR, TARGET_HOST, MODEL_PATH, REPLICATOR_CONFIG_PATH, MMA_CONFIG_PATH, DEFAULT_SYSTEM, STATUS_SLOT_SIZE, DEFAULT_STATUS_UNIT_ID, getCanonicalVersion, getYamlHash, bumpCanonicalVersion, setYamlHash, invalidateCache, atomicWrite, readModel, writeModel, isRequiredNonNegativeInt, isValidIp, isValidEndpoint, endpointPort, getMissingTargetPorts, findGroup, findDevice, findMemoryPort, findUnit, readsOverlap, ensureTargetMemory, widenRange, pickCanonicalSuid, getCanonicalStatusUnitId, assignNextSlot, recompileStatusSlots, csvCell, parseCSVRow, generateUniqueReadId } = require('./services/modelStore');
+const { scheduleCompile, flushPendingCompile, autoCompile, mergeRanges, rehydrateFromYaml, resolveIdentityConflicts, autoFixDuplicateUnitIds, buildErrorSummary, compileAndWrite } = require('./services/compileService');
+const { DOCKER_SOCKET, ALLOWED_SERVICES, DOCKER_LOG_TAIL_LINES, getAppVersion, getDockerDigest, dockerApi, restartServices, streamContainerLogs, discoverVersion } = require('./services/dockerService');
+const { modbusReadHoldingRegisters, readDevicesStatus } = require('./services/modbusService');
+const { validateMmaConfig, validateReplicatorConfig } = require('./services/yamlCompiler');
 const { computeIntegrity } = require('./services/integrityService');
+
+const GIT_SHA = process.env.GIT_SHA || 'dev';
+const VALID_AREA_TYPES = new Set(['holding_registers', 'input_registers', 'coils', 'discrete_inputs']);
+const VALID_FC_SET = new Set([1, 2, 3, 4, 5, 6, 15, 16]);
+
+function makeRateLimiter(windowMs, max) {
+    const hits = new Map();
+    return (req, res, next) => {
+        const ip = req.ip;
+        const now = Date.now();
+        const entry = hits.get(ip) || { count: 0, start: now };
+        if (now - entry.start > windowMs) { entry.count = 0; entry.start = now; }
+        entry.count++;
+        hits.set(ip, entry);
+        if (entry.count > max) return res.status(429).json({ error: 'Too many requests' });
+        next();
+    };
+}
+const authRateLimit = makeRateLimiter(15 * 60 * 1000, 20);
+const rateLimit    = makeRateLimiter(60 * 1000, 60);
+
+/**
+ * APPLY integrity gate — call before any APPLY operation.
+ *
+ * Runs computeIntegrity(model).  If the result is not ok, sends a 422 response
+ * with the standard integrity_failed shape and returns true so the caller can
+ * `return` immediately.  Returns false when integrity passes.
+ *
+ * @param {object} model
+ * @param {object} res  - Express response object
+ * @returns {boolean}  true → caller should return; false → proceed with APPLY
+ */
+function applyIntegrityGate(model, res) {
+    const integrity = computeIntegrity(model);
+    if (!integrity.ok) {
+        const errorMessages = integrity.issues
+            .filter(i => i.severity === 'error')
+            .map(i => `[${i.deviceName}] ${i.message}`);
+        res.status(422).json({
+            status: 'integrity_failed',
+            error: 'APPLY blocked — integrity CHECK failed. Run Fix Issues to resolve errors before applying.',
+            integrity_errors: errorMessages,
+            integrity: integrity,
+        });
+        return true;
+    }
+    return false;
+}
+
+/**
+ * Count routes (reads) for all devices whose target port is not in excludedPortNums.
+ * @param {object} model
+ * @param {Set<number>} excludedPortNums
+ * @returns {number}
+ */
+function countRoutes(model, excludedPortNums) {
+    let count = 0;
+    for (const device of (model.devices || [])) {
+        const targetPort = endpointPort(device.target_endpoint);
+        if (targetPort !== null && excludedPortNums.has(targetPort)) continue;
+        count += (device.reads || []).length;
+    }
+    return count;
+}
 
 const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'public')));
 app.use(requireAuth);
-
-const DATA_DIR = process.env.DATA_DIR || '/app/data';
-const TARGET_HOST = process.env.TARGET_HOST || 'mma';
-let APP_VERSION = process.env.APP_VERSION || 'dev';
-let DOCKER_DIGEST = process.env.DOCKER_DIGEST || null;
-const GIT_SHA = process.env.GIT_SHA || null;
-const MODEL_PATH = path.join(DATA_DIR, 'model.json');
-const REPLICATOR_CONFIG_PATH = path.join(DATA_DIR, 'replicator/config.yaml');
-const MMA_CONFIG_PATH = path.join(DATA_DIR, 'mma/config.yaml');
-const AUTH_PATH = path.join(DATA_DIR, 'auth.json');
-
-// ---------------------------------------------------------------------------
-// Auth — credentials stored in DATA_DIR/auth.json (hashed with scrypt).
-// Sessions are kept in-memory (token → session); restarting the server
-// invalidates all sessions, which is acceptable for this use case.
-// ---------------------------------------------------------------------------
-const DEFAULT_USERNAME = 'admin';
-const DEFAULT_PASSWORD = 'admin';
-// N=16384 (2^14): OWASP-recommended minimum for interactive logins with r=8, p=1.
-// Memory cost = 128 * N * r = 16 MB — stays safely under Node.js's 32 MB default maxmem.
-// Do not increase N above 32768 without also raising maxmem, as it will exceed the limit.
-const SCRYPT_PARAMS = { N: 16384, r: 8, p: 1 };
-const HASH_LEN = 64;
-const SALT_BYTES = 16;
-
-const _sessions = new Map(); // token → { username, createdAt }
-const SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
-
-// ---------------------------------------------------------------------------
-// Rate limiting — factory used for both auth and general endpoints.
-// ---------------------------------------------------------------------------
-function makeRateLimiter({ maxRequests, windowMs, message }) {
-    const store = new Map();
-    return function(req, res, next) {
-        const key = req.ip || 'unknown';
-        const now = Date.now();
-        const entry = store.get(key) || { count: 0, start: now };
-        if (now - entry.start > windowMs) { entry.count = 0; entry.start = now; }
-        entry.count += 1;
-        store.set(key, entry);
-        if (entry.count > maxRequests) {
-            return res.status(429).json({ error: message });
-        }
-        next();
-    };
-}
-
-// Rate limiter for auth endpoints: max 10 attempts per IP per minute.
-const authRateLimit = makeRateLimiter({ maxRequests: 10, windowMs: 60_000, message: 'Too many attempts — please wait before retrying' });
-
-function hashPassword(password, salt) {
-    return scryptSync(password, salt, HASH_LEN, SCRYPT_PARAMS).toString('hex');
-}
-
-function verifyPassword(candidate, auth) {
-    const supplied = Buffer.from(hashPassword(candidate, auth.salt), 'hex');
-    const stored   = Buffer.from(auth.hash, 'hex');
-    return supplied.length === stored.length && timingSafeEqual(supplied, stored);
-}
-
-function readAuth() {
-    if (fs.existsSync(AUTH_PATH)) {
-        try {
-            const raw = JSON.parse(fs.readFileSync(AUTH_PATH, 'utf-8'));
-            if (raw.username && raw.salt && raw.hash) return raw;
-        } catch (_) { /* fall through to default */ }
-    }
-    const salt = randomBytes(SALT_BYTES).toString('hex');
-    const auth = {
-        username: DEFAULT_USERNAME,
-        salt,
-        hash: hashPassword(DEFAULT_PASSWORD, salt),
-        mustChangePassword: true,
-    };
-    writeAuth(auth);
-    return auth;
-}
-
-function writeAuth(auth) {
-    fs.mkdirSync(path.dirname(AUTH_PATH), { recursive: true });
-    fs.writeFileSync(AUTH_PATH, JSON.stringify(auth, null, 2), 'utf-8');
-}
-
-function parseCookies(req) {
-    const cookies = {};
-    const header = req.headers.cookie || '';
-    for (const part of header.split(';')) {
-        const eqIdx = part.indexOf('=');
-        if (eqIdx <= 0) continue;
-        const k = part.slice(0, eqIdx).trim();
-        const v = part.slice(eqIdx + 1).trim();
-        if (k) cookies[k] = decodeURIComponent(v);
-    }
-    return cookies;
-}
-
-function requireAuth(req, res, next) {
-    // Auth and version routes are always public
-    if (req.path.startsWith('/auth/') || req.path === '/version') return next();
-    const token = parseCookies(req)['mcs_session'];
-    if (!token || !_sessions.has(token)) {
-        return res.status(401).json({ error: 'Not authenticated' });
-    }
-    const session = _sessions.get(token);
-    if (Date.now() - session.createdAt > SESSION_TTL_MS) {
-        _sessions.delete(token);
-        return res.status(401).json({ error: 'Session expired' });
-    }
-    req.authSession = session;
-    next();
-}
-
-const DEFAULT_SYSTEM = {};
-
-// Number of holding registers consumed by each device's status slot.
-const STATUS_SLOT_SIZE = 30;
-
-// Default Modbus unit_id used for the status memory block on each MMA listener.
-// Chosen to avoid collision with typical device unit_id values (usually small integers).
-const DEFAULT_STATUS_UNIT_ID = 246;
-
-// ---------------------------------------------------------------------------
-// In-memory model cache — eliminates repeated fs.readFileSync / JSON.parse
-// on every request.  Invalidated (and re-populated) on every writeModel().
-//
-// CONTRACT: callers that mutate the returned object MUST call writeModel()
-// afterwards to keep the cache and disk in sync.  All existing route handlers
-// already follow this pattern.
-// ---------------------------------------------------------------------------
-let _modelCache = null;
-
-// ---------------------------------------------------------------------------
-// Canonical version counter — the single source-of-truth version stamp.
-//
-// Incremented every time compileAndWrite() successfully writes both YAML
-// config files to disk.  Returned alongside the model and compiled YAML in
-// GET /model/snapshot so every UI view can prove it is rendering the same
-// compiled state.  Never reset (monotonically increasing within a process
-// lifetime; clients should treat it as an opaque comparable token).
-// ---------------------------------------------------------------------------
-let _canonicalVersion = 0;
-
-// ---------------------------------------------------------------------------
-// YAML content hash — SHA-256 of the last successfully written replicator.yaml
-// + mma.yaml pair.  Computed and stored inside compileAndWrite() whenever both
-// files are atomically committed to disk.  Exposed via GET /model/snapshot so
-// the UI can detect filesystem drift between saves (e.g. external edits or a
-// second client triggering a compile).  Null until the first successful compile.
-// ---------------------------------------------------------------------------
-let _yamlContentHash = null;
-
-// ---------------------------------------------------------------------------
-// Compile queue — decouples autoCompile from the synchronous CRUD hot path.
-// A short debounce ensures rapid back-to-back mutations only trigger one
-// compile pass.  The compile result is always based on the latest model
-// (readModel() is O(1) via _modelCache).
-//
-// _compilePending and _lastMutationTimestamp are observability flags that
-// expose queue state (e.g. a future GET /compile/status endpoint).
-// ---------------------------------------------------------------------------
-let _compilePending = false;        // true while a compile timer is outstanding
-let _lastMutationTimestamp = 0;     // ms timestamp of the most recent mutation
-let _compileTimer = null;
-const COMPILE_DEBOUNCE_MS = 50;
-
-function scheduleCompile() {
-    _compilePending = true;
-    _lastMutationTimestamp = Date.now();
-    if (_compileTimer) clearTimeout(_compileTimer);
-    _compileTimer = setTimeout(() => {
-        _compilePending = false;
-        _compileTimer = null;
-        autoCompile(readModel());
-    }, COMPILE_DEBOUNCE_MS);
-}
-
-// ---------------------------------------------------------------------------
-// Index maps — O(1) lookup caches derived from _modelCache.
-//
-// Rebuilt by rebuildIndexes() which is called from writeModel() (after every
-// successful mutation) and from readModel() (on the first cold read).
-//
-// CONTRACT: indexes are read-only derived caches — they NEVER modify model
-// data and NEVER affect logic outcomes.  Model remains the sole source of
-// truth; these Maps exist purely to eliminate repeated O(n) array scans.
-//
-// Map keys and their meanings:
-//   devicesById           — device.id (string UUID) → device object
-//   devicesByUnitId       — device.unitId (number)  → device object
-//   devicesByStatusUnitId — device.status_unit_id (number | null) → device[]
-//   devicesByStatusSlot   — device.status_slot (number) → device[]
-//   portsById             — port.id (string UUID)  → port object
-//   portsByNumber         — port.port (number)     → port object
-// ---------------------------------------------------------------------------
-const _idx = {
-    devicesById:           new Map(),
-    devicesByUnitId:       new Map(),
-    devicesByStatusUnitId: new Map(),
-    devicesByStatusSlot:   new Map(),
-    devicesByTarget:       new Map(), // "device.target_endpoint|device.unitId" (composite key) → device object
-                                       // unitId is a system-managed value that should be unique across all devices;
-                                       // enforced at creation/duplicate time via devicesByUnitId lookups.
-    portsById:             new Map(),
-    portsByNumber:         new Map(),
-};
-
-function rebuildIndexes(model) {
-    _idx.devicesById.clear();
-    _idx.devicesByUnitId.clear();
-    _idx.devicesByStatusUnitId.clear();
-    _idx.devicesByStatusSlot.clear();
-    _idx.devicesByTarget.clear();
-    _idx.portsById.clear();
-    _idx.portsByNumber.clear();
-
-    for (const device of (model.devices || [])) {
-        _idx.devicesById.set(device.id, device);
-
-        const parsedUnitId = Number(device.unitId);
-        if (Number.isFinite(parsedUnitId)) {
-            _idx.devicesByUnitId.set(parsedUnitId, device);
-        }
-
-        // null is a valid Map key — devices with no status_unit_id are stored under null
-        const statusUnitIdKey = device.status_unit_id != null ? Number(device.status_unit_id) : null;
-        if (!_idx.devicesByStatusUnitId.has(statusUnitIdKey)) {
-            _idx.devicesByStatusUnitId.set(statusUnitIdKey, []);
-        }
-        _idx.devicesByStatusUnitId.get(statusUnitIdKey).push(device);
-
-        const slot = Number(device.status_slot ?? 0);
-        if (Number.isFinite(slot)) {
-            if (!_idx.devicesByStatusSlot.has(slot)) {
-                _idx.devicesByStatusSlot.set(slot, []);
-            }
-            _idx.devicesByStatusSlot.get(slot).push(device);
-        }
-
-        if (device.target_endpoint) {
-            _idx.devicesByTarget.set(`${device.target_endpoint.trim()}|${device.unitId}`, device);
-        }
-    }
-
-    for (const port of ((model.memory && model.memory.ports) || [])) {
-        _idx.portsById.set(port.id, port);
-        _idx.portsByNumber.set(Number(port.port), port);
-    }
-
-    // Debug-level consistency check: index sizes must match source array lengths.
-    // Mismatches indicate duplicate IDs in the model (a data-integrity violation
-    // enforced at creation time).  This assertion is informational only — it
-    // does not alter the model or raise an exception in production.
-    const deviceCount = (model.devices || []).length;
-    const portCount   = ((model.memory && model.memory.ports) || []).length;
-    console.assert(
-        _idx.devicesById.size === deviceCount,
-        `[idx] devicesById size mismatch: ${_idx.devicesById.size} entries vs ${deviceCount} devices — duplicate device IDs detected`
-    );
-    console.assert(
-        _idx.portsById.size === portCount,
-        `[idx] portsById size mismatch: ${_idx.portsById.size} entries vs ${portCount} ports — duplicate port IDs detected`
-    );
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Validate that a value is a required positive integer (e.g. for unit IDs).
- * Returns true if valid, false otherwise.
- */
-function isRequiredNonNegativeInt(value) {
-    if (value == null || value === '') return false;
-    const n = Number(value);
-    return Number.isFinite(n) && n >= 0;
-}
-
-function initialModel() {
-    return { system: DEFAULT_SYSTEM, groups: [], devices: [], memory: { ports: [] } };
-}
-
-/**
- * Return the widest range that covers both (start1, count1) and (start2, count2).
- * Used wherever two address ranges for the same area type must be merged.
- */
-function widenRange(start1, count1, start2, count2) {
-    const newStart = Math.min(start1, start2);
-    const newEnd   = Math.max(start1 + count1 - 1, start2 + count2 - 1);
-    return { start: newStart, count: newEnd - newStart + 1 };
-}
-
-/**
- * Apply all in-place migration passes to a freshly parsed model object.
- * Writes the model back to disk when any field was changed.
- * Returns the (possibly mutated) model.
- */
-function migrateModel(model) {
-    if (!Array.isArray(model.devices)) model.devices = [];
-    if (!Array.isArray(model.groups)) model.groups = [];
-    if (!model.system) model.system = {};
-    if (!model.memory) model.memory = { ports: [] };
-    if (!Array.isArray(model.memory.ports)) model.memory.ports = [];
-    // Ensure each port has units[] (new field for manual unit-based config)
-    for (const port of model.memory.ports) {
-        if (!Array.isArray(port.units)) {
-            port.units = [];
-            // Note: units[] starts empty; users can auto-populate from device reads
-            // via POST /memory/port/:portId/units/populate or add units manually.
-        }
-    }
-    let migrated = false;
-    // Normalize duplicate area types within units: merge same-type areas using widest range.
-    // This ensures the model is always consistent with the MMA config compiler's merge behaviour.
-    for (const port of model.memory.ports) {
-        for (const unit of (port.units || [])) {
-            if (!Array.isArray(unit.areas) || unit.areas.length < 2) continue;
-            const byType = new Map();
-            let hasDuplicates = false;
-            for (const area of unit.areas) {
-                if (!byType.has(area.type)) {
-                    byType.set(area.type, { ...area });
-                } else {
-                    const ex = byType.get(area.type);
-                    ({ start: ex.start, count: ex.count } = widenRange(ex.start, ex.count, area.start, area.count));
-                    hasDuplicates = true;
-                    migrated = true;
-                }
-            }
-            if (hasDuplicates) unit.areas = [...byType.values()];
-        }
-    }
-    for (const device of model.devices) {
-        // Migrate old free-text device.group → device.groupId using group entities
-        if (device.group && !device.groupId) {
-            let grp = model.groups.find(g => g.name === device.group);
-            if (!grp) {
-                grp = { id: randomUUID(), name: device.group };
-                model.groups.push(grp);
-            }
-            device.groupId = grp.id;
-            delete device.group;
-            migrated = true;
-        }
-        // Migrate old device.host → device.ipAddress
-        if (device.host && !device.ipAddress) {
-            device.ipAddress = device.host;
-            delete device.host;
-            migrated = true;
-        }
-        // Migrate old device.ipAddress + device.port → device.source_endpoint
-        if ((device.ipAddress || device.port) && !device.source_endpoint) {
-            const ip = (device.ipAddress || 'localhost').trim();
-            const p = Number(device.port) || 502;
-            device.source_endpoint = `${ip}:${p}`;
-            delete device.ipAddress;
-            delete device.port;
-            migrated = true;
-        }
-        // Migrate old auto-assigned assigned_unit_id → explicit unitId
-        if ('assigned_unit_id' in device && !('unitId' in device)) {
-            device.unitId = device.assigned_unit_id;
-            migrated = true;
-        }
-        if ('assigned_unit_id' in device) {
-            delete device.assigned_unit_id;
-            migrated = true;
-        }
-        // Remove legacy target_name reference (target concept removed)
-        if ('target_name' in device) {
-            delete device.target_name;
-            migrated = true;
-        }
-    }
-    // Migrate old system.targets → model.memory.ports (preserve port numbers, drop empty)
-    if (Array.isArray(model.system.targets) && model.system.targets.length > 0
-            && model.memory.ports.length === 0) {
-        for (const t of model.system.targets) {
-            const port = t.port || Number((t.endpoint || '').split(':')[1]) || 502;
-            if (Number.isFinite(port) && port > 0) {
-                model.memory.ports.push({ id: randomUUID(), port, blocks: [] });
-            }
-        }
-        migrated = true;
-    }
-    if (Array.isArray(model.system.targets)) {
-        delete model.system.targets;
-        migrated = true;
-    }
-    // Migrate missing target_endpoint: derive from mma_endpoint system setting + memory port lookup
-    {
-        const unitToPortNum = {};
-        for (const port of model.memory.ports) {
-            for (const block of (port.blocks || [])) {
-                const uid = Number(block.unit_id);
-                if (Number.isFinite(uid) && !(uid in unitToPortNum)) {
-                    unitToPortNum[uid] = Number(port.port) || 502;
-                }
-            }
-        }
-        const defaultMmaHost = (model.system && model.system.mma_endpoint) || TARGET_HOST;
-        const defaultPortNum = (model.memory.ports[0] && Number(model.memory.ports[0].port)) || 502;
-        for (const device of model.devices) {
-            if (!device.target_endpoint) {
-                const targetPort = (device.unitId != null && unitToPortNum[Number(device.unitId)] != null)
-                    ? unitToPortNum[Number(device.unitId)]
-                    : defaultPortNum;
-                device.target_endpoint = `${defaultMmaHost}:${targetPort}`;
-                migrated = true;
-            }
-        }
-    }
-    if (migrated) writeModel(model);
-    return model;
-}
-
-function readModel() {
-    if (_modelCache !== null) {
-        return _modelCache;
-    }
-    if (!fs.existsSync(MODEL_PATH)) {
-        const initial = initialModel();
-        writeModel(initial);
-        return initial;
-    }
-    let model;
-    try {
-        model = JSON.parse(fs.readFileSync(MODEL_PATH, 'utf-8'));
-    } catch (parseErr) {
-        console.error(`[readModel] Failed to parse ${MODEL_PATH}: ${parseErr.message} — resetting to initial model`);
-        const initial = initialModel();
-        writeModel(initial);
-        return initial;
-    }
-    model = migrateModel(model);
-    _modelCache = model; // always cache after the first cold read, regardless of migration
-    rebuildIndexes(model);
-    return model;
-}
-
-function isValidIp(ip) {
-    if (typeof ip !== 'string' || !ip.trim()) return false;
-    const parts = ip.trim().split('.');
-    if (parts.length !== 4) return false;
-    return parts.every(p => /^\d+$/.test(p) && Number(p) >= 0 && Number(p) <= 255);
-}
-
-// Validate a free-form endpoint string: "<host>:<port>" where host may be an
-// IP address, docker service name, or "localhost".
-function isValidEndpoint(endpoint) {
-    if (typeof endpoint !== 'string' || !endpoint.trim()) return false;
-    const lastColon = endpoint.lastIndexOf(':');
-    if (lastColon < 1) return false; // no host before colon
-    const port = Number(endpoint.slice(lastColon + 1));
-    return Number.isFinite(port) && port >= 1 && port <= 65535;
-}
-
-// Extract the port number from an endpoint string. Returns null on failure.
-function endpointPort(endpoint) {
-    if (typeof endpoint !== 'string') return null;
-    const lastColon = endpoint.lastIndexOf(':');
-    if (lastColon < 0) return null;
-    const port = Number(endpoint.slice(lastColon + 1));
-    return Number.isFinite(port) && port >= 1 && port <= 65535 ? port : null;
-}
-
-// Return sorted array of port numbers referenced by device target_endpoints
-// that do not yet exist in model.memory.ports.
-function getMissingTargetPorts(model) {
-    const existingPortNums = new Set((model.memory.ports || []).map(p => Number(p.port)));
-    const missing = new Set();
-    for (const device of (model.devices || [])) {
-        const port = endpointPort(device.target_endpoint);
-        if (port != null && !existingPortNums.has(port)) {
-            missing.add(port);
-        }
-    }
-    return [...missing].sort((a, b) => a - b);
-}
-
-function findGroup(model, groupId) {
-    return (model.groups || []).find(g => g.id === groupId) || null;
-}
-
-// Ensure a memory port, unit, and areas exist for the device's target_endpoint + unitId,
-// and keep the unit's area types in sync with the actual reads.
-//
-// Creates the port and/or unit if absent.  Then it computes the complete set of
-// source_area types required by ALL devices that target the same (portNum, unitId) —
-// including the triggering device — and:
-//   • removes areas whose type is no longer required by any device read (stale areas)
-//   • adds areas for types that are missing, using the merged address range from reads
-//   • leaves areas whose type is still required untouched (preserving user-set start/count)
-//
-// Safe to call with an already-mutated model before writeModel() — all changes are
-// applied in-place.
-function ensureTargetMemory(model, device) {
-    const portNum = endpointPort(device.target_endpoint);
-    if (portNum == null) return; // invalid endpoint — validation catches this separately
-
-    const unitId = Number(device.unitId);
-    if (!Number.isFinite(unitId) || unitId < 0) return; // invalid unit id
-
-    // Find or create the memory port.
-    let port = _idx.portsByNumber.get(portNum) || null;
-    if (!port) {
-        port = { id: randomUUID(), port: portNum, blocks: [], units: [] };
-        model.memory.ports.push(port);
-        console.log(`[ensureTargetMemory] Created target memory port ${portNum} for unit_id: ${unitId}`);
-    }
-
-    // Find or create the unit within the port.
-    if (!port.units) port.units = [];
-    let unit = port.units.find(u => Number(u.unit_id) === unitId);
-    if (!unit) {
-        unit = { id: randomUUID(), unit_id: unitId, areas: [] };
-        port.units.push(unit);
-        console.log(`[ensureTargetMemory] Created target memory unit_id: ${unitId} on port ${portNum}`);
-    } else {
-        console.log(`[ensureTargetMemory] Syncing areas for unit_id: ${unitId} on port ${portNum}`);
-    }
-
-    // Collect required area types from ALL devices that target this (portNum, unitId).
-    // Using the full device list ensures that an area shared by multiple devices is only
-    // removed when no device still requires it.
-    const readsByArea = {};
-    for (const dev of (model.devices || [])) {
-        if (endpointPort(dev.target_endpoint) !== portNum || Number(dev.unitId) !== unitId) continue;
-        for (const read of (dev.reads || [])) {
-            const areaType = read.source_area || 'holding_registers';
-            const start = Number(read.source_address);
-            const count = Number(read.source_count);
-            if (!Number.isFinite(start) || !Number.isFinite(count) || count < 1) continue;
-            if (!readsByArea[areaType]) readsByArea[areaType] = [];
-            readsByArea[areaType].push({ start, end: start + count - 1 });
-        }
-    }
-
-    if (!unit.areas) unit.areas = [];
-    const requiredAreaTypes = new Set(Object.keys(readsByArea));
-
-    // Remove areas whose type is no longer required by any device read.
-    const before = unit.areas.length;
-    unit.areas = unit.areas.filter(a => requiredAreaTypes.has(a.type));
-    const removed = before - unit.areas.length;
-    if (removed > 0) {
-        console.log(`[ensureTargetMemory] Removed ${removed} stale area(s) from unit_id ${unitId} on port ${portNum}`);
-    }
-
-    // Add areas for types that are now required but not yet present.
-    // Use the single widest range (min start → max end) so the model always
-    // holds exactly one area per type per unit — matching what compileMma2Config
-    // emits in the YAML and preventing the Memory tab from showing a different
-    // number of entries than the generated config.
-    const existingAreaTypes = new Set(unit.areas.map(a => a.type));
-    for (const [areaType, ranges] of Object.entries(readsByArea)) {
-        if (existingAreaTypes.has(areaType)) continue; // already present — preserve user's start/count
-        const minStart = Math.min(...ranges.map(r => r.start));
-        const maxEnd   = Math.max(...ranges.map(r => r.end));
-        unit.areas.push({
-            id: randomUUID(),
-            type: areaType,
-            start: minStart,
-            count: maxEnd - minStart + 1,
-        });
-        console.log(`[ensureTargetMemory] Added area ${areaType} start=${minStart} count=${maxEnd - minStart + 1} to unit_id ${unitId}`);
-    }
-}
-
-function writeModel(model) {
-    _modelCache = model;
-    rebuildIndexes(model);
-    atomicWrite(MODEL_PATH, JSON.stringify(model, null, 2));
-}
-
-function atomicWrite(filePath, content) {
-    const dir = path.dirname(filePath);
-    fs.mkdirSync(dir, { recursive: true });
-    const unique = `${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const tmp = path.join(dir, `.tmp-${unique}`);
-    fs.writeFileSync(tmp, content, 'utf-8');
-    try {
-        fs.renameSync(tmp, filePath);
-    } catch (err) {
-        try {
-            if (fs.existsSync(tmp)) fs.unlinkSync(tmp);
-        } catch (_) {
-            // Best effort cleanup only.
-        }
-        throw err;
-    }
-}
-
-function readsOverlap(a, b) {
-    if (a.source_area !== b.source_area) return false;
-    const aStart = Number(a.source_address);
-    const aEnd = aStart + Number(a.source_count);
-    const bStart = Number(b.source_address);
-    const bEnd = bStart + Number(b.source_count);
-    if (!Number.isFinite(aStart) || !Number.isFinite(aEnd) ||
-        !Number.isFinite(bStart) || !Number.isFinite(bEnd)) return false;
-    return aStart < bEnd && bStart < aEnd;
-}
-
-function findDevice(model, deviceId) {
-    return _idx.devicesById.get(deviceId) || null;
-}
-
-// ---------------------------------------------------------------------------
-// CSV helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Escape a value for a CSV cell (RFC 4180).
- */
-function csvCell(val) {
-    const s = String(val ?? '');
-    if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
-        return '"' + s.replace(/"/g, '""') + '"';
-    }
-    return s;
-}
-
-/**
- * Parse a single CSV row, handling quoted fields per RFC 4180.
- */
-function parseCSVRow(line) {
-    const cells = [];
-    let cur = '';
-    let inQuotes = false;
-    for (let i = 0; i < line.length; i++) {
-        const ch = line[i];
-        if (inQuotes) {
-            if (ch === '"') {
-                if (line[i + 1] === '"') { cur += '"'; i++; }
-                else { inQuotes = false; }
-            } else {
-                cur += ch;
-            }
-        } else {
-            if (ch === '"') { inQuotes = true; }
-            else if (ch === ',') { cells.push(cur); cur = ''; }
-            else { cur += ch; }
-        }
-    }
-    cells.push(cur);
-    return cells;
-}
-
-/**
- * Generate a unique read ID that does not clash with any existing read on the device.
- */
-function generateUniqueReadId(reads) {
-    const existingIds = new Set((reads || []).map(r => r.id));
-    let n = 1;
-    while (existingIds.has(`read_${n}`)) n++;
-    return `read_${n}`;
-}
-
-/**
- * Return the status_unit_id that all devices on the given target_endpoint should
- * share.  Returns the most-common existing value for the endpoint group, or
- * DEFAULT_STATUS_UNIT_ID when no device in the group has one assigned yet.
- *
- * @param {object} model
- * @param {string} targetEndpoint  — normalised target_endpoint of the device
- * @returns {number}
- */
-function getCanonicalStatusUnitId(model, targetEndpoint) {
-    const epKey = (targetEndpoint || '').trim().toLowerCase();
-    const counts = new Map();
-    for (const d of (model.devices || [])) {
-        if (d.status_unit_id == null) continue;
-        if ((d.target_endpoint || '').trim().toLowerCase() !== epKey) continue;
-        const suid = Number(d.status_unit_id);
-        counts.set(suid, (counts.get(suid) || 0) + 1);
-    }
-    return pickCanonicalSuid(counts, DEFAULT_STATUS_UNIT_ID);
-}
-
-/**
- * Choose the canonical status_unit_id from a Map<suid, count>.
- * Highest count wins; lowest suid breaks ties.  Returns fallback when counts is empty.
- *
- * @param {Map<number,number>} counts
- * @param {number|null} fallback
- * @returns {number|null}
- */
-function pickCanonicalSuid(counts, fallback) {
-    // bestCount starts at -1 so the first entry always sets canonical unconditionally.
-    // Tie-breaking (suid < canonical) is only evaluated from the second entry onward,
-    // at which point canonical is always a number — no null guard needed.
-    let canonical = null;
-    let bestCount = -1;
-    for (const [suid, count] of counts) {
-        if (count > bestCount || (count === bestCount && suid < canonical)) {
-            canonical = suid;
-            bestCount = count;
-        }
-    }
-    return canonical !== null ? canonical : fallback;
-}
-
-/**
- * Return the smallest slot index not currently used by any device sharing the
- * same target_endpoint.  Slots are zero-based and unique within a target
- * endpoint group.  Devices on different endpoints may share the same slot number.
- *
- * @param {object} model
- * @param {string} targetEndpoint  — normalised target_endpoint of the new device
- * @returns {number}
- */
-function assignNextSlot(model, targetEndpoint) {
-    const epKey = (targetEndpoint || '').trim().toLowerCase();
-    const usedSlots = new Set(
-        (model.devices || [])
-            .filter(d => d.status_slot != null && (d.target_endpoint || '').trim().toLowerCase() === epKey)
-            .map(d => Number(d.status_slot))
-            .filter(n => Number.isFinite(n))
-    );
-    let next = 0;
-    while (usedSlots.has(next)) next++;
-    return next;
-}
-
-/**
- * Validate and fill status slot assignments, scoped per target_endpoint.
- *
- * Slots are zero-based integers that are unique within the group of devices
- * sharing the same target_endpoint (host + port).  Devices on different
- * endpoints are independent — they may share the same slot number without
- * conflict.
- *
- * Rules:
- *   - Clear any duplicate slots within an endpoint group before reassigning.
- *   - Assign missing (null) or cleared duplicate slots using the lowest available
- *     slot (gap-filling, deterministic, stable allocation).
- *   - Each endpoint group is processed independently.
- *
- * @param {object} model
- * @returns {{ modified: boolean }}
- */
-function recompileStatusSlots(model) {
-    const devices = model.devices || [];
-
-    // Group devices by target_endpoint so slot uniqueness is enforced per endpoint.
-    const epGroups = new Map(); // endpointKey → device[]
-    for (const device of devices) {
-        const key = (device.target_endpoint || '').trim().toLowerCase() || '__null__';
-        if (!epGroups.has(key)) epGroups.set(key, []);
-        epGroups.get(key).push(device);
-    }
-
-    let modified = false;
-    for (const grpDevices of epGroups.values()) {
-        // Detect duplicate slots: slot → first device that owns it (keeps it), rest are cleared.
-        const slotOwner = new Map(); // slot → first device seen with that slot
-        for (const device of grpDevices) {
-            if (device.status_slot == null) continue;
-            const slot = Number(device.status_slot);
-            if (!Number.isFinite(slot)) {
-                device.status_slot = null;
-                modified = true;
-                continue;
-            }
-            if (slotOwner.has(slot)) {
-                // Duplicate — clear it so it gets reassigned below.
-                device.status_slot = null;
-                modified = true;
-            } else {
-                slotOwner.set(slot, device);
-            }
-        }
-
-        // Collect slots that are still validly assigned (non-duplicate, non-null).
-        const usedSlots = new Set(slotOwner.keys());
-
-        for (const device of grpDevices) {
-            if (device.status_slot != null) continue;
-            // Find the lowest available slot within this endpoint group (gap-filling).
-            let next = 0;
-            while (usedSlots.has(next)) next++;
-            device.status_slot = next;
-            usedSlots.add(next);
-            modified = true;
-        }
-    }
-    return { modified };
-}
-
-// ---------------------------------------------------------------------------
-// Routes
-// ---------------------------------------------------------------------------
 
 // ── Auth routes (public — no requireAuth) ──────────────────────────────────
 
@@ -885,7 +152,7 @@ app.post('/auth/change-password', authRateLimit, (req, res) => {
 
 
 app.get('/version', (req, res) => {
-    res.json({ version: APP_VERSION, digest: DOCKER_DIGEST, gitSha: GIT_SHA });
+    res.json({ version: getAppVersion(), digest: getDockerDigest(), gitSha: GIT_SHA, canonicalVersion: getCanonicalVersion() });
 });
 
 // GET /model — return full model
@@ -897,31 +164,11 @@ app.get('/model', (req, res) => {
     }
 });
 
+
 // GET /model/snapshot — single canonical response combining model + compiled YAML.
-//
-// This is the endpoint that ALL views must use for their primary data load.
-// Returning model and compiled configs in one response guarantees they come
-// from the same canonical version — there is no window where the Memory Tab
-// could show a model that is ahead of or behind the Config Viewer's YAML.
-//
-// Response shape:
-//   { model, canonicalVersion, config: { replicator: string|null, mma: string|null } }
-// Rate-limited (same policy as /validate) because each response includes two
-// file system reads for the compiled YAML files.
 app.get('/model/snapshot', rateLimit, (req, res) => {
     try {
-        // Flush any pending debounced compile so the snapshot always returns
-        // YAML that matches the current model.  Without this, a rapid
-        // mutation + snapshot sequence would read stale YAML from disk while
-        // the Config Viewer already shows the new Memory-tab state.
-        if (_compilePending) {
-            if (_compileTimer) {
-                clearTimeout(_compileTimer);
-                _compileTimer = null;
-            }
-            _compilePending = false;
-            autoCompile(readModel());
-        }
+        flushPendingCompile();
         const model = readModel();
         const replicatorYaml = fs.existsSync(REPLICATOR_CONFIG_PATH)
             ? fs.readFileSync(REPLICATOR_CONFIG_PATH, 'utf-8')
@@ -931,8 +178,8 @@ app.get('/model/snapshot', rateLimit, (req, res) => {
             : null;
         res.json({
             model,
-            canonicalVersion: _canonicalVersion,
-            yamlHash: _yamlContentHash,
+            canonicalVersion: getCanonicalVersion(),
+            yamlHash: getYamlHash(),
             config: { replicator: replicatorYaml, mma: mmaYaml },
         });
     } catch (err) {
@@ -1250,13 +497,10 @@ app.post('/config/save', (req, res) => {
     }
 });
 
+
 // ---------------------------------------------------------------------------
 // Memory port + block CRUD
 // ---------------------------------------------------------------------------
-
-function findMemoryPort(model, portId) {
-    return _idx.portsById.get(portId) || null;
-}
 
 // POST /memory/port — add a memory port (MMA listener)
 app.post('/memory/port', (req, res) => {
@@ -1337,13 +581,6 @@ app.delete('/memory/port/:id', (req, res) => {
 // ---------------------------------------------------------------------------
 // Memory unit + area CRUD (nested under port, units[] layer)
 // ---------------------------------------------------------------------------
-
-const VALID_AREA_TYPES = new Set(['holding_registers', 'input_registers', 'coils', 'discrete_inputs']);
-const VALID_FC_SET = new Set([1, 2, 3, 4, 5, 6, 15, 16]);
-
-function findUnit(port, unitId) {
-    return ((port && port.units) || []).find(u => u.id === unitId) || null;
-}
 
 // POST /memory/port/:portId/unit — add a unit to a memory port
 app.post('/memory/port/:portId/unit', (req, res) => {
@@ -2384,497 +1621,6 @@ app.get('/config', (req, res) => {
     }
 });
 
-// ---------------------------------------------------------------------------
-// Compile helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Merge an array of {start, end} ranges into a minimal sorted list with no
- * overlapping or adjacent ranges. Two ranges are considered adjacent when one
- * ends exactly one before the other begins (e.g. [1,5] and [6,10]), and are
- * merged into a single range [1,10].
- *
- * @param {Array<{start: number, end: number}>} ranges
- * @returns {Array<{start: number, end: number}>}
- */
-function mergeRanges(ranges) {
-    if (ranges.length === 0) return [];
-    const sorted = [...ranges].sort((a, b) => a.start - b.start);
-    const result = [{ ...sorted[0] }];
-    for (let i = 1; i < sorted.length; i++) {
-        const last = result[result.length - 1];
-        if (sorted[i].start <= last.end + 1) {
-            last.end = Math.max(last.end, sorted[i].end);
-        } else {
-            result.push({ ...sorted[i] });
-        }
-    }
-    return result;
-}
-
-/**
- * Full rehydration: rebuild all memory allocation state from scratch.
- *
- * Derives memory blocks entirely from device reads — no merging with existing
- * blocks, no diff-based updates. Status slot assignments are also recomputed.
- * Every call produces a deterministic, complete snapshot of memory state
- * derived solely from the model.
- *
- * Called on every model mutation and compile to ensure memory always matches
- * the model exactly.
- *
- * @param {object} model
- * @returns {{ modified: boolean, blocksCreated: number }}
- */
-function rehydrateFromYaml(model) {
-    // Step 1: recompile status slot assignments (deterministic sequential allocation)
-    const statusSlots = recompileStatusSlots(model);
-
-    const memoryPorts = model.memory.ports || [];
-
-    // Collect required coverage grouped by portId|unitId|area, derived purely
-    // from device reads. Port is resolved from device.target_endpoint.
-    const required = {};
-
-    for (const device of (model.devices || [])) {
-        const unitId = Number(device.unitId);
-        if (!Number.isFinite(unitId) || unitId < 0) continue;
-
-        const targetPort = endpointPort(device.target_endpoint) || 502;
-        const matchingPort = _idx.portsByNumber.get(targetPort) || null;
-        if (!matchingPort) continue; // port does not exist — skip device
-
-        for (const read of (device.reads || [])) {
-            const area = read.source_area || 'holding_registers';
-            const start = Number(read.source_address);
-            const count = Number(read.source_count);
-            if (!Number.isFinite(start) || !Number.isFinite(count) || count < 1) continue;
-
-            const key = `${matchingPort.id}|${unitId}|${area}`;
-            if (!required[key]) {
-                required[key] = { portId: matchingPort.id, unitId, area, ranges: [] };
-            }
-            required[key].ranges.push({ start, end: start + count - 1 });
-        }
-    }
-
-    // Track prior block counts to detect changes
-    const oldBlockCounts = {};
-    for (const port of memoryPorts) {
-        oldBlockCounts[port.id] = (port.blocks || []).length;
-    }
-
-    // Step 2: clear all existing blocks — full replace, never merge
-    for (const port of memoryPorts) {
-        port.blocks = [];
-    }
-
-    // Step 3: assign freshly-computed blocks derived from reads
-    let blocksCreated = 0;
-    for (const req of Object.values(required)) {
-        const port = _idx.portsById.get(req.portId) || null;
-        if (!port) continue;
-
-        // Unified allocation: one contiguous block spanning min start → max end,
-        // regardless of gaps between individual read ranges.
-        if (req.ranges.length === 0) continue;
-        const minStart = Math.min(...req.ranges.map(r => r.start));
-        const maxEnd   = Math.max(...req.ranges.map(r => r.end));
-        port.blocks.push({
-            id: randomUUID(),
-            unit_id: req.unitId,
-            area: req.area,
-            address: minStart,
-            count: maxEnd - minStart + 1,
-        });
-        blocksCreated++;
-    }
-
-    // Detect whether any blocks changed
-    let blocksChanged = false;
-    for (const port of memoryPorts) {
-        if ((port.blocks || []).length !== oldBlockCounts[port.id]) {
-            blocksChanged = true;
-            break;
-        }
-    }
-    // Also mark modified when old non-empty blocks were present (they got new IDs)
-    if (!blocksChanged) {
-        for (const port of memoryPorts) {
-            if (oldBlockCounts[port.id] > 0) { blocksChanged = true; break; }
-        }
-    }
-
-    // Step 4: ensure every device has a non-null status_unit_id.
-    // Devices on the same target_endpoint must share the same value.
-    // Any device that still has null is assigned the endpoint group's canonical
-    // value, falling back to DEFAULT_STATUS_UNIT_ID when the whole group is unset.
-    let statusUidsModified = false;
-    const epStatusCounts = new Map(); // epKey → Map<suid, count>
-    for (const device of (model.devices || [])) {
-        if (device.status_unit_id == null) continue;
-        const epKey = (device.target_endpoint || '').trim().toLowerCase();
-        if (!epStatusCounts.has(epKey)) epStatusCounts.set(epKey, new Map());
-        const suid = Number(device.status_unit_id);
-        const m = epStatusCounts.get(epKey);
-        m.set(suid, (m.get(suid) || 0) + 1);
-    }
-    for (const device of (model.devices || [])) {
-        if (device.status_unit_id != null) continue;
-        const epKey = (device.target_endpoint || '').trim().toLowerCase();
-        const counts = epStatusCounts.get(epKey) || new Map();
-        const canonical = pickCanonicalSuid(counts, DEFAULT_STATUS_UNIT_ID);
-        device.status_unit_id = canonical;
-        // Register the assigned value so subsequent null devices on the same
-        // endpoint get the same canonical rather than each defaulting independently.
-        if (!epStatusCounts.has(epKey)) epStatusCounts.set(epKey, new Map());
-        const m = epStatusCounts.get(epKey);
-        m.set(canonical, (m.get(canonical) || 0) + 1);
-        statusUidsModified = true;
-    }
-
-    const modified = blocksChanged || statusSlots.modified || statusUidsModified;
-    return { modified, blocksCreated };
-}
-
-/**
- * Resolve duplicate (port, unit_id) identity conflicts that would arise in the
- * generated MMA listener config.
- *
- * The MMA runtime requires each (listener-port, unit_id) pair to be unique within
- * a listener.  A conflict occurs when a device's status_unit_id equals the unit_id
- * of a regular memory block on the same port.
- *
- * Resolution strategy (deterministic):
- *   - Regular memory blocks (derived from device.unitId) are treated as primary and
- *     are never moved — changing unitId would break Replicator routing.
- *   - status_unit_id values are the remappable dimension.  When a conflict is found,
- *     the status_unit_id is incremented until a free slot is found on that port.
- *   - All devices that share the same (port, old_status_unit_id) are remapped together
- *     so that intentional status-memory sharing is preserved.
- *
- * Fails only if no available unit slot can be found within the valid Modbus range
- * (0–65535).
- *
- * @param {object} model  — mutated in-place when conflicts are resolved
- * @returns {{ resolutionLog: Array<{originalIdentity, newIdentity, reason}>, error?: string }}
- */
-function resolveIdentityConflicts(model) {
-    const resolutionLog = [];
-    const memoryPorts = (model.memory && model.memory.ports) || [];
-
-    // Build per-port set of unit_ids occupied by regular memory blocks.
-    const occupiedByPort = new Map(); // portNum → Set<unit_id>
-    for (const port of memoryPorts) {
-        const portNum = Number(port.port);
-        const occupied = new Set();
-        for (const block of (port.blocks || [])) {
-            occupied.add(Number(block.unit_id));
-        }
-        // Also include unit_ids from manually-configured units[]
-        for (const unit of (port.units || [])) {
-            occupied.add(Number(unit.unit_id));
-        }
-        occupiedByPort.set(portNum, occupied);
-    }
-
-    // Track which status_unit_ids have already been processed per port so that
-    // multiple devices intentionally sharing the same status_unit_id on the same
-    // port are remapped as a group (not individually).
-    const statusProcessedByPort = new Map(); // portNum → Map<old_suid, new_suid | null>
-
-    for (const device of (model.devices || [])) {
-        if (device.status_unit_id == null) continue;
-        const targetPort = endpointPort(device.target_endpoint);
-        if (targetPort == null) continue;
-
-        const occupied = occupiedByPort.get(targetPort);
-        if (!occupied) continue; // port not in memory model — skip
-
-        const suid = Number(device.status_unit_id);
-
-        if (!statusProcessedByPort.has(targetPort)) {
-            statusProcessedByPort.set(targetPort, new Map());
-        }
-        const processed = statusProcessedByPort.get(targetPort);
-
-        if (processed.has(suid)) {
-            // Already handled as part of a group — apply the cached remapping.
-            const newUid = processed.get(suid);
-            if (newUid !== null) {
-                device.status_unit_id = newUid;
-            }
-            continue;
-        }
-
-        if (!occupied.has(suid)) {
-            // No conflict — mark as occupied so later status_unit_ids avoid it.
-            occupied.add(suid);
-            processed.set(suid, null); // null = no remapping needed
-            continue;
-        }
-
-        // Conflict detected.  Find the next available slot (incremental expansion).
-        const MAX_UNIT_ID = 65535;
-        let newUid = suid + 1;
-        while (newUid <= MAX_UNIT_ID && occupied.has(newUid)) newUid++;
-        if (newUid > MAX_UNIT_ID) {
-            return {
-                resolutionLog,
-                error: `Cannot resolve identity conflict for status_unit_id ${suid} on port ${targetPort}: no available unit slot in range 0–${MAX_UNIT_ID}`,
-            };
-        }
-
-        resolutionLog.push({
-            originalIdentity: { port: targetPort, unit: suid },
-            newIdentity: { port: targetPort, unit: newUid },
-            reason: `status_unit_id ${suid} on port ${targetPort} conflicts with a regular memory block unit_id; remapped to ${newUid}`,
-        });
-
-        // Cache the remapping so sibling devices sharing this status_unit_id are
-        // updated consistently in subsequent loop iterations.
-        processed.set(suid, newUid);
-        occupied.add(newUid);
-
-        device.status_unit_id = newUid;
-    }
-
-    return { resolutionLog };
-}
-
-/**
- * Auto-fix duplicate unit_id conflicts across devices on the same listener port.
- *
- * NOTE: Under MMA2 semantics, unit_id is a CONTAINER ID — multiple blocks sharing
- * the same unit_id on the same port are merged by compileMma2Config at compile time.
- * This function is therefore retained only for the /compile/resolve auto_fix flow and
- * will be a no-op in the common case where duplicates should be merged rather than
- * reassigned.  It reassigns device.unitId when there is a pre-existing model-level
- * conflict that the user explicitly wants resolved by splitting.
- *
- * Mutates model.devices in-place.  Returns { fixed, resolutionLog, error }.
- *
- * @param {object} model
- * @returns {{ fixed: boolean, resolutionLog: Array<object>, error: string|null }}
- */
-function autoFixDuplicateUnitIds(model) {
-    const MAX_UNIT_ID = 255;
-    const resolutionLog = [];
-
-    // Build: portNum → Map<unitId, devices[]>
-    const portDevices = new Map();
-    for (const device of (model.devices || [])) {
-        const uid = Number(device.unitId);
-        if (!Number.isFinite(uid) || uid < 0) continue;
-        const port = endpointPort(device.target_endpoint);
-        if (!port) continue;
-        if (!portDevices.has(port)) portDevices.set(port, new Map());
-        const uidMap = portDevices.get(port);
-        if (!uidMap.has(uid)) uidMap.set(uid, []);
-        uidMap.get(uid).push(device);
-    }
-
-    for (const [portNum, uidMap] of portDevices) {
-        // Build the full set of occupied unitIds on this port to avoid collisions.
-        const occupied = new Set([...uidMap.keys()]);
-
-        for (const [uid, devices] of [...uidMap.entries()]) {
-            if (devices.length <= 1) continue;
-
-            // Keep the first device; reassign all duplicates to the next free slot.
-            const [, ...dupes] = devices;
-            for (const dev of dupes) {
-                let newUid = uid + 1;
-                while (newUid <= MAX_UNIT_ID && occupied.has(newUid)) newUid++;
-                if (newUid > MAX_UNIT_ID) {
-                    return {
-                        fixed: false,
-                        resolutionLog,
-                        error: `Cannot auto-fix: no free unit_id slot on port ${portNum} (all slots 0–${MAX_UNIT_ID} occupied)`,
-                    };
-                }
-                resolutionLog.push({
-                    reason: `Device "${dev.name || dev.id}" (port ${portNum}): duplicate unit_id ${uid} reassigned to ${newUid}`,
-                    deviceId: dev.id,
-                    portNum,
-                    oldUnitId: uid,
-                    newUnitId: newUid,
-                });
-                occupied.add(newUid);
-                uidMap.set(newUid, [dev]);
-                dev.unitId = newUid;
-            }
-        }
-    }
-
-    return { fixed: resolutionLog.length > 0, resolutionLog, error: null };
-}
-
-/**
- * Build a human-readable error summary from MMA and Replicator error arrays.
- * @param {string[]} mmaErrors
- * @param {string[]} replicatorErrors
- * @returns {string}
- */
-function buildErrorSummary(mmaErrors, replicatorErrors) {
-    const mma = mmaErrors || [];
-    const rep = replicatorErrors || [];
-    const parts = [];
-    if (mma.length > 0) parts.push(`MMA: ${mma[0]}`);
-    if (rep.length > 0) parts.push(`Replicator: ${rep[0]}`);
-    // extra = total errors minus the one from each array already shown in parts
-    const extra = (mma.length + rep.length) - parts.length;
-    if (extra > 0) parts.push(`…and ${extra} more issue(s)`);
-    return parts.join(' | ') || 'Config validation failed';
-}
-
-/**
- * Compile model → YAML and write to disk.
- * Returns { ok, mmaErrors, replicatorErrors, blocksCreated, resolutionLog }.
- * Does NOT throw — callers that want to surface errors should check the return value.
- *
- * @param {object} model
- * @param {Set<number>} [excludedPortNums] - port numbers whose devices should be omitted from replicator YAML
- * @param {{ skipValidation?: boolean }} [opts]
- *   skipValidation — when true, bypass YAML structural validation checks
- *                    (used for "ignore & force continue" user override).  Unsafe: the
- *                    runtime may behave unpredictably with an invalid config.
- */
-function compileAndWrite(model, excludedPortNums = new Set(), opts = {}) {
-    const { skipValidation = false } = opts;
-    // Full rehydration: rebuild all memory state (blocks + status slots) from scratch.
-    // This is the single deterministic step that replaces any prior incremental logic.
-    const rehydrated = rehydrateFromYaml(model);
-
-    // Resolve identity conflicts BEFORE generating YAML — auto-remap any
-    // status_unit_id values that clash with regular memory block unit_ids on the
-    // same port.  This is a compile-time resolver, not a validator: conflicts are
-    // fixed automatically rather than causing a hard failure.
-    const { resolutionLog, error: conflictError } = resolveIdentityConflicts(model);
-    if (conflictError) {
-        // Discard in-memory mutations (rehydration, conflict resolution) without
-        // persisting them — model.json and YAML remain at their last good state.
-        _modelCache = null;
-        return { ok: false, mmaErrors: [conflictError], replicatorErrors: [], resolutionLog: [] };
-    }
-
-    // NOTE: writeModel() is intentionally NOT called here.
-    // model.json is only written alongside the YAML files (below) so that the two
-    // stores are always atomically consistent.  Any in-memory mutations made by
-    // rehydrateFromYaml / resolveIdentityConflicts that do not survive a failed
-    // validation are discarded by resetting _modelCache (see failure paths below).
-
-    if (!skipValidation) {
-        // Validate no duplicate unit_id within the same port (listener).
-        // NOTE: per MMA2 semantics, duplicate unit_id entries are MERGED by
-        // compileMma2Config (unit_id is a container ID, not a unique block ID).
-        // This check has been intentionally removed — duplicates produce a merged
-        // unit in the output, not an error.
-    }
-
-    // Validate that every device has at least one read definition.
-    // This check is ALWAYS enforced — skipValidation does not bypass it.
-    // A device with no reads cannot produce valid YAML and is always an invalid state.
-    const devicesWithNoReads = (model.devices || []).filter(d => !(d.reads && d.reads.length > 0));
-    if (devicesWithNoReads.length > 0) {
-        _modelCache = null;
-        const validationErrors = devicesWithNoReads.map(d => ({
-            type: 'validation_error',
-            target: 'device',
-            device_id: d.id,
-            message: 'Device must have at least one read definition',
-        }));
-        return {
-            ok: false,
-            mmaErrors: [],
-            replicatorErrors: devicesWithNoReads.map(d => `Device "${d.name || d.id}" must have at least one read definition`),
-            validationErrors,
-            resolutionLog,
-        };
-    }
-
-    // Validate that no included port has an empty memory block list AND no status devices.
-    // A port with no regular blocks is still valid if devices with status_unit_id target it
-    // (status blocks are generated dynamically in toMmaYaml).
-    // A port with manually-configured units[] is also valid even without auto-derived blocks.
-    // This check is never skipped — an empty port is always a structural problem.
-    const emptyPorts = (model.memory.ports || [])
-        .filter(p => {
-            const portNum = Number(p.port);
-            if (excludedPortNums.has(portNum)) return false;
-            if ((p.units || []).length > 0) return false; // has manually configured units
-            if ((p.blocks || []).length > 0) return false;
-            // Port is non-empty if any non-excluded device uses it for status memory
-            const hasStatusContent = (model.devices || []).some(d =>
-                d.status_unit_id != null &&
-                endpointPort(d.target_endpoint) === portNum &&
-                !excludedPortNums.has(portNum)
-            );
-            return !hasStatusContent;
-        })
-        .map(p => Number(p.port));
-    if (emptyPorts.length > 0) {
-        // Discard in-memory mutations without persisting them.
-        _modelCache = null;
-        return {
-            ok: false,
-            mmaErrors: [`MMA port(s) ${emptyPorts.join(', ')} have no memory blocks — add a read on a device targeting this port before compiling`],
-            replicatorErrors: [],
-            resolutionLog,
-        };
-    }
-
-    const replicatorYaml = toReplicatorYaml(model, excludedPortNums);
-    const { yaml: mmaYaml, mergeLog } = toMmaYaml(model);
-
-    if (!skipValidation) {
-        const mmaErrors = validateMmaConfig(mmaYaml);
-        const replicatorErrors = validateReplicatorConfig(replicatorYaml);
-        if (mmaErrors.length > 0 || replicatorErrors.length > 0) {
-            // Discard in-memory mutations without persisting them.
-            _modelCache = null;
-            return { ok: false, mmaErrors, replicatorErrors, resolutionLog, mergeLog };
-        }
-    }
-
-    // All validation passed — write model.json and YAML together so the two
-    // stores are always co-committed.  model.json is written here (not earlier)
-    // to guarantee it is never ahead of or behind the YAML files on disk.
-    if (rehydrated.modified || resolutionLog.length > 0) {
-        // Persist rehydration mutations (blocks, status slots, status_unit_ids)
-        // and any conflict-resolution remappings alongside the YAML write.
-        writeModel(model);
-    }
-    atomicWrite(REPLICATOR_CONFIG_PATH, replicatorYaml);
-    atomicWrite(MMA_CONFIG_PATH, mmaYaml);
-    // Compute a content hash of the written YAML pair so the UI can detect
-    // filesystem drift between saves (e.g. external edits or a second client).
-    // Each file is hashed independently and the two digests are concatenated so
-    // swapping file order or re-combining them differently does not produce a
-    // false-negative collision.
-    const replicatorHash = createHash('sha256').update(replicatorYaml).digest('hex');
-    const mmaHash        = createHash('sha256').update(mmaYaml).digest('hex');
-    _yamlContentHash = `${replicatorHash}:${mmaHash}`;
-    // Advance the canonical version stamp — every successful YAML write moves
-    // the authoritative state forward by exactly one step.
-    _canonicalVersion++;
-    return { ok: true, blocksCreated: rehydrated.blocksCreated, resolutionLog, mergeLog };
-}
-
-/**
- * Silently auto-compile after a model mutation.
- * Devices whose target port does not exist in memory are excluded from YAML output —
- * no ports are auto-created; the user must confirm via the explicit Compile flow.
- * Any errors are swallowed — the model is always saved regardless.
- */
-function autoCompile(model) {
-    try {
-        const missingPorts = getMissingTargetPorts(model);
-        const excludedPortNums = new Set(missingPorts);
-        compileAndWrite(model, excludedPortNums);
-    } catch (_) { /* best-effort */ }
-}
-
 // GET /compile/precheck — return port numbers referenced by devices that don't exist in memory yet.
 // The frontend uses this to present confirmation dialogs before triggering the full compile.
 app.get('/compile/precheck', (req, res) => {
@@ -3044,9 +1790,6 @@ app.post('/compile/resolve', async (req, res) => {
     }
 });
 
-// Simple in-memory rate limiter for read-heavy endpoints (max 30 req/min per IP).
-const rateLimit = makeRateLimiter({ maxRequests: 30, windowMs: 60_000, message: 'Too many requests — please wait before retrying' });
-
 // GET /validate — validate the current on-disk config files against separation rules
 app.get('/validate', rateLimit, (req, res) => {
     try {
@@ -3080,34 +1823,6 @@ app.get('/validate', rateLimit, (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-
-/**
- * APPLY integrity gate — call before any APPLY operation.
- *
- * Runs computeIntegrity(model).  If the result is not ok, sends a 422 response
- * with the standard integrity_failed shape and returns true so the caller can
- * `return` immediately.  Returns false when integrity passes.
- *
- * @param {object} model
- * @param {object} res  - Express response object
- * @returns {boolean}  true → caller should return; false → proceed with APPLY
- */
-function applyIntegrityGate(model, res) {
-    const integrity = computeIntegrity(model);
-    if (!integrity.ok) {
-        const errorMessages = integrity.issues
-            .filter(i => i.severity === 'error')
-            .map(i => `[${i.deviceName}] ${i.message}`);
-        res.status(422).json({
-            status: 'integrity_failed',
-            error: 'APPLY blocked — integrity CHECK failed. Run Fix Issues to resolve errors before applying.',
-            integrity_errors: errorMessages,
-            integrity: integrity,
-        });
-        return true;
-    }
-    return false;
-}
 
 // GET /yaml-integrity — CHECK layer: detect configuration and system inconsistencies.
 // Read-only — never mutates model or state.
@@ -3220,151 +1935,13 @@ app.post('/yaml-integrity/fix', (req, res) => {
 // Device status reading (Modbus TCP → MMA status blocks)
 // ---------------------------------------------------------------------------
 
-/**
- * Read holding registers from a Modbus TCP endpoint.
- * Uses the built-in `net` module — no extra dependencies.
- * Returns an array of uint16 register values, or null on any error/timeout.
- *
- * @param {string} host
- * @param {number} port
- * @param {number} unitId   - Modbus unit ID
- * @param {number} startAddr - First register address (0-based)
- * @param {number} count     - Number of registers to read
- * @param {number} [timeoutMs=2000]
- * @returns {Promise<number[]|null>}
- */
-function modbusReadHoldingRegisters(host, port, unitId, startAddr, count, timeoutMs) {
-    timeoutMs = timeoutMs || 2000;
-    return new Promise(resolve => {
-        let settled = false;
-        const done = val => { if (!settled) { settled = true; resolve(val); } };
-
-        const socket = net.createConnection({ host, port: Number(port) });
-        const timer = setTimeout(() => { socket.destroy(); done(null); }, timeoutMs);
-
-        // Modbus TCP request (MBAP header + PDU)
-        const req = Buffer.alloc(12);
-        req.writeUInt16BE(1, 0);          // Transaction ID
-        req.writeUInt16BE(0, 2);          // Protocol ID
-        req.writeUInt16BE(6, 4);          // Length (bytes that follow)
-        req.writeUInt8(unitId & 0xFF, 6); // Unit ID
-        req.writeUInt8(3, 7);             // FC 03: Read Holding Registers
-        req.writeUInt16BE(startAddr, 8);
-        req.writeUInt16BE(count, 10);
-
-        const chunks = [];
-        socket.on('connect', () => socket.write(req));
-        socket.on('data', chunk => {
-            chunks.push(chunk);
-            const data = Buffer.concat(chunks);
-            // Wait for at least MBAP header (7 bytes) + FC byte + byte-count byte
-            if (data.length < 9) return;
-            const byteCount = data[8];
-            if (data.length < 9 + byteCount) return;
-            clearTimeout(timer);
-            socket.destroy();
-            // Validate FC and byte count
-            if (data[7] !== 3 || byteCount !== count * 2) { done(null); return; }
-            const regs = [];
-            for (let i = 0; i < count; i++) {
-                regs.push(data.readUInt16BE(9 + i * 2));
-            }
-            done(regs);
-        });
-        socket.on('error', () => { clearTimeout(timer); socket.destroy(); done(null); });
-        socket.on('close', () => { clearTimeout(timer); done(null); });
-    });
-}
-
-// GET /devices/status — read all 30 status block slots for each device.
-//   Reads are batched per (endpoint, status_unit_id) to minimise TCP connections.
-//   Returns { ok: true, status: { [deviceId]: { health_code, last_error_code,
-//     seconds_in_error, device_name, requests_total, responses_valid_total,
-//     timeouts_total, transport_errors_total, consecutive_fail_current,
-//     consecutive_fail_max } } }
+// GET /devices/status — read status block registers for all devices.
+//   Reads are batched per (endpoint, status_unit_id) via modbusService.
 app.get('/devices/status', async (req, res) => {
     try {
         const model = readModel();
         const devices = model.devices || [];
-        const result = {};
-
-        // Group devices by (host, port, status_unit_id) so we can batch-read.
-        const groupMap = new Map();
-        for (const device of devices) {
-            if (device.status_unit_id == null) continue;
-            const ep = device.target_endpoint || `${TARGET_HOST}:502`;
-            const lastColon = ep.lastIndexOf(':');
-            const host = lastColon > 0 ? ep.slice(0, lastColon) : ep;
-            const port = lastColon > 0 ? parseInt(ep.slice(lastColon + 1), 10) : 502;
-            const key = `${host}\x00${port}\x00${device.status_unit_id}`;
-            if (!groupMap.has(key)) {
-                groupMap.set(key, { host, port, unitId: Number(device.status_unit_id), devices: [] });
-            }
-            groupMap.get(key).devices.push(device);
-        }
-
-        await Promise.all([...groupMap.values()].map(async ({ host, port, unitId, devices: grpDevs }) => {
-            const maxSlot = Math.max(...grpDevs.map(d => Number(d.status_slot) || 0));
-            // Read all 30 registers of every slot up to and including the last device's slot.
-            const readCount = (maxSlot + 1) * STATUS_SLOT_SIZE;
-            const regs = await modbusReadHoldingRegisters(host, port, unitId, 0, readCount);
-
-            for (const device of grpDevs) {
-                const base = (Number(device.status_slot) || 0) * STATUS_SLOT_SIZE;
-                // Helper: read one register at slot-relative offset (called only inside the
-                // `if (regs && regs.length > base)` guard, so regs is guaranteed non-null here).
-                const get = (off) => (regs.length > base + off) ? (regs[base + off] || 0) : 0;
-                // Helper: read uint32 (lo word at loOff, hi word at loOff+1).
-                const get32 = (loOff) => get(loOff) + get(loOff + 1) * 65536;
-
-                let health_code = 0;
-                let last_error_code = 0;
-                let seconds_in_error = 0;
-                let device_name = '';
-                let requests_total = 0;
-                let responses_valid_total = 0;
-                let timeouts_total = 0;
-                let transport_errors_total = 0;
-                let consecutive_fail_current = 0;
-                let consecutive_fail_max = 0;
-
-                if (regs && regs.length > base) {
-                    // Slots 0–2: operational truth
-                    health_code      = get(0);
-                    last_error_code  = get(1);
-                    seconds_in_error = get(2);
-
-                    // Slots 3–10: device_name (ASCII, max 16 chars, 8 registers × 2 bytes)
-                    const nameStart = base + 3;
-                    const nameEnd   = Math.min(base + 11, regs.length);
-                    if (nameEnd > nameStart) {
-                        const nameRegs  = regs.slice(nameStart, nameEnd);
-                        const nameBytes = Buffer.alloc(nameRegs.length * 2);
-                        for (let i = 0; i < nameRegs.length; i++) {
-                            nameBytes.writeUInt16BE(nameRegs[i] || 0, i * 2);
-                        }
-                        device_name = nameBytes.toString('ascii').replace(/\0.*/, '').trim();
-                    }
-
-                    // Slots 20–29: transport lifetime counters
-                    if (regs.length >= base + STATUS_SLOT_SIZE) {
-                        requests_total           = get32(20);
-                        responses_valid_total    = get32(22);
-                        timeouts_total           = get32(24);
-                        transport_errors_total   = get32(26);
-                        consecutive_fail_current = get(28);
-                        consecutive_fail_max     = get(29);
-                    }
-                }
-
-                result[device.id] = {
-                    health_code, last_error_code, seconds_in_error, device_name,
-                    requests_total, responses_valid_total, timeouts_total,
-                    transport_errors_total, consecutive_fail_current, consecutive_fail_max,
-                };
-            }
-        }));
-
+        const result = await readDevicesStatus(devices, TARGET_HOST, STATUS_SLOT_SIZE);
         res.json({ ok: true, status: result });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -3374,69 +1951,6 @@ app.get('/devices/status', async (req, res) => {
 // ---------------------------------------------------------------------------
 // Docker runtime control (via Docker socket)
 // ---------------------------------------------------------------------------
-
-const DOCKER_SOCKET = process.env.DOCKER_SOCKET || '/var/run/docker.sock';
-const ALLOWED_SERVICES = new Set(['mma', 'replicator']);
-// Seconds Docker waits for a graceful SIGTERM before sending SIGKILL on safe stop/restart.
-const MMA_SAFE_STOP_TIMEOUT_SECS = 30;
-
-/**
- * Make an HTTP request to the Docker daemon socket.
- * @param {string} method - HTTP method (GET, POST, etc.)
- * @param {string} apiPath - Docker API path (e.g. '/containers/mma/json')
- * @returns {Promise<{status: number, body: any}>}
- */
-function dockerApi(method, apiPath) {
-    return new Promise((resolve, reject) => {
-        const opts = {
-            socketPath: DOCKER_SOCKET,
-            method,
-            path: apiPath,
-            headers: { 'Content-Type': 'application/json' },
-        };
-        const req = http.request(opts, (dockerRes) => {
-            let data = '';
-            dockerRes.on('data', chunk => { data += chunk; });
-            dockerRes.on('end', () => {
-                let body = null;
-                if (data) {
-                    try { body = JSON.parse(data); } catch (parseErr) {
-                        console.warn(`[dockerApi] Failed to parse Docker response for ${method} ${apiPath}: ${parseErr.message}`);
-                        body = data;
-                    }
-                }
-                resolve({ status: dockerRes.statusCode, body });
-            });
-        });
-        req.on('error', reject);
-        req.end();
-    });
-}
-
-/**
- * Restart MMA and Replicator containers sequentially via the Docker socket.
- * MMA is given a graceful SIGTERM window (MMA_SAFE_STOP_TIMEOUT_SECS); Replicator
- * is restarted immediately.
- *
- * @param {string[]} services  - ordered list of service names to restart
- * @returns {Promise<{errors: string[]}>}
- */
-async function restartServices(services) {
-    const errors = [];
-    for (const service of services) {
-        try {
-            const stopTimeout = service === 'mma' ? `?t=${MMA_SAFE_STOP_TIMEOUT_SECS}` : '';
-            const r = await dockerApi('POST', `/containers/${service}/restart${stopTimeout}`);
-            if (r.status !== 204 && r.status !== 304) {
-                const msg = (r.body && r.body.message) ? r.body.message : `HTTP ${r.status}`;
-                errors.push(`${service}: ${msg}`);
-            }
-        } catch (dockerErr) {
-            errors.push(`${service}: ${dockerErr.message}`);
-        }
-    }
-    return { errors };
-}
 
 // GET /runtime/status — return running state of mma and replicator containers
 app.get('/runtime/status', async (req, res) => {
@@ -3497,126 +2011,13 @@ app.post('/runtime/:service/:action', async (req, res) => {
 });
 
 // GET /runtime/logs/:service — stream Docker container logs via Server-Sent Events
-const DOCKER_LOG_TAIL_LINES = 100;
-
 app.get('/runtime/logs/:service', (req, res) => {
     const { service } = req.params;
     if (!ALLOWED_SERVICES.has(service)) {
         return res.status(400).json({ error: `Unknown service "${service}"` });
     }
-
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.flushHeaders();
-
-    const apiPath = `/containers/${encodeURIComponent(service)}/logs?follow=1&stdout=1&stderr=1&timestamps=1&tail=${DOCKER_LOG_TAIL_LINES}`;
-
-    const opts = {
-        socketPath: DOCKER_SOCKET,
-        method: 'GET',
-        path: apiPath,
-    };
-
-    let dockerReq = null;
-    let buffer = Buffer.alloc(0);
-    let closed = false;
-
-    const sendEvent = (eventName, data) => {
-        if (!closed) {
-            try {
-                res.write(`event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`);
-            } catch (_) {
-                closed = true;
-            }
-        }
-    };
-
-    const cleanup = () => {
-        closed = true;
-        if (dockerReq) {
-            try { dockerReq.destroy(); } catch (_) {}
-            dockerReq = null;
-        }
-    };
-
-    req.on('close', cleanup);
-
-    try {
-        dockerReq = http.request(opts, (dockerRes) => {
-            if (dockerRes.statusCode !== 200) {
-                sendEvent('log-error', { message: `Docker returned HTTP ${dockerRes.statusCode} for ${service}` });
-                res.end();
-                return;
-            }
-
-            dockerRes.on('data', (chunk) => {
-                if (closed) return;
-                buffer = Buffer.concat([buffer, chunk]);
-                // Parse Docker multiplexed log stream frames.
-                // Each frame has an 8-byte header: [stream(1), 0, 0, 0, size_big_endian(4)]
-                // stream: 1 = stdout, 2 = stderr
-                while (buffer.length >= 8) {
-                    const streamType = buffer[0]; // 1=stdout, 2=stderr
-                    const frameSize = buffer.readUInt32BE(4);
-                    if (buffer.length < 8 + frameSize) break;
-                    const payload = buffer.slice(8, 8 + frameSize).toString('utf8');
-                    buffer = buffer.slice(8 + frameSize);
-                    const lines = payload.split('\n');
-                    for (const line of lines) {
-                        if (line) {
-                            sendEvent('log', { type: streamType, line });
-                        }
-                    }
-                }
-            });
-
-            dockerRes.on('end', () => {
-                sendEvent('stream-end', {});
-                res.end();
-            });
-
-            dockerRes.on('error', (err) => {
-                sendEvent('log-error', { message: err.message });
-                res.end();
-            });
-        });
-
-        dockerReq.on('error', (err) => {
-            if (!res.headersSent) {
-                res.status(500).json({ error: err.message });
-            } else {
-                sendEvent('log-error', { message: err.message });
-                res.end();
-            }
-        });
-
-        dockerReq.end();
-    } catch (err) {
-        if (!res.headersSent) {
-            res.status(500).json({ error: err.message });
-        } else {
-            sendEvent('log-error', { message: err.message });
-            res.end();
-        }
-    }
+    streamContainerLogs(service, res, req);
 });
-
-/**
- * Count routes (reads) for all devices whose target port is not in excludedPortNums.
- * @param {object} model
- * @param {Set<number>} excludedPortNums
- * @returns {number}
- */
-function countRoutes(model, excludedPortNums) {
-    let count = 0;
-    for (const device of (model.devices || [])) {
-        const targetPort = endpointPort(device.target_endpoint);
-        if (targetPort !== null && excludedPortNums.has(targetPort)) continue;
-        count += (device.reads || []).length;
-    }
-    return count;
-}
 
 // POST /runtime/apply — APPLY layer: compile configs and write to disk (no service restart).
 // Blocked if the CHECK layer (computeIntegrity) reports any errors — enforces CHECK → APPLY order.
@@ -3720,50 +2121,8 @@ app.post('/runtime/apply-restart', async (req, res) => {
     }
 });
 
-// ---------------------------------------------------------------------------
-
-/**
- * Discover the running image tag via the Docker socket and update APP_VERSION.
- * Falls back to the current value (env var or 'dev') if discovery fails.
- */
-async function discoverVersion() {
-    try {
-        const id = os.hostname();
-        const result = await dockerApi('GET', `/containers/${id}/json`);
-        if (result.status === 200 && result.body?.Config?.Image) {
-            const image = result.body.Config.Image; // e.g. "rodtamin/mcs-web:v1.2.3"
-            const tag = image.includes(':') ? image.split(':').pop() : null;
-            if (tag) {
-                APP_VERSION = tag;
-                console.log(`[version] Discovered version from image tag: ${APP_VERSION}`);
-            }
-            // Discover digest from image metadata if not already set via env var
-            if (!DOCKER_DIGEST) {
-                try {
-                    const imgResult = await dockerApi('GET', `/images/${encodeURIComponent(image)}/json`);
-                    if (imgResult.status === 200 && Array.isArray(imgResult.body?.RepoDigests) && imgResult.body.RepoDigests.length > 0) {
-                        // RepoDigests entries are like "repo@sha256:hexhash"
-                        const repoDigest = imgResult.body.RepoDigests[0];
-                        const atIdx = repoDigest.indexOf('@');
-                        const digestPart = atIdx !== -1 ? repoDigest.slice(atIdx + 1) : repoDigest;
-                        // 'sha256:' (7) + at least 6 hex chars = 13 minimum meaningful digest
-                        if (digestPart.startsWith('sha256:') && digestPart.length > 13) {
-                            DOCKER_DIGEST = digestPart;
-                            console.log(`[version] Discovered digest: ${DOCKER_DIGEST.slice(0, 19)}…`);
-                        }
-                    }
-                } catch (imgErr) {
-                    console.warn(`[version] Could not fetch image digest: ${imgErr.message}`);
-                }
-            }
-        }
-    } catch (err) {
-        console.warn(`[version] Could not self-discover version via Docker socket: ${err.message}`);
-    }
-}
-
-discoverVersion().finally(() => {
-    app.listen(8080, () => {
-        console.log('Web running on 8080');
-    });
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    discoverVersion();
+    console.log(`MCS server running on port ${PORT} (GIT_SHA=${GIT_SHA})`);
 });
