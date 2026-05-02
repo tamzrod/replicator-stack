@@ -1996,7 +1996,7 @@
   <div class="st-card">
     <div class="st-card-header">
       <h2>📊 Device Status</h2>
-      <span style="font-size:.75rem;color:#6B7280">Live — updates every 5 s while this tab is active</span>
+      <span style="font-size:.75rem;color:#6B7280">Live — updates every 5 s</span>
     </div>
     <div class="st-card-body">
       <div id="status-table-wrap"><div class="st-empty">Loading device status…</div></div>
@@ -7173,8 +7173,8 @@ function renderStatusTab() {
 
 // ── Device Status Polling ────────────────────────────────────────────────────
 // Reads all 30 status block registers per device slot from MMA.
-// Polling only runs while the Status tab is active — started on tab-enter and
-// stopped on tab-leave so no resources are consumed in the background.
+// Polling runs continuously as a 5-second heartbeat — started once at app
+// init via startStatusPolling() and never stopped.
 const STATUS_POLL_INTERVAL_MS = 5000;
 let _statusPollTimer = null;
 let _statusPollActive = false;
@@ -7189,9 +7189,11 @@ async function pollDeviceStatus() {
       _deviceStatus = data.status;
     } else {
       // Fail closed: any request failure marks all known devices as offline.
+      // Preserve existing diagnostic fields (device_name, counters, etc.) so
+      // the Status Tab table does not lose its display names during a blip.
       const offline = {};
       for (const d of (_currentModel?.devices || [])) {
-        offline[d.id] = { online: false, last_seen: null };
+        offline[d.id] = Object.assign({}, _deviceStatus[d.id] || {}, { online: false, last_seen: null });
       }
       _deviceStatus = offline;
     }
