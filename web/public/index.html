@@ -7788,7 +7788,8 @@ function _aeAppendEvent(evt) {
   const tr = document.createElement('tr');
   tr.className = evt.status === 'allowed' ? 'ae-row-allowed' : 'ae-row-denied';
 
-  // Format timestamp (nanoseconds → ISO string)
+  // Format timestamp: MMA2 emits ts as Unix nanoseconds; divide by 1e6 to get ms.
+  // slice(0, 23) gives "YYYY-MM-DD HH:MM:SS.mmm" after replacing the T separator.
   const tsNs = Number(evt.ts);
   let tsStr = '';
   if (Number.isFinite(tsNs) && tsNs > 0) {

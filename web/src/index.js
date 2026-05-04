@@ -2455,7 +2455,22 @@ app.get('/access-events/stream', (req, res) => {
 
         const upstream = http.request(
             { hostname: TARGET_HOST, port, path: evPath, method: 'GET' },
-            (upstreamRes) => { upstreamRes.pipe(res); }
+            (upstreamRes) => {
+                if (upstreamRes.statusCode !== 200) {
+                    let body = '';
+                    upstreamRes.on('data', (chunk) => { body += chunk; });
+                    upstreamRes.on('end', () => {
+                        if (!res.headersSent) {
+                            res.status(502).json({
+                                error: `Access events stream returned HTTP ${upstreamRes.statusCode}`,
+                                detail: body.slice(0, 200),
+                            });
+                        }
+                    });
+                    return;
+                }
+                upstreamRes.pipe(res);
+            }
         );
 
         upstream.on('error', (err) => {
