@@ -1,5 +1,6 @@
 const express = require('express');
 const fs = require('fs');
+const http = require('http');
 const path = require('path');
 const net = require('net');
 const { randomUUID, randomBytes } = require('crypto');
@@ -15,6 +16,81 @@ const { computeIntegrity } = require('./services/integrityService');
 const GIT_SHA = process.env.GIT_SHA || null;
 const VALID_AREA_TYPES = new Set(['holding_registers', 'input_registers', 'coils', 'discrete_inputs']);
 const VALID_FC_SET = new Set([1, 2, 3, 4, 5, 6, 15, 16]);
+
+// ---------------------------------------------------------------------------
+// Access Events — constants, defaults, and validation
+// ---------------------------------------------------------------------------
+
+const REQUIRED_ACCESS_EVENT_KEY_FIELDS = ['src_ip', 'function_code', 'action', 'status', 'port', 'unit'];
+
+function defaultAccessEventsConfig() {
+    return {
+        enabled: false,
+        mode: 'rate',
+        window: 5,
+        key_fields: REQUIRED_ACCESS_EVENT_KEY_FIELDS.slice(),
+        include_counter: true,
+        limits: { max_keys: 1000, ttl: 30 },
+        output: { type: 'http_stream', path: '/events', listen: ':9090' },
+    };
+}
+
+/**
+ * Validate an access_events config object per MMA2 manual rules.
+ * When enabled is false, no field validation is performed.
+ * @returns {string[]} array of error messages (empty = valid)
+ */
+function validateAccessEventsConfig(cfg) {
+    const errors = [];
+    if (!cfg || typeof cfg !== 'object') return ['Config must be an object'];
+    // Validation only applies when enabled
+    if (!cfg.enabled) return errors;
+
+    if (cfg.mode !== 'rate') errors.push('mode must be "rate"');
+
+    const win = Number(cfg.window);
+    if (!Number.isFinite(win) || !Number.isInteger(win) || win <= 0) {
+        errors.push('window must be a positive integer');
+    }
+
+    const kf = cfg.key_fields;
+    if (!Array.isArray(kf) || kf.length !== 6) {
+        errors.push('key_fields must contain exactly the 6 required fields');
+    } else {
+        const actual = new Set(kf);
+        if (!REQUIRED_ACCESS_EVENT_KEY_FIELDS.every(f => actual.has(f)) || actual.size !== 6) {
+            errors.push('key_fields must contain exactly: ' + REQUIRED_ACCESS_EVENT_KEY_FIELDS.join(', '));
+        }
+    }
+
+    const maxKeys = Number(cfg.limits && cfg.limits.max_keys);
+    if (!Number.isFinite(maxKeys) || !Number.isInteger(maxKeys) || maxKeys <= 0) {
+        errors.push('limits.max_keys must be a positive integer');
+    }
+
+    const ttl = Number(cfg.limits && cfg.limits.ttl);
+    if (!Number.isFinite(ttl) || !Number.isInteger(ttl) || ttl < 0) {
+        errors.push('limits.ttl must be a non-negative integer');
+    } else if (Number.isFinite(win) && win > 0 && ttl < 2 * win) {
+        errors.push(`limits.ttl must be >= 2 × window (minimum: ${2 * win})`);
+    }
+
+    if (!cfg.output || cfg.output.type !== 'http_stream') {
+        errors.push('output.type must be "http_stream"');
+    }
+
+    const outPath = cfg.output && cfg.output.path;
+    if (typeof outPath !== 'string' || !outPath.startsWith('/')) {
+        errors.push('output.path must start with "/"');
+    }
+
+    const listen = cfg.output && cfg.output.listen;
+    if (!listen || typeof listen !== 'string' || !listen.trim()) {
+        errors.push('output.listen must not be empty');
+    }
+
+    return errors;
+}
 
 function makeRateLimiter(windowMs, max) {
     const hits = new Map();
@@ -2297,6 +2373,118 @@ app.post('/yaml-integrity/fix', (req, res) => {
         res.json({ fixed, changes, integrity: postFixIntegrity });
     } catch (err) {
         res.status(500).json({ error: err.message });
+    }
+});
+
+// ---------------------------------------------------------------------------
+// Access Events — config and NDJSON stream proxy
+// ---------------------------------------------------------------------------
+
+// GET /access-events/config — return the current access_events config (or defaults).
+app.get('/access-events/config', (req, res) => {
+    try {
+        const model = readModel();
+        res.json(model.access_events || defaultAccessEventsConfig());
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /access-events/config — validate and persist access_events config.
+// Writes to model.access_events and schedules a compile so the MMA YAML is updated.
+app.post('/access-events/config', (req, res) => {
+    try {
+        const body = req.body;
+        if (!body || typeof body !== 'object' || Array.isArray(body)) {
+            return res.status(400).json({ error: 'Request body must be an object' });
+        }
+
+        // Build config — fixed fields (mode, key_fields, output.type) are always enforced.
+        const cfg = {
+            enabled: body.enabled === true,
+            mode: 'rate',
+            window: Number(body.window),
+            key_fields: REQUIRED_ACCESS_EVENT_KEY_FIELDS.slice(),
+            include_counter: body.include_counter !== false,
+            limits: {
+                max_keys: Number(body.limits && body.limits.max_keys),
+                ttl: Number(body.limits && body.limits.ttl),
+            },
+            output: {
+                type: 'http_stream',
+                path: (body.output && typeof body.output.path === 'string') ? body.output.path : '',
+                listen: (body.output && typeof body.output.listen === 'string') ? body.output.listen : '',
+            },
+        };
+
+        const errors = validateAccessEventsConfig(cfg);
+        if (errors.length > 0) {
+            return res.status(400).json({ error: 'Validation failed', errors });
+        }
+
+        const model = readModel();
+        model.access_events = cfg;
+        writeModel(model);
+        scheduleCompile();
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /access-events/stream — proxy the NDJSON event stream from MMA.
+// Reads output.listen and output.path from model.access_events to determine
+// the upstream URL (http://<TARGET_HOST>:<port><path>).
+app.get('/access-events/stream', (req, res) => {
+    try {
+        const model = readModel();
+        const ae = model.access_events || defaultAccessEventsConfig();
+
+        if (!ae.enabled) {
+            return res.status(503).json({ error: 'Access events not enabled — enable in Settings first' });
+        }
+
+        const listen = (ae.output && ae.output.listen) || ':9090';
+        const evPath = (ae.output && ae.output.path) || '/events';
+        const portMatch = listen.match(/:(\d+)$/);
+        const port = portMatch ? parseInt(portMatch[1], 10) : 9090;
+
+        res.setHeader('Content-Type', 'application/x-ndjson');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('X-Accel-Buffering', 'no');
+
+        const upstream = http.request(
+            { hostname: TARGET_HOST, port, path: evPath, method: 'GET' },
+            (upstreamRes) => {
+                if (upstreamRes.statusCode !== 200) {
+                    let body = '';
+                    upstreamRes.on('data', (chunk) => { body += chunk; });
+                    upstreamRes.on('end', () => {
+                        if (!res.headersSent) {
+                            res.status(502).json({
+                                error: `Access events stream returned HTTP ${upstreamRes.statusCode}`,
+                                detail: body.slice(0, 200),
+                            });
+                        }
+                    });
+                    return;
+                }
+                upstreamRes.pipe(res);
+            }
+        );
+
+        upstream.on('error', (err) => {
+            if (!res.headersSent) {
+                res.status(502).json({ error: `Cannot connect to access events stream: ${err.message}` });
+            } else {
+                res.end();
+            }
+        });
+
+        req.on('close', () => { upstream.destroy(); });
+        upstream.end();
+    } catch (err) {
+        if (!res.headersSent) res.status(500).json({ error: err.message });
     }
 });
 
