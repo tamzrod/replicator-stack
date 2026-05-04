@@ -1693,6 +1693,156 @@
       border-radius: 4px;
     }
     .btn-log-clear:hover { background: #4B5563; }
+
+    /* ── Access Events Tab ──────────────────────────────────────────── */
+    #access-events-tab-container {
+      display: none;
+      margin: 24px;
+      flex-direction: column;
+      gap: 16px;
+    }
+    #access-events-tab-container.active { display: flex; }
+    .ae-inner-tab-bar {
+      display: flex;
+      border-bottom: 2px solid #E5E7EB;
+    }
+    .ae-inner-tab-btn {
+      padding: 8px 22px;
+      font-size: .875rem;
+      font-weight: 600;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+      cursor: pointer;
+      color: #6B7280;
+      transition: color .15s, border-color .15s;
+    }
+    .ae-inner-tab-btn:hover { color: #374151; }
+    .ae-inner-tab-btn.active { color: #145DA0; border-bottom-color: #145DA0; }
+    .ae-monitor-panel, .ae-settings-panel { display: none; flex-direction: column; gap: 14px; }
+    .ae-monitor-panel.active, .ae-settings-panel.active { display: flex; }
+    .ae-conn-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .ae-conn-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: #9CA3AF;
+      flex-shrink: 0;
+    }
+    .ae-conn-dot.connected { background: #22C55E; box-shadow: 0 0 0 3px rgba(34,197,94,.2); }
+    .ae-conn-dot.error { background: #EF4444; }
+    .ae-conn-status { font-size: .82rem; color: #6B7280; }
+    .ae-counters { display: flex; gap: 10px; flex-wrap: wrap; }
+    .ae-counter-chip {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 12px; border-radius: 20px;
+      font-size: .78rem; font-weight: 700;
+    }
+    .ae-counter-chip.total   { background: #EFF6FF; color: #1D4ED8; }
+    .ae-counter-chip.allowed { background: #DCFCE7; color: #166534; }
+    .ae-counter-chip.denied  { background: #FEE2E2; color: #991B1B; }
+    .ae-table-card {
+      background: #fff; border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.07); overflow: hidden;
+    }
+    .ae-table-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 16px; border-bottom: 1px solid #E5E7EB; background: #F9FAFB;
+    }
+    .ae-table-header h2 { font-size: .9rem; font-weight: 700; color: #0B3C5D; margin: 0; }
+    .ae-table-wrap {
+      overflow-x: auto; overflow-y: auto; max-height: 440px;
+    }
+    .ae-table {
+      width: 100%; border-collapse: collapse; font-size: .75rem;
+    }
+    .ae-table th {
+      text-align: left; padding: 7px 10px;
+      background: #F3F4F6; border-bottom: 1px solid #E5E7EB;
+      font-weight: 600; font-size: .7rem; color: #6B7280;
+      text-transform: uppercase; letter-spacing: .04em;
+      white-space: nowrap; position: sticky; top: 0; z-index: 1;
+    }
+    .ae-table td {
+      padding: 6px 10px; border-bottom: 1px solid #F3F4F6;
+      vertical-align: middle; white-space: nowrap;
+      font-family: 'Courier New', Courier, monospace; font-size: .73rem;
+    }
+    .ae-table tr:last-child td { border-bottom: none; }
+    .ae-row-allowed > td { background: #F0FDF4; }
+    .ae-row-denied  > td { background: #FEF2F2; }
+    .ae-status-allowed { color: #166534; font-weight: 700; }
+    .ae-status-denied  { color: #991B1B; font-weight: 700; }
+    .ae-empty-row td {
+      padding: 32px; text-align: center;
+      color: #9CA3AF; font-style: italic; font-family: inherit;
+    }
+    .ae-settings-card {
+      background: #fff; border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.07); overflow: hidden;
+      max-width: 640px;
+    }
+    .ae-settings-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 20px; border-bottom: 1px solid #E5E7EB; background: #F9FAFB;
+    }
+    .ae-settings-header h2 { font-size: .95rem; font-weight: 700; color: #0B3C5D; margin: 0; }
+    .ae-settings-body { padding: 20px 24px; }
+    .ae-field-row { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 14px; }
+    .ae-field-label {
+      font-size: .8rem; font-weight: 600; color: #374151;
+      min-width: 168px; padding-top: 6px; flex-shrink: 0;
+    }
+    .ae-field-label code {
+      font-size: .75rem; color: #145DA0;
+      background: #EFF6FF; padding: 1px 5px; border-radius: 3px;
+    }
+    .ae-field-value { flex: 1; }
+    .ae-input {
+      font-size: .85rem; padding: 6px 10px;
+      border: 1px solid #D1D5DB; border-radius: 5px;
+      width: 100%; max-width: 260px; color: #374151;
+    }
+    .ae-input:focus { outline: none; border-color: #145DA0; box-shadow: 0 0 0 3px rgba(20,93,160,.1); }
+    .ae-input[readonly] { background: #F9FAFB; color: #6B7280; cursor: default; }
+    .ae-hint { font-size: .72rem; color: #6B7280; margin-top: 3px; }
+    .ae-section-divider { border: none; border-top: 1px solid #E5E7EB; margin: 12px 0; }
+    .ae-key-fields-list {
+      font-size: .78rem; color: #374151;
+      background: #F9FAFB; border: 1px solid #E5E7EB;
+      border-radius: 5px; padding: 8px 12px; list-style: none; margin: 0;
+    }
+    .ae-key-fields-list li { padding: 2px 0; }
+    .ae-key-fields-list li::before { content: '—'; color: #9CA3AF; margin-right: 6px; }
+    .ae-validation-errors {
+      background: #FEF2F2; border: 1px solid #FCA5A5;
+      border-radius: 6px; padding: 10px 14px; margin-bottom: 14px;
+    }
+    .ae-validation-errors p { font-size: .8rem; font-weight: 700; color: #991B1B; margin-bottom: 6px; }
+    .ae-validation-errors ul { margin: 0; padding-left: 16px; font-size: .78rem; color: #B91C1C; }
+    .ae-save-result { margin-top: 10px; font-size: .82rem; font-weight: 500; }
+    .ae-save-result.ok { color: #166534; }
+    .ae-save-result.error { color: #991B1B; }
+    .ae-toggle-wrap { display: flex; align-items: center; gap: 10px; }
+    .ae-toggle { position: relative; display: inline-block; width: 40px; height: 22px; }
+    .ae-toggle input { opacity: 0; width: 0; height: 0; }
+    .ae-toggle-slider {
+      position: absolute; cursor: pointer; inset: 0;
+      background: #D1D5DB; border-radius: 22px; transition: background .2s;
+    }
+    .ae-toggle-slider::before {
+      content: ''; position: absolute;
+      height: 16px; width: 16px; left: 3px; bottom: 3px;
+      background: #fff; border-radius: 50%; transition: transform .2s;
+    }
+    .ae-toggle input:checked + .ae-toggle-slider { background: #22C55E; }
+    .ae-toggle input:checked + .ae-toggle-slider::before { transform: translateX(18px); }
+    .ae-toggle-label { font-size: .85rem; color: #374151; font-weight: 500; }
   </style>
 </head>
 <body>
@@ -1755,6 +1905,7 @@
   <button class="tab-btn" data-tab="runtime">⚙ Runtime</button>
   <button class="tab-btn" data-tab="status">📊 Status</button>
   <button class="tab-btn" data-tab="config-viewer">🔍 Config Viewer</button>
+  <button class="tab-btn" data-tab="access-events">📡 Access Events</button>
   <button class="btn-refresh btn-tab-bar-refresh" id="btn-refresh">↻ Refresh</button>
 </div>
 
@@ -2001,6 +2152,190 @@
     </div>
   </div>
 </div><!-- #status-tab-container -->
+
+<!-- ── Access Events Tab ────────────────────────────────────────── -->
+<div id="access-events-tab-container">
+
+  <div class="ae-inner-tab-bar">
+    <button class="ae-inner-tab-btn active" data-ae-tab="monitor">📡 Monitor</button>
+    <button class="ae-inner-tab-btn" data-ae-tab="settings">⚙ Settings</button>
+  </div>
+
+  <!-- Monitor Panel -->
+  <div class="ae-monitor-panel active" id="ae-monitor-panel">
+    <div class="ae-conn-bar">
+      <div class="ae-conn-dot" id="ae-conn-dot"></div>
+      <span class="ae-conn-status" id="ae-conn-status">Not connected</span>
+      <div class="ae-counters">
+        <span class="ae-counter-chip total">Total: <span id="ae-count-total">0</span></span>
+        <span class="ae-counter-chip allowed">Allowed: <span id="ae-count-allowed">0</span></span>
+        <span class="ae-counter-chip denied">Denied: <span id="ae-count-denied">0</span></span>
+      </div>
+      <button class="btn-log-clear" id="ae-btn-clear" style="margin-left:auto">🗑 Clear</button>
+    </div>
+    <div class="ae-table-card">
+      <div class="ae-table-header">
+        <h2>📋 Live Events</h2>
+        <span style="font-size:.75rem;color:#6B7280">Last 500 events · auto-scroll</span>
+      </div>
+      <div class="ae-table-wrap" id="ae-table-wrap">
+        <table class="ae-table">
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Port</th>
+              <th>Unit</th>
+              <th>FC</th>
+              <th>Action</th>
+              <th>Status</th>
+              <th>Src IP</th>
+              <th>Count</th>
+              <th>Window</th>
+            </tr>
+          </thead>
+          <tbody id="ae-event-tbody">
+            <tr class="ae-empty-row"><td colspan="9">No events yet — connect to start streaming</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Panel -->
+  <div class="ae-settings-panel" id="ae-settings-panel">
+    <div class="ae-settings-card">
+      <div class="ae-settings-header">
+        <h2>⚙ Access Events Settings</h2>
+      </div>
+      <div class="ae-settings-body">
+        <div id="ae-validation-errors" style="display:none" class="ae-validation-errors">
+          <p>⚠ Validation errors:</p>
+          <ul id="ae-validation-errors-list"></ul>
+        </div>
+
+        <!-- enabled -->
+        <div class="ae-field-row">
+          <div class="ae-field-label"><code>enabled</code></div>
+          <div class="ae-field-value">
+            <div class="ae-toggle-wrap">
+              <label class="ae-toggle">
+                <input type="checkbox" id="ae-cfg-enabled" />
+                <span class="ae-toggle-slider"></span>
+              </label>
+              <span class="ae-toggle-label" id="ae-enabled-label">Disabled</span>
+            </div>
+            <div class="ae-hint">Enable or disable the access event system</div>
+          </div>
+        </div>
+
+        <!-- mode (read-only) -->
+        <div class="ae-field-row">
+          <div class="ae-field-label"><code>mode</code></div>
+          <div class="ae-field-value">
+            <input class="ae-input" type="text" value="rate" readonly />
+            <div class="ae-hint">Only "rate" mode is supported</div>
+          </div>
+        </div>
+
+        <!-- window -->
+        <div class="ae-field-row">
+          <div class="ae-field-label"><code>window</code></div>
+          <div class="ae-field-value">
+            <input class="ae-input" type="number" id="ae-cfg-window" min="1" step="1" />
+            <div class="ae-hint">Aggregation window in seconds (must be &gt; 0)</div>
+          </div>
+        </div>
+
+        <!-- key_fields (read-only display) -->
+        <div class="ae-field-row">
+          <div class="ae-field-label"><code>key_fields</code></div>
+          <div class="ae-field-value">
+            <ul class="ae-key-fields-list">
+              <li>src_ip</li>
+              <li>function_code</li>
+              <li>action</li>
+              <li>status</li>
+              <li>port</li>
+              <li>unit</li>
+            </ul>
+            <div class="ae-hint">Fixed — exactly these 6 fields are required by the MMA2 manual</div>
+          </div>
+        </div>
+
+        <!-- include_counter -->
+        <div class="ae-field-row">
+          <div class="ae-field-label"><code>include_counter</code></div>
+          <div class="ae-field-value">
+            <div class="ae-toggle-wrap">
+              <label class="ae-toggle">
+                <input type="checkbox" id="ae-cfg-include-counter" />
+                <span class="ae-toggle-slider"></span>
+              </label>
+              <span class="ae-toggle-label" id="ae-counter-label">Disabled</span>
+            </div>
+            <div class="ae-hint">Include <code>count</code> and <code>window_sec</code> in summary events</div>
+          </div>
+        </div>
+
+        <hr class="ae-section-divider" />
+
+        <!-- limits.max_keys -->
+        <div class="ae-field-row">
+          <div class="ae-field-label"><code>limits.max_keys</code></div>
+          <div class="ae-field-value">
+            <input class="ae-input" type="number" id="ae-cfg-max-keys" min="1" step="1" />
+            <div class="ae-hint">Maximum concurrent aggregation keys (must be &gt; 0)</div>
+          </div>
+        </div>
+
+        <!-- limits.ttl -->
+        <div class="ae-field-row">
+          <div class="ae-field-label"><code>limits.ttl</code></div>
+          <div class="ae-field-value">
+            <input class="ae-input" type="number" id="ae-cfg-ttl" min="0" step="1" />
+            <div class="ae-hint">Key TTL in seconds — must be ≥ 2 × window</div>
+          </div>
+        </div>
+
+        <hr class="ae-section-divider" />
+
+        <!-- output.type (read-only) -->
+        <div class="ae-field-row">
+          <div class="ae-field-label"><code>output.type</code></div>
+          <div class="ae-field-value">
+            <input class="ae-input" type="text" value="http_stream" readonly />
+            <div class="ae-hint">Only "http_stream" is supported</div>
+          </div>
+        </div>
+
+        <!-- output.path -->
+        <div class="ae-field-row">
+          <div class="ae-field-label"><code>output.path</code></div>
+          <div class="ae-field-value">
+            <input class="ae-input" type="text" id="ae-cfg-output-path" placeholder="/events" />
+            <div class="ae-hint">HTTP path for streaming endpoint (must start with "/")</div>
+          </div>
+        </div>
+
+        <!-- output.listen -->
+        <div class="ae-field-row">
+          <div class="ae-field-label"><code>output.listen</code></div>
+          <div class="ae-field-value">
+            <input class="ae-input" type="text" id="ae-cfg-output-listen" placeholder=":9090" />
+            <div class="ae-hint">TCP bind address for the HTTP server (e.g. ":9090")</div>
+          </div>
+        </div>
+
+        <div id="ae-save-result" class="ae-save-result" style="display:none"></div>
+        <div style="margin-top:18px;display:flex;gap:8px;align-items:center">
+          <button class="btn-primary" id="ae-btn-save">💾 Save Settings</button>
+          <button class="btn-refresh" id="ae-btn-reload" style="font-size:.8rem;padding:7px 12px">↻ Reload</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- #access-events-tab-container -->
 
 <!-- ── Add / Edit Group Dialog ───────────────────────────────────── -->
 <dialog id="group-dialog">
@@ -6288,12 +6623,15 @@ document.getElementById('tab-bar').addEventListener('click', e => {
   const memContainer = document.getElementById('memory-tab-container');
   const rtContainer = document.getElementById('runtime-tab-container');
   const stContainer = document.getElementById('status-tab-container');
+  const aeContainer = document.getElementById('access-events-tab-container');
 
   appContainer.style.display = 'none';
   cvContainer.classList.remove('active');
   memContainer.classList.remove('active');
   rtContainer.classList.remove('active');
   stContainer.classList.remove('active');
+  aeContainer.classList.remove('active');
+  stopAccessEventsStream();
 
   if (tab === 'model') {
     appContainer.style.display = '';
@@ -6327,6 +6665,11 @@ document.getElementById('tab-bar').addEventListener('click', e => {
       loadConfigs();
     }
     stopLogStream();
+  } else if (tab === 'access-events') {
+    aeContainer.classList.add('active');
+    stopStatusPolling();
+    stopLogStream();
+    startAccessEventsStream();
   }
 });
 
@@ -7399,6 +7742,313 @@ fetch('/version')
     const verEl = document.getElementById('app-version');
     if (verEl) verEl.textContent = 'dev';
   });
+
+// ── Access Events ─────────────────────────────────────────────────────────────
+
+let _aeAbortController = null;
+let _aeTotalCount = 0;
+let _aeAllowedCount = 0;
+let _aeDeniedCount = 0;
+let _aeAutoScroll = true;
+const AE_ROW_LIMIT = 500;
+const AE_SCROLL_THRESHOLD_PX = 40;
+
+function _aeSetConnStatus(text, state) {
+  const dot = document.getElementById('ae-conn-dot');
+  const statusEl = document.getElementById('ae-conn-status');
+  if (statusEl) statusEl.textContent = text;
+  if (dot) {
+    dot.className = 'ae-conn-dot' +
+      (state === 'connected' ? ' connected' : state === 'error' ? ' error' : '');
+  }
+}
+
+function _aeUpdateCounters() {
+  const t = document.getElementById('ae-count-total');
+  const a = document.getElementById('ae-count-allowed');
+  const d = document.getElementById('ae-count-denied');
+  if (t) t.textContent = _aeTotalCount;
+  if (a) a.textContent = _aeAllowedCount;
+  if (d) d.textContent = _aeDeniedCount;
+}
+
+function _aeAppendEvent(evt) {
+  _aeTotalCount++;
+  if (evt.status === 'allowed') _aeAllowedCount++;
+  else _aeDeniedCount++;
+  _aeUpdateCounters();
+
+  const tbody = document.getElementById('ae-event-tbody');
+  if (!tbody) return;
+
+  // Remove placeholder row if present
+  const emptyRow = tbody.querySelector('.ae-empty-row');
+  if (emptyRow) emptyRow.remove();
+
+  const tr = document.createElement('tr');
+  tr.className = evt.status === 'allowed' ? 'ae-row-allowed' : 'ae-row-denied';
+
+  // Format timestamp (nanoseconds → ISO string)
+  const tsNs = Number(evt.ts);
+  let tsStr = '';
+  if (Number.isFinite(tsNs) && tsNs > 0) {
+    tsStr = new Date(Math.floor(tsNs / 1e6)).toISOString().replace('T', ' ').slice(0, 23);
+  } else {
+    tsStr = String(evt.ts || '');
+  }
+
+  const cells = [
+    [tsStr,                                          ''],
+    [evt.port != null        ? String(evt.port)        : '', ''],
+    [evt.unit != null        ? String(evt.unit)        : '', ''],
+    [evt.function_code != null ? String(evt.function_code) : '', ''],
+    [evt.action  || '',                              ''],
+    [evt.status  || '',  evt.status === 'allowed' ? 'ae-status-allowed' : 'ae-status-denied'],
+    [evt.src_ip  || '',                              ''],
+    [evt.count      != null ? String(evt.count)      : '', ''],
+    [evt.window_sec != null ? String(evt.window_sec) : '', ''],
+  ];
+
+  for (const [text, cls] of cells) {
+    const td = document.createElement('td');
+    td.textContent = text;
+    if (cls) td.className = cls;
+    tr.appendChild(td);
+  }
+
+  tbody.appendChild(tr);
+
+  // Limit visible rows
+  while (tbody.children.length > AE_ROW_LIMIT) {
+    tbody.removeChild(tbody.firstChild);
+  }
+
+  // Auto-scroll
+  if (_aeAutoScroll) {
+    const tw = document.getElementById('ae-table-wrap');
+    if (tw) tw.scrollTop = tw.scrollHeight;
+  }
+}
+
+async function startAccessEventsStream() {
+  if (_aeAbortController) return;
+  _aeAbortController = new AbortController();
+  _aeSetConnStatus('Connecting…', '');
+
+  try {
+    const resp = await fetch('/access-events/stream', { signal: _aeAbortController.signal });
+
+    if (!resp.ok) {
+      let errText = 'Connection failed';
+      try { const j = await resp.json(); errText = j.error || errText; } catch { /* ignore */ }
+      _aeSetConnStatus(`Error: ${errText}`, 'error');
+      _aeAbortController = null;
+      return;
+    }
+
+    _aeSetConnStatus('Connected — streaming', 'connected');
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop(); // keep incomplete line in buffer
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        try { _aeAppendEvent(JSON.parse(trimmed)); } catch { /* ignore malformed line */ }
+      }
+    }
+
+    _aeSetConnStatus('Stream ended', 'error');
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      _aeSetConnStatus('Disconnected', '');
+    } else {
+      _aeSetConnStatus(`Error: ${err.message}`, 'error');
+    }
+  }
+  _aeAbortController = null;
+}
+
+function stopAccessEventsStream() {
+  if (_aeAbortController) {
+    _aeAbortController.abort();
+    _aeAbortController = null;
+  }
+}
+
+function _aeClearEvents() {
+  _aeTotalCount = 0;
+  _aeAllowedCount = 0;
+  _aeDeniedCount = 0;
+  _aeUpdateCounters();
+  const tbody = document.getElementById('ae-event-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  const tr = document.createElement('tr');
+  tr.className = 'ae-empty-row';
+  const td = document.createElement('td');
+  td.colSpan = 9;
+  td.textContent = 'No events yet — connect to start streaming';
+  tr.appendChild(td);
+  tbody.appendChild(tr);
+}
+
+// ── Settings form ──────────────────────────────────────────────────────────
+
+async function _aeLoadSettings() {
+  const { ok, data } = await api('GET', '/access-events/config');
+  if (!ok) return;
+  const cfg = data;
+
+  const enabledEl = document.getElementById('ae-cfg-enabled');
+  if (enabledEl) {
+    enabledEl.checked = !!cfg.enabled;
+    _aeUpdateEnabledLabel(!!cfg.enabled);
+  }
+
+  const windowEl = document.getElementById('ae-cfg-window');
+  if (windowEl) windowEl.value = cfg.window != null ? cfg.window : 5;
+
+  const incEl = document.getElementById('ae-cfg-include-counter');
+  if (incEl) {
+    incEl.checked = cfg.include_counter !== false;
+    _aeUpdateCounterLabel(cfg.include_counter !== false);
+  }
+
+  const maxKeysEl = document.getElementById('ae-cfg-max-keys');
+  if (maxKeysEl) maxKeysEl.value = (cfg.limits && cfg.limits.max_keys != null) ? cfg.limits.max_keys : 1000;
+
+  const ttlEl = document.getElementById('ae-cfg-ttl');
+  if (ttlEl) ttlEl.value = (cfg.limits && cfg.limits.ttl != null) ? cfg.limits.ttl : 30;
+
+  const pathEl = document.getElementById('ae-cfg-output-path');
+  if (pathEl) pathEl.value = (cfg.output && cfg.output.path) || '/events';
+
+  const listenEl = document.getElementById('ae-cfg-output-listen');
+  if (listenEl) listenEl.value = (cfg.output && cfg.output.listen) || ':9090';
+
+  _aeHideValidationErrors();
+  _aeHideSaveResult();
+}
+
+function _aeUpdateEnabledLabel(checked) {
+  const el = document.getElementById('ae-enabled-label');
+  if (el) el.textContent = checked ? 'Enabled' : 'Disabled';
+}
+
+function _aeUpdateCounterLabel(checked) {
+  const el = document.getElementById('ae-counter-label');
+  if (el) el.textContent = checked ? 'Enabled' : 'Disabled';
+}
+
+function _aeHideValidationErrors() {
+  const el = document.getElementById('ae-validation-errors');
+  if (el) el.style.display = 'none';
+}
+
+function _aeShowValidationErrors(errors) {
+  const el = document.getElementById('ae-validation-errors');
+  const list = document.getElementById('ae-validation-errors-list');
+  if (!el || !list) return;
+  list.innerHTML = '';
+  for (const err of errors) {
+    const li = document.createElement('li');
+    li.textContent = err;
+    list.appendChild(li);
+  }
+  el.style.display = 'block';
+}
+
+function _aeHideSaveResult() {
+  const el = document.getElementById('ae-save-result');
+  if (el) el.style.display = 'none';
+}
+
+function _aeShowSaveResult(text, isOk) {
+  const el = document.getElementById('ae-save-result');
+  if (!el) return;
+  el.textContent = text;
+  el.className = 'ae-save-result ' + (isOk ? 'ok' : 'error');
+  el.style.display = 'block';
+}
+
+async function _aeSaveSettings() {
+  _aeHideValidationErrors();
+  _aeHideSaveResult();
+
+  const payload = {
+    enabled:         document.getElementById('ae-cfg-enabled')?.checked === true,
+    mode:            'rate',
+    window:          parseInt(document.getElementById('ae-cfg-window')?.value || '', 10),
+    key_fields:      ['src_ip', 'function_code', 'action', 'status', 'port', 'unit'],
+    include_counter: document.getElementById('ae-cfg-include-counter')?.checked !== false,
+    limits: {
+      max_keys: parseInt(document.getElementById('ae-cfg-max-keys')?.value || '', 10),
+      ttl:      parseInt(document.getElementById('ae-cfg-ttl')?.value || '', 10),
+    },
+    output: {
+      type:   'http_stream',
+      path:   document.getElementById('ae-cfg-output-path')?.value   || '',
+      listen: document.getElementById('ae-cfg-output-listen')?.value || '',
+    },
+  };
+
+  const btn = document.getElementById('ae-btn-save');
+  if (btn) btn.disabled = true;
+
+  const { ok, data } = await api('POST', '/access-events/config', payload);
+
+  if (btn) btn.disabled = false;
+
+  if (!ok) {
+    if (data && Array.isArray(data.errors)) {
+      _aeShowValidationErrors(data.errors);
+    } else {
+      _aeShowSaveResult(`Error: ${(data && data.error) || 'Save failed'}`, false);
+    }
+    return;
+  }
+
+  _aeShowSaveResult('✓ Settings saved', true);
+  setTimeout(_aeHideSaveResult, 3000);
+}
+
+// ── Access Events inner tab switching ────────────────────────────────────────
+
+document.getElementById('access-events-tab-container').addEventListener('click', e => {
+  const btn = e.target.closest('.ae-inner-tab-btn');
+  if (!btn) return;
+  const tab = btn.dataset.aeTab;
+  document.querySelectorAll('.ae-inner-tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('ae-monitor-panel').classList.toggle('active', tab === 'monitor');
+  document.getElementById('ae-settings-panel').classList.toggle('active', tab === 'settings');
+  if (tab === 'settings') _aeLoadSettings();
+});
+
+document.getElementById('ae-btn-clear').addEventListener('click', _aeClearEvents);
+document.getElementById('ae-btn-save').addEventListener('click', _aeSaveSettings);
+document.getElementById('ae-btn-reload').addEventListener('click', _aeLoadSettings);
+
+document.getElementById('ae-cfg-enabled').addEventListener('change', e => {
+  _aeUpdateEnabledLabel(e.target.checked);
+});
+document.getElementById('ae-cfg-include-counter').addEventListener('change', e => {
+  _aeUpdateCounterLabel(e.target.checked);
+});
+
+document.getElementById('ae-table-wrap').addEventListener('scroll', () => {
+  const tw = document.getElementById('ae-table-wrap');
+  if (!tw) return;
+  _aeAutoScroll = tw.scrollHeight - tw.scrollTop - tw.clientHeight < AE_SCROLL_THRESHOLD_PX;
+});
 </script>
 </body>
 </html>

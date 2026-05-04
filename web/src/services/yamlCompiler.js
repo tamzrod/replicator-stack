@@ -190,6 +190,36 @@ function compileMma2Config(blocks, statusMap = new Map()) {
     return { mergedUnits, mergeLog };
 }
 
+/**
+ * Build the YAML lines for the access_events top-level block.
+ * Key fields are always the required six from the MMA2 manual, in canonical order.
+ * @param {object} ae - model.access_events object
+ * @returns {string[]}
+ */
+function _buildAccessEventsYamlLines(ae) {
+    return [
+        'access_events:',
+        `  enabled: ${ae.enabled ? 'true' : 'false'}`,
+        `  mode: rate`,
+        `  window: ${Number(ae.window) || 5}`,
+        `  key_fields:`,
+        `    - src_ip`,
+        `    - function_code`,
+        `    - action`,
+        `    - status`,
+        `    - port`,
+        `    - unit`,
+        `  include_counter: ${ae.include_counter ? 'true' : 'false'}`,
+        `  limits:`,
+        `    max_keys: ${Number((ae.limits && ae.limits.max_keys)) || 1000}`,
+        `    ttl: ${Number((ae.limits && ae.limits.ttl)) || 30}`,
+        `  output:`,
+        `    type: http_stream`,
+        `    path: ${(ae.output && ae.output.path) || '/events'}`,
+        `    listen: "${(ae.output && ae.output.listen) || ':9090'}"`,
+    ];
+}
+
 function toMmaYaml(model) {
     // MMA runtime config generated from Memory tab ports.
     // Format per docs/sample yaml/mma.yaml:
@@ -208,7 +238,13 @@ function toMmaYaml(model) {
     const memoryPorts = (model.memory && model.memory.ports) || [];
 
     if (memoryPorts.length === 0) {
-        return { yaml: 'listeners: []\n', mergeLog: [] };
+        const lines = ['listeners: []'];
+        const ae = model.access_events;
+        if (ae && typeof ae === 'object') {
+            lines.push('');
+            lines.push(..._buildAccessEventsYamlLines(ae));
+        }
+        return { yaml: lines.join('\n') + '\n', mergeLog: [] };
     }
 
     // Pre-compute status memory requirements from devices:
@@ -329,6 +365,13 @@ function toMmaYaml(model) {
             }
         }
     }
+    // Append access_events block if configured in the model.
+    const ae = model.access_events;
+    if (ae && typeof ae === 'object') {
+        lines.push('');
+        lines.push(..._buildAccessEventsYamlLines(ae));
+    }
+
     return { yaml: lines.join('\n') + '\n', mergeLog: allMergeLog };
 }
 
