@@ -424,7 +424,7 @@ access_events:
 | `key_fields` | list | Yes | Must contain exactly these six fields: `src_ip`, `function_code`, `action`, `status`, `port`, `unit`. No substitutions, no omissions. |
 | `include_counter` | boolean | Yes | When `true`, summary events include `count` and `window_sec`. |
 | `limits.max_keys` | integer | Yes | Maximum concurrent aggregation keys. Must be `> 0`. New keys are dropped when this limit is reached. |
-| `limits.ttl` | integer | Yes | Key TTL in seconds. Must be `>= 2 × window`. |
+| `limits.ttl` | integer | Yes | Key TTL in seconds. Must be `>= 2 * window`. |
 | `output.type` | string | Yes | Only `"http_stream"` is supported. |
 | `output.path` | string | Yes | HTTP path for the streaming endpoint. Must start with `"/"`. |
 | `output.listen` | string | Yes | TCP bind address for the HTTP server (e.g. `":9090"`). Must not be empty. |
@@ -679,7 +679,7 @@ Displays live device operational status.
 
 When `GET /devices/status` fails (API error), all devices are marked offline (fail-closed behavior).
 
-Each device's status reads a contiguous block of 30 holding registers from MMA2 starting at `status_slot × 30`.
+Each device's status reads a contiguous block of 30 holding registers from MMA2 starting at `status_slot * 30`.
 
 ### 7.6 Config Viewer Tab
 
