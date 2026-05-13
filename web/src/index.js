@@ -31,7 +31,7 @@ function defaultAccessEventsConfig() {
         key_fields: REQUIRED_ACCESS_EVENT_KEY_FIELDS.slice(),
         include_counter: true,
         limits: { max_keys: 1000, ttl: 30 },
-        output: { type: 'http_stream', path: '/events', listen: ':9090', host: '' },
+        output: { type: 'http_stream', host: '', listen: ':9090', path: '/events' },
     };
 }
 
@@ -2434,8 +2434,8 @@ app.post('/access-events/config', (req, res) => {
 });
 
 // GET /access-events/stream — proxy the NDJSON event stream from MMA.
-// Reads output.listen and output.path from model.access_events to determine
-// the upstream URL (http://<TARGET_HOST>:<port><path>).
+// Reads output.listen, output.path, and output.host from model.access_events to
+// determine the upstream URL (http://<host>:<port><path>).
 app.get('/access-events/stream', (req, res) => {
     try {
         const model = readModel();
@@ -2447,6 +2447,10 @@ app.get('/access-events/stream', (req, res) => {
 
         const listen = (ae.output && ae.output.listen) || ':9090';
         const evPath = (ae.output && ae.output.path) || '/events';
+        const host =
+            ae?.output?.host ||
+            process.env.TARGET_HOST ||
+            'mma';
         const portMatch = listen.match(/:(\d+)$/);
         const port = portMatch ? parseInt(portMatch[1], 10) : 9090;
 
@@ -2455,7 +2459,7 @@ app.get('/access-events/stream', (req, res) => {
         res.setHeader('X-Accel-Buffering', 'no');
 
         const upstream = http.request(
-            { hostname: (ae.output && ae.output.host) || TARGET_HOST, port, path: evPath, method: 'GET' },
+            { hostname: host, port, path: evPath, method: 'GET' },
             (upstreamRes) => {
                 if (upstreamRes.statusCode !== 200) {
                     let body = '';
