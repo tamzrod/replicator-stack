@@ -2326,6 +2326,15 @@
           </div>
         </div>
 
+        <!-- output.host -->
+        <div class="ae-field-row">
+          <div class="ae-field-label"><code>output.host</code></div>
+          <div class="ae-field-value">
+            <input class="ae-input" type="text" id="ae-cfg-output-host" placeholder="mma" />
+            <div class="ae-hint">Hostname or IP the web backend uses to reach the MMA event stream. Leave blank to use the default (<code>mma</code>). Set to the Docker host gateway (e.g. <code>172.17.0.1</code>) when MMA is on <code>network_mode: host</code>.</div>
+          </div>
+        </div>
+
         <div id="ae-save-result" class="ae-save-result" style="display:none"></div>
         <div style="margin-top:18px;display:flex;gap:8px;align-items:center">
           <button class="btn-primary" id="ae-btn-save">💾 Save Settings</button>
@@ -7935,6 +7944,9 @@ async function _aeLoadSettings() {
   const listenEl = document.getElementById('ae-cfg-output-listen');
   if (listenEl) listenEl.value = (cfg.output && cfg.output.listen) || ':9090';
 
+  const hostEl = document.getElementById('ae-cfg-output-host');
+  if (hostEl) hostEl.value = (cfg.output && cfg.output.host) || '';
+
   _aeHideValidationErrors();
   _aeHideSaveResult();
 }
@@ -7998,6 +8010,7 @@ async function _aeSaveSettings() {
       type:   'http_stream',
       path:   document.getElementById('ae-cfg-output-path')?.value   || '',
       listen: document.getElementById('ae-cfg-output-listen')?.value || '',
+      host:   document.getElementById('ae-cfg-output-host')?.value?.trim() || '',
     },
   };
 
