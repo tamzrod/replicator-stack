@@ -31,7 +31,7 @@ function defaultAccessEventsConfig() {
         key_fields: REQUIRED_ACCESS_EVENT_KEY_FIELDS.slice(),
         include_counter: true,
         limits: { max_keys: 1000, ttl: 30 },
-        output: { type: 'http_stream', path: '/events', listen: ':9090' },
+        output: { type: 'http_stream', path: '/events', listen: ':9090', host: '' },
     };
 }
 
@@ -2414,6 +2414,7 @@ app.post('/access-events/config', (req, res) => {
                 type: 'http_stream',
                 path: (body.output && typeof body.output.path === 'string') ? body.output.path : '',
                 listen: (body.output && typeof body.output.listen === 'string') ? body.output.listen : '',
+                host: (body.output && typeof body.output.host === 'string') ? body.output.host.trim() : '',
             },
         };
 
@@ -2454,7 +2455,7 @@ app.get('/access-events/stream', (req, res) => {
         res.setHeader('X-Accel-Buffering', 'no');
 
         const upstream = http.request(
-            { hostname: TARGET_HOST, port, path: evPath, method: 'GET' },
+            { hostname: (ae.output && ae.output.host) || TARGET_HOST, port, path: evPath, method: 'GET' },
             (upstreamRes) => {
                 if (upstreamRes.statusCode !== 200) {
                     let body = '';
