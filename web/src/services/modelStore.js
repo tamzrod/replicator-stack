@@ -224,7 +224,7 @@ function mergeSegments(segments) {
 }
 
 /**
- * Coalesce overlapping segments while preserving disjoint ranges.
+ * Coalesce overlapping/adjacent segments while preserving disjoint ranges.
  * This is used during auto-sync to avoid duplicate/overlapping entries
  * when an existing range is expanded (for example by addinvert).
  *
@@ -244,7 +244,7 @@ function coalesceOverlappingSegments(segments) {
         const last = out[out.length - 1];
         const lastEnd = last.start + last.count - 1;
         const segEnd = seg.start + seg.count - 1;
-        if (seg.start <= lastEnd) {
+        if (seg.start <= lastEnd + 1) {
             const newEnd = Math.max(lastEnd, segEnd);
             last.count = newEnd - last.start + 1;
         } else {
