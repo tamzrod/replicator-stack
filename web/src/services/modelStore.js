@@ -552,12 +552,14 @@ function ensureTargetMemory(model, device) {
                     sEnd >= range.end;
             });
             const missingRanges = ranges.filter(r => !isCovered(r));
-            let targetArea = areas[0] || null; // deterministic: append to first matching area
-            if (missingRanges.length > 0 && !targetArea) {
-                targetArea = { id: randomUUID(), type: areaType, segments: [] };
-                unit.areas.push(targetArea);
-            }
             if (missingRanges.length > 0) {
+                // Keep deterministic behavior by extending the earliest existing
+                // area of this type; create one only if none exist.
+                let targetArea = areas[0] || null;
+                if (!targetArea) {
+                    targetArea = { id: randomUUID(), type: areaType, segments: [] };
+                    unit.areas.push(targetArea);
+                }
                 if (!Array.isArray(targetArea.segments)) targetArea.segments = [];
                 for (const r of missingRanges) {
                     targetArea.segments.push({ start: r.start, count: r.end - r.start + 1 });
