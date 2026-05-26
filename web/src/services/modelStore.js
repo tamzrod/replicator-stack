@@ -546,18 +546,17 @@ function ensureTargetMemory(model, device) {
             const isCovered = (range) => allSegments.some(seg => {
                 const sStart = Number(seg.start);
                 const sCount = Number(seg.count);
+                if (!Number.isFinite(sStart) || !Number.isFinite(sCount) || sCount < 1) return false;
                 const sEnd = sStart + sCount - 1;
-                return Number.isFinite(sStart) &&
-                    Number.isFinite(sCount) &&
-                    sCount > 0 &&
-                    sStart <= range.start &&
+                return sStart <= range.start &&
                     sEnd >= range.end;
             });
             const missingRanges = ranges.filter(r => !isCovered(r));
-            if (missingRanges.length > 0 && areas.length > 0) {
-                if (!Array.isArray(areas[0].segments)) areas[0].segments = [];
+            const targetArea = areas[0] || null; // deterministic: append to first matching area
+            if (missingRanges.length > 0 && targetArea) {
+                if (!Array.isArray(targetArea.segments)) targetArea.segments = [];
                 for (const r of missingRanges) {
-                    areas[0].segments.push({ start: r.start, count: r.end - r.start + 1 });
+                    targetArea.segments.push({ start: r.start, count: r.end - r.start + 1 });
                 }
                 console.log(`[ensureTargetMemory] Expanded area ${areaType} with ${missingRanges.length} missing segment(s) for unit_id ${unitId}`);
             }
