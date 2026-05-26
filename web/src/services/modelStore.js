@@ -535,10 +535,34 @@ function ensureTargetMemory(model, device) {
 
     // Add areas for types that are now required but not yet present.
     // Each read range becomes its own segment — segments are never auto-merged.
-    // Existing areas are left untouched so user-configured segments are preserved.
+    // For existing areas, ensure every required read range is fully covered.
     const existingAreaTypes = new Set(unit.areas.map(a => a.type));
     for (const [areaType, ranges] of Object.entries(readsByArea)) {
-        if (existingAreaTypes.has(areaType)) continue; // already present — preserve user's segments
+        if (existingAreaTypes.has(areaType)) {
+            // Keep existing user segments, but append missing required ranges so
+            // memory allocation stays in sync with reads (e.g. addinvert expansion).
+            const areas = unit.areas.filter(a => a.type === areaType);
+            const allSegments = areas.flatMap(a => (a.segments || []));
+            const isCovered = (range) => allSegments.some(seg => {
+                const sStart = Number(seg.start);
+                const sCount = Number(seg.count);
+                const sEnd = sStart + sCount - 1;
+                return Number.isFinite(sStart) &&
+                    Number.isFinite(sCount) &&
+                    sCount > 0 &&
+                    sStart <= range.start &&
+                    sEnd >= range.end;
+            });
+            const missingRanges = ranges.filter(r => !isCovered(r));
+            if (missingRanges.length > 0 && areas.length > 0) {
+                if (!Array.isArray(areas[0].segments)) areas[0].segments = [];
+                for (const r of missingRanges) {
+                    areas[0].segments.push({ start: r.start, count: r.end - r.start + 1 });
+                }
+                console.log(`[ensureTargetMemory] Expanded area ${areaType} with ${missingRanges.length} missing segment(s) for unit_id ${unitId}`);
+            }
+            continue;
+        }
         const segments = ranges.map(r => ({ start: r.start, count: r.end - r.start + 1 }));
         unit.areas.push({
             id: randomUUID(),
