@@ -132,11 +132,17 @@ function rehydrateFromYaml(model) {
             const count = Number(read.source_count);
             if (!Number.isFinite(start) || !Number.isFinite(count) || count < 1) continue;
 
+            // FC1 (coils) and FC2 (discrete_inputs/input_status) with addinvert=true
+            // append an inverted copy after the original block — reserve double the space.
+            const effectiveCount = read.addinvert && (area === 'coils' || area === 'discrete_inputs' || area === 'input_status')
+                ? count * 2
+                : count;
+
             const key = `${matchingPort.id}|${unitId}|${area}`;
             if (!required[key]) {
                 required[key] = { portId: matchingPort.id, unitId, area, ranges: [] };
             }
-            required[key].ranges.push({ start, end: start + count - 1 });
+            required[key].ranges.push({ start, end: start + effectiveCount - 1 });
         }
     }
 

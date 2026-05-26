@@ -511,8 +511,14 @@ function ensureTargetMemory(model, device) {
             const start = Number(read.source_address);
             const count = Number(read.source_count);
             if (!Number.isFinite(start) || !Number.isFinite(count) || count < 1) continue;
+
+            // FC1 (coils) and FC2 (discrete_inputs/input_status) with addinvert=true
+            // append an inverted copy after the original block — reserve double the space.
+            const effectiveCount = read.addinvert && (areaType === 'coils' || areaType === 'discrete_inputs' || areaType === 'input_status')
+                ? count * 2
+                : count;
             if (!readsByArea[areaType]) readsByArea[areaType] = [];
-            readsByArea[areaType].push({ start, end: start + count - 1 });
+            readsByArea[areaType].push({ start, end: start + effectiveCount - 1 });
         }
     }
 
