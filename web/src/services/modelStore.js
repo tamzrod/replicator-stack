@@ -224,6 +224,37 @@ function mergeSegments(segments) {
 }
 
 /**
+ * Coalesce overlapping/adjacent segments while preserving disjoint ranges.
+ * This is used during auto-sync to avoid duplicate/overlapping entries
+ * when an existing range is expanded (for example by addinvert).
+ *
+ * @param {{ start: number, count: number }[]} segments
+ * @returns {{ start: number, count: number }[]}
+ */
+function coalesceOverlappingSegments(segments) {
+    if (!Array.isArray(segments) || segments.length === 0) return [];
+    const sorted = segments
+        .map(s => ({ start: Number(s.start), count: Number(s.count) }))
+        .filter(s => Number.isFinite(s.start) && Number.isFinite(s.count) && s.start >= 0 && s.count > 0)
+        .sort((a, b) => a.start - b.start);
+    if (sorted.length <= 1) return sorted;
+
+    const out = [{ ...sorted[0] }];
+    for (const seg of sorted.slice(1)) {
+        const last = out[out.length - 1];
+        const lastEnd = last.start + last.count - 1;
+        const segEnd = seg.start + seg.count - 1;
+        if (seg.start <= lastEnd + 1) {
+            const newEnd = Math.max(lastEnd, segEnd);
+            last.count = newEnd - last.start + 1;
+        } else {
+            out.push({ ...seg });
+        }
+    }
+    return out;
+}
+
+/**
  * Return the widest range that covers both (start1, count1) and (start2, count2).
  * Retained for backward-compatibility with callers that explicitly merge ranges.
  */
@@ -542,6 +573,9 @@ function ensureTargetMemory(model, device) {
             // Keep existing user segments, but append missing required ranges so
             // memory allocation stays in sync with reads (e.g. addinvert expansion).
             const areas = unit.areas.filter(a => a.type === areaType);
+            for (const area of areas) {
+                area.segments = coalesceOverlappingSegments(area.segments || []);
+            }
             const allSegments = areas.flatMap(a => (a.segments || []));
             const isCovered = (range) => allSegments.some(seg => {
                 const sStart = Number(seg.start);
@@ -564,6 +598,7 @@ function ensureTargetMemory(model, device) {
                 for (const r of missingRanges) {
                     targetArea.segments.push({ start: r.start, count: r.end - r.start + 1 });
                 }
+                targetArea.segments = coalesceOverlappingSegments(targetArea.segments);
                 console.log(`[ensureTargetMemory] Expanded area ${areaType} with ${missingRanges.length} missing segment(s) for unit_id ${unitId}`);
             }
             continue;
