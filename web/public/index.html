@@ -3204,12 +3204,13 @@ function renderDeviceWorkspace() {
   // ── B. READ Section (inline editing per row) ───────────────────────
   let readsBody;
   if (reads.length === 0) {
-    readsBody = `<tr><td colspan="7"><div role="alert" class="empty-state" style="padding:16px 0;color:#EF4444;font-weight:500">⚠ At least one read is required for this device — add a read below.</div></td></tr>`;
+    readsBody = `<tr><td colspan="8"><div role="alert" class="empty-state" style="padding:16px 0;color:#EF4444;font-weight:500">⚠ At least one read is required for this device — add a read below.</div></td></tr>`;
   } else {
     readsBody = reads.map(r => {
       if (r.id === _editingReadId) {
         const selOpts = ['holding_registers','coils','input_registers','discrete_inputs']
           .map(v => `<option value="${v}"${r.source_area === v ? ' selected' : ''}>${v}</option>`).join('');
+        const ireDigital = ['coils','discrete_inputs'].includes(r.source_area);
         return `<tr class="row-highlight">
           <td style="font-size:.78rem">${escapeHtml(r.id)}</td>
           <td><input class="inline-input" type="text" id="ire-name" value="${escapeHtml(r.name || '')}" placeholder="Name" /></td>
@@ -3217,11 +3218,32 @@ function renderDeviceWorkspace() {
           <td><input class="inline-input" type="number" id="ire-addr" value="${escapeHtml(String(r.source_address ?? 0))}" style="width:70px" /></td>
           <td><input class="inline-input" type="number" id="ire-count" value="${escapeHtml(String(r.source_count ?? 1))}" min="1" style="width:60px" /></td>
           <td><input class="inline-input" type="number" id="ire-poll" value="${escapeHtml(String(r.poll_interval ?? 2000))}" min="100" style="width:80px" /></td>
+          <td>
+            <div id="ire-flags-wrap" style="${ireDigital ? '' : 'display:none'}">
+              <label style="display:flex;align-items:center;gap:4px;margin-bottom:2px;white-space:nowrap">
+                <input type="checkbox" id="ire-invert"${r.invert ? ' checked' : ''}> <span style="font-size:.8rem">invert</span>
+              </label>
+              <label style="display:flex;align-items:center;gap:4px;white-space:nowrap">
+                <input type="checkbox" id="ire-addinvert"${r.addinvert ? ' checked' : ''}> <span style="font-size:.8rem">addinvert</span>
+              </label>
+            </div>
+            <span id="ire-flags-na" style="${ireDigital ? 'display:none' : 'color:#D1D5DB'}">—</span>
+          </td>
           <td style="white-space:nowrap">
             <button class="btn-save-inline ws-save-read" data-read-id="${escapeHtml(r.id)}">Save</button>
             <button class="btn-cancel-inline ws-cancel-read">Cancel</button>
           </td>
         </tr>`;
+      }
+      const viewDigital = ['coils','discrete_inputs'].includes(r.source_area);
+      let flagsCell;
+      if (!viewDigital) {
+        flagsCell = '<span style="color:#D1D5DB">—</span>';
+      } else {
+        const parts = [];
+        if (r.invert)    parts.push('<span style="background:#FEF3C7;color:#B45309;font-size:.72rem;padding:1px 5px;border-radius:3px;font-weight:500">invert</span>');
+        if (r.addinvert) parts.push('<span style="background:#EDE9FE;color:#7C3AED;font-size:.72rem;padding:1px 5px;border-radius:3px;font-weight:500">addinvert</span>');
+        flagsCell = parts.length ? parts.join(' ') : '<span style="color:#D1D5DB">—</span>';
       }
       return `<tr>
         <td>${escapeHtml(r.id)}</td>
@@ -3230,6 +3252,7 @@ function renderDeviceWorkspace() {
         <td>${escapeHtml(String(r.source_address ?? '—'))}</td>
         <td>${escapeHtml(String(r.source_count ?? '—'))}</td>
         <td>${escapeHtml(String(r.poll_interval ?? '—'))} ms</td>
+        <td>${flagsCell}</td>
         <td style="white-space:nowrap">
           <button class="btn-edit ws-edit-read" data-read-id="${escapeHtml(r.id)}">✎</button>
           <button class="btn-danger ws-del-read" data-read-id="${escapeHtml(r.id)}">✕</button>
@@ -3253,7 +3276,7 @@ function renderDeviceWorkspace() {
     <div class="reads-table-wrap">
       <table>
         <thead><tr>
-          <th>ID</th><th>Name</th><th>Area</th><th>Address</th><th>Count</th><th>Poll</th><th></th>
+          <th>ID</th><th>Name</th><th>Area</th><th>Address</th><th>Count</th><th>Poll</th><th>Flags</th><th></th>
         </tr></thead>
         <tbody>${readsBody}</tbody>
       </table>
@@ -3280,6 +3303,19 @@ function renderDeviceWorkspace() {
           <div class="field"><label>Source Address</label><input id="wr-src-addr" type="number" value="0" title="Starting register address (0-based)" required /></div>
           <div class="field"><label>Count</label><input id="wr-count" type="number" value="1" min="1" title="Number of registers to read" required /></div>
           <div class="field"><label>Poll Interval (ms)</label><input id="wr-poll" type="number" value="2000" min="100" title="How often to poll the device in milliseconds" required /></div>
+        </div>
+        <div id="wr-flags-row" class="row" style="display:none">
+          <div class="field">
+            <label>Flags <span style="color:#9CA3AF;font-weight:400">(FC1/FC2 only)</span></label>
+            <div style="display:flex;gap:16px;align-items:center;margin-top:2px">
+              <label style="display:flex;align-items:center;gap:5px;cursor:pointer">
+                <input type="checkbox" id="wr-invert"> <span>invert</span>
+              </label>
+              <label style="display:flex;align-items:center;gap:5px;cursor:pointer">
+                <input type="checkbox" id="wr-addinvert"> <span>addinvert</span>
+              </label>
+            </div>
+          </div>
         </div>
         <div id="ws-read-banner" class="banner"></div>
         <div style="display:flex;gap:8px">
@@ -3410,12 +3446,17 @@ function renderDeviceWorkspace() {
     // Auto-generate a unique read ID for this device
     _pendingReadId = generateUniqueReadId(device.reads);
     document.getElementById('wr-id-display').textContent = _pendingReadId;
+    // Sync flags row visibility with current area selection
+    const wrArea = document.getElementById('wr-src-area').value;
+    document.getElementById('wr-flags-row').style.display =
+      ['coils','discrete_inputs'].includes(wrArea) ? '' : 'none';
   });
   document.getElementById('ws-btn-cancel-read').addEventListener('click', () => {
     document.getElementById('ws-add-read-panel').style.display = 'none';
     document.getElementById('ws-btn-show-add-read').style.display = '';
     document.getElementById('ws-read-form').reset();
     document.getElementById('wr-poll').value = '2000';
+    document.getElementById('wr-flags-row').style.display = 'none';
     _pendingReadId = null;
   });
 
@@ -3428,15 +3469,21 @@ function renderDeviceWorkspace() {
     if (!_pendingReadId || currentIds.has(_pendingReadId)) {
       _pendingReadId = generateUniqueReadId(device.reads);
     }
+    const wrArea = document.getElementById('wr-src-area').value;
+    const wrDigital = ['coils','discrete_inputs'].includes(wrArea);
     const payload = {
       device_id: device.id,
       read: {
         id:             _pendingReadId,
         name:           document.getElementById('wr-name').value.trim(),
-        source_area:    document.getElementById('wr-src-area').value,
+        source_area:    wrArea,
         source_address: Number(document.getElementById('wr-src-addr').value),
         source_count:   Number(document.getElementById('wr-count').value),
         poll_interval:  Number(document.getElementById('wr-poll').value),
+        ...(wrDigital ? {
+          invert:    document.getElementById('wr-invert').checked,
+          addinvert: document.getElementById('wr-addinvert').checked,
+        } : {}),
       }
     };
     const { ok, data } = await api('POST', '/read', payload);
@@ -3448,6 +3495,26 @@ function renderDeviceWorkspace() {
       banner.textContent = `✗ ${data.error || 'Unknown error'}`;
       banner.className = 'banner show err';
     }
+  });
+
+  // Add-read form: show/hide flags row when area changes
+  document.getElementById('wr-src-area').addEventListener('change', () => {
+    const isDigital = ['coils','discrete_inputs'].includes(document.getElementById('wr-src-area').value);
+    document.getElementById('wr-flags-row').style.display = isDigital ? '' : 'none';
+    if (!isDigital) {
+      document.getElementById('wr-invert').checked = false;
+      document.getElementById('wr-addinvert').checked = false;
+    }
+  });
+
+  // Add-read form: mutual exclusion between invert and addinvert
+  document.getElementById('wr-invert').addEventListener('change', () => {
+    if (document.getElementById('wr-invert').checked)
+      document.getElementById('wr-addinvert').checked = false;
+  });
+  document.getElementById('wr-addinvert').addEventListener('change', () => {
+    if (document.getElementById('wr-addinvert').checked)
+      document.getElementById('wr-invert').checked = false;
   });
 
   // Inline read edit: enter edit mode
@@ -3472,13 +3539,17 @@ function renderDeviceWorkspace() {
       const readId = btn.dataset.readId;
       const banner = document.getElementById('ws-read-inline-error');
       banner.className = 'banner';
+      const ireArea = document.getElementById('ire-area').value;
+      const ireDigital = ['coils','discrete_inputs'].includes(ireArea);
       const payload = {
         read: {
           name:           document.getElementById('ire-name').value.trim(),
-          source_area:    document.getElementById('ire-area').value,
+          source_area:    ireArea,
           source_address: Number(document.getElementById('ire-addr').value),
           source_count:   Number(document.getElementById('ire-count').value),
           poll_interval:  Number(document.getElementById('ire-poll').value),
+          invert:    ireDigital ? document.getElementById('ire-invert').checked    : false,
+          addinvert: ireDigital ? document.getElementById('ire-addinvert').checked : false,
         }
       };
       const { ok, data } = await api('PUT', `/read/${encodeURIComponent(device.id)}/${encodeURIComponent(readId)}`, payload);
@@ -3492,6 +3563,36 @@ function renderDeviceWorkspace() {
       }
     });
   });
+
+  // Inline read edit: area change → show/hide flags
+  const ireAreaEl = document.getElementById('ire-area');
+  if (ireAreaEl) {
+    ireAreaEl.addEventListener('change', () => {
+      const isDigital = ['coils','discrete_inputs'].includes(ireAreaEl.value);
+      const wrap = document.getElementById('ire-flags-wrap');
+      const na   = document.getElementById('ire-flags-na');
+      if (wrap) wrap.style.display = isDigital ? '' : 'none';
+      if (na)   na.style.display   = isDigital ? 'none' : '';
+      if (!isDigital) {
+        const inv = document.getElementById('ire-invert');
+        const addinv = document.getElementById('ire-addinvert');
+        if (inv)    inv.checked = false;
+        if (addinv) addinv.checked = false;
+      }
+    });
+  }
+
+  // Inline read edit: mutual exclusion between invert and addinvert
+  const ireInvert = document.getElementById('ire-invert');
+  const ireAddinvert = document.getElementById('ire-addinvert');
+  if (ireInvert && ireAddinvert) {
+    ireInvert.addEventListener('change', () => {
+      if (ireInvert.checked) ireAddinvert.checked = false;
+    });
+    ireAddinvert.addEventListener('change', () => {
+      if (ireAddinvert.checked) ireInvert.checked = false;
+    });
+  }
 
   el.querySelectorAll('.ws-del-read').forEach(btn => {
     btn.addEventListener('click', () => deleteRead(device.id, btn.dataset.readId));

@@ -1715,6 +1715,18 @@ app.put('/read/:deviceId/:readId', (req, res) => {
         if (read.source_address !== undefined) existing.source_address = Number(read.source_address);
         if (read.source_count !== undefined) existing.source_count = Number(read.source_count);
         if (read.poll_interval !== undefined) existing.poll_interval = Number(read.poll_interval);
+        // invert / addinvert are only valid for FC1/FC2 (coils / discrete_inputs)
+        const digitalAreas = new Set(['coils', 'discrete_inputs']);
+        if (digitalAreas.has(existing.source_area)) {
+            if (read.invert !== undefined)    existing.invert    = Boolean(read.invert);
+            if (read.addinvert !== undefined) existing.addinvert = Boolean(read.addinvert);
+            // enforce mutual exclusion
+            if (existing.invert && existing.addinvert) existing.addinvert = false;
+        } else {
+            // strip flags that are not applicable for FC3/FC4
+            delete existing.invert;
+            delete existing.addinvert;
+        }
         ensureTargetMemory(model, device);
         writeModel(model);
         scheduleCompile();
@@ -2028,6 +2040,17 @@ app.post('/config/global-import', rateLimit, (req, res) => {
         for (const device of importedModel.devices) {
             delete device.status_slot;
             delete device.status_unit_id;
+            // Silently fix reads where both invert and addinvert are true (invalid state):
+            // keep invert=true, set addinvert=false. Also strip flags from non-digital areas.
+            const _digitalAreas = new Set(['coils', 'discrete_inputs']);
+            for (const read of (device.reads || [])) {
+                if (!_digitalAreas.has(read.source_area)) {
+                    delete read.invert;
+                    delete read.addinvert;
+                } else if (read.invert && read.addinvert) {
+                    read.addinvert = false;
+                }
+            }
         }
 
         // Normalise optional top-level fields
