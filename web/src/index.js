@@ -1279,7 +1279,12 @@ app.get('/memory/reconcile', (req, res) => {
                     if (!configuredAreas.has(areaType)) continue; // already flagged as missing
                     const readStart = Number(read.source_address);
                     const readCount = Number(read.source_count) || 1;
-                    const readEnd = readStart + readCount - 1;
+                    // FC1 (coils) and FC2 (discrete_inputs/input_status) with addinvert=true
+                    // reserve double the address space — verify the full expanded footprint is covered.
+                    const effectiveReadCount = read.addinvert && (areaType === 'coils' || areaType === 'discrete_inputs' || areaType === 'input_status')
+                        ? readCount * 2
+                        : readCount;
+                    const readEnd = readStart + effectiveReadCount - 1;
                     const matchingAreas = (unit.areas || []).filter(a => a.type === areaType);
                     // A read is covered if any segment in any matching area fully contains it.
                     const covered = matchingAreas.some(a =>
