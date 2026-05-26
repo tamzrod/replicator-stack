@@ -235,7 +235,7 @@ function coalesceOverlappingSegments(segments) {
     if (!Array.isArray(segments) || segments.length === 0) return [];
     const sorted = segments
         .map(s => ({ start: Number(s.start), count: Number(s.count) }))
-        .filter(s => Number.isFinite(s.start) && Number.isFinite(s.count) && s.count > 0)
+        .filter(s => Number.isFinite(s.start) && Number.isFinite(s.count) && s.start >= 0 && s.count > 0)
         .sort((a, b) => a.start - b.start);
     if (sorted.length <= 1) return sorted;
 
