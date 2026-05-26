@@ -84,6 +84,11 @@ function toReplicatorYaml(model, excludedPortNums = new Set()) {
             lines.push(`        - fc: ${fc}`);
             lines.push(`          address: ${read.source_address}`);
             lines.push(`          quantity: ${read.source_count}`);
+            // invert / addinvert are only valid for FC1 (coils) and FC2 (discrete inputs)
+            if (fc === 1 || fc === 2) {
+                if (read.invert)    lines.push(`          invert: true`);
+                if (read.addinvert) lines.push(`          addinvert: true`);
+            }
         }
         lines.push(`      targets:`);
         lines.push(`        - id: ${device.unitId}`);
