@@ -2947,7 +2947,7 @@ function _snapshotDevice(deviceMap, deviceId) {
   const d = deviceMap.get(deviceId);
   if (!d) return '__not_found__';
   const reads = (d.reads || []).map(r =>
-    `${r.id}:${r.name || ''}:${r.source_area}:${r.source_address}:${r.source_count}:${r.poll_interval}`
+    `${r.id}:${r.name || ''}:${r.source_area}:${r.source_address}:${r.source_count}:${r.poll_interval}:${r.invert === true ? 1 : 0}`
   ).join(',');
   return [
     d.id, d.name || '', d.groupId || '',
@@ -3126,6 +3126,22 @@ function generateUniqueReadId(reads) {
   while (existingIds.has(`read_${n}`)) n++;
   return `read_${n}`;
 }
+
+function readAreaSupportsInvert(area) {
+  return area === 'coils' || area === 'discrete_inputs';
+}
+
+function syncReadInvertControl(areaInput, invertInput, hintEl) {
+  if (!areaInput || !invertInput) return;
+  const enabled = readAreaSupportsInvert(areaInput.value);
+  invertInput.disabled = !enabled;
+  if (hintEl) {
+    hintEl.textContent = enabled
+      ? 'Applies after the Modbus read.'
+      : 'Ignored for register reads.';
+  }
+}
+
 function renderDeviceWorkspace() {
   console.debug('[canonical:%s] renderDeviceWorkspace', _canonicalVersion);
   const el = document.getElementById('device-workspace');
@@ -3204,7 +3220,7 @@ function renderDeviceWorkspace() {
   // ── B. READ Section (inline editing per row) ───────────────────────
   let readsBody;
   if (reads.length === 0) {
-    readsBody = `<tr><td colspan="7"><div role="alert" class="empty-state" style="padding:16px 0;color:#EF4444;font-weight:500">⚠ At least one read is required for this device — add a read below.</div></td></tr>`;
+    readsBody = `<tr><td colspan="8"><div role="alert" class="empty-state" style="padding:16px 0;color:#EF4444;font-weight:500">⚠ At least one read is required for this device — add a read below.</div></td></tr>`;
   } else {
     readsBody = reads.map(r => {
       if (r.id === _editingReadId) {
@@ -3217,6 +3233,13 @@ function renderDeviceWorkspace() {
           <td><input class="inline-input" type="number" id="ire-addr" value="${escapeHtml(String(r.source_address ?? 0))}" style="width:70px" /></td>
           <td><input class="inline-input" type="number" id="ire-count" value="${escapeHtml(String(r.source_count ?? 1))}" min="1" style="width:60px" /></td>
           <td><input class="inline-input" type="number" id="ire-poll" value="${escapeHtml(String(r.poll_interval ?? 2000))}" min="100" style="width:80px" /></td>
+          <td>
+            <label style="display:flex;align-items:center;gap:6px">
+              <input type="checkbox" id="ire-invert"${r.invert === true ? ' checked' : ''} />
+              <span>Invert</span>
+            </label>
+            <div id="ire-invert-hint" style="font-size:.72rem;color:#9CA3AF;margin-top:4px"></div>
+          </td>
           <td style="white-space:nowrap">
             <button class="btn-save-inline ws-save-read" data-read-id="${escapeHtml(r.id)}">Save</button>
             <button class="btn-cancel-inline ws-cancel-read">Cancel</button>
@@ -3230,6 +3253,7 @@ function renderDeviceWorkspace() {
         <td>${escapeHtml(String(r.source_address ?? '—'))}</td>
         <td>${escapeHtml(String(r.source_count ?? '—'))}</td>
         <td>${escapeHtml(String(r.poll_interval ?? '—'))} ms</td>
+        <td>${readAreaSupportsInvert(r.source_area) ? (r.invert === true ? 'Yes' : 'No') : '<span style="color:#D1D5DB">—</span>'}</td>
         <td style="white-space:nowrap">
           <button class="btn-edit ws-edit-read" data-read-id="${escapeHtml(r.id)}">✎</button>
           <button class="btn-danger ws-del-read" data-read-id="${escapeHtml(r.id)}">✕</button>
@@ -3253,7 +3277,7 @@ function renderDeviceWorkspace() {
     <div class="reads-table-wrap">
       <table>
         <thead><tr>
-          <th>ID</th><th>Name</th><th>Area</th><th>Address</th><th>Count</th><th>Poll</th><th></th>
+          <th>ID</th><th>Name</th><th>Area</th><th>Address</th><th>Count</th><th>Poll</th><th>Invert</th><th></th>
         </tr></thead>
         <tbody>${readsBody}</tbody>
       </table>
@@ -3280,6 +3304,14 @@ function renderDeviceWorkspace() {
           <div class="field"><label>Source Address</label><input id="wr-src-addr" type="number" value="0" title="Starting register address (0-based)" required /></div>
           <div class="field"><label>Count</label><input id="wr-count" type="number" value="1" min="1" title="Number of registers to read" required /></div>
           <div class="field"><label>Poll Interval (ms)</label><input id="wr-poll" type="number" value="2000" min="100" title="How often to poll the device in milliseconds" required /></div>
+          <div class="field">
+            <label>Invert</label>
+            <label style="display:flex;align-items:center;gap:6px">
+              <input id="wr-invert" type="checkbox" />
+              <span>Invert bit values</span>
+            </label>
+            <div id="wr-invert-hint" style="font-size:.78rem;color:#9CA3AF;margin-top:4px"></div>
+          </div>
         </div>
         <div id="ws-read-banner" class="banner"></div>
         <div style="display:flex;gap:8px">
@@ -3416,8 +3448,19 @@ function renderDeviceWorkspace() {
     document.getElementById('ws-btn-show-add-read').style.display = '';
     document.getElementById('ws-read-form').reset();
     document.getElementById('wr-poll').value = '2000';
+    syncReadInvertControl(
+      document.getElementById('wr-src-area'),
+      document.getElementById('wr-invert'),
+      document.getElementById('wr-invert-hint')
+    );
     _pendingReadId = null;
   });
+
+  const addAreaInput = document.getElementById('wr-src-area');
+  const addInvertInput = document.getElementById('wr-invert');
+  const addInvertHint = document.getElementById('wr-invert-hint');
+  addAreaInput.addEventListener('change', () => syncReadInvertControl(addAreaInput, addInvertInput, addInvertHint));
+  syncReadInvertControl(addAreaInput, addInvertInput, addInvertHint);
 
   document.getElementById('ws-read-form').addEventListener('submit', async e => {
     e.preventDefault();
@@ -3428,16 +3471,21 @@ function renderDeviceWorkspace() {
     if (!_pendingReadId || currentIds.has(_pendingReadId)) {
       _pendingReadId = generateUniqueReadId(device.reads);
     }
+    const sourceArea = document.getElementById('wr-src-area').value;
+    const readPayload = {
+      id:             _pendingReadId,
+      name:           document.getElementById('wr-name').value.trim(),
+      source_area:    sourceArea,
+      source_address: Number(document.getElementById('wr-src-addr').value),
+      source_count:   Number(document.getElementById('wr-count').value),
+      poll_interval:  Number(document.getElementById('wr-poll').value),
+    };
+    if (readAreaSupportsInvert(sourceArea)) {
+      readPayload.invert = addInvertInput.checked;
+    }
     const payload = {
       device_id: device.id,
-      read: {
-        id:             _pendingReadId,
-        name:           document.getElementById('wr-name').value.trim(),
-        source_area:    document.getElementById('wr-src-area').value,
-        source_address: Number(document.getElementById('wr-src-addr').value),
-        source_count:   Number(document.getElementById('wr-count').value),
-        poll_interval:  Number(document.getElementById('wr-poll').value),
-      }
+      read: readPayload
     };
     const { ok, data } = await api('POST', '/read', payload);
     if (ok) {
@@ -3472,14 +3520,19 @@ function renderDeviceWorkspace() {
       const readId = btn.dataset.readId;
       const banner = document.getElementById('ws-read-inline-error');
       banner.className = 'banner';
+      const editArea = document.getElementById('ire-area').value;
+      const readPayload = {
+        name:           document.getElementById('ire-name').value.trim(),
+        source_area:    editArea,
+        source_address: Number(document.getElementById('ire-addr').value),
+        source_count:   Number(document.getElementById('ire-count').value),
+        poll_interval:  Number(document.getElementById('ire-poll').value),
+      };
+      if (readAreaSupportsInvert(editArea)) {
+        readPayload.invert = document.getElementById('ire-invert').checked;
+      }
       const payload = {
-        read: {
-          name:           document.getElementById('ire-name').value.trim(),
-          source_area:    document.getElementById('ire-area').value,
-          source_address: Number(document.getElementById('ire-addr').value),
-          source_count:   Number(document.getElementById('ire-count').value),
-          poll_interval:  Number(document.getElementById('ire-poll').value),
-        }
+        read: readPayload
       };
       const { ok, data } = await api('PUT', `/read/${encodeURIComponent(device.id)}/${encodeURIComponent(readId)}`, payload);
       if (ok) {
@@ -3496,6 +3549,14 @@ function renderDeviceWorkspace() {
   el.querySelectorAll('.ws-del-read').forEach(btn => {
     btn.addEventListener('click', () => deleteRead(device.id, btn.dataset.readId));
   });
+
+  const editAreaInput = document.getElementById('ire-area');
+  const editInvertInput = document.getElementById('ire-invert');
+  const editInvertHint = document.getElementById('ire-invert-hint');
+  if (editAreaInput && editInvertInput) {
+    editAreaInput.addEventListener('change', () => syncReadInvertControl(editAreaInput, editInvertInput, editInvertHint));
+    syncReadInvertControl(editAreaInput, editInvertInput, editInvertHint);
+  }
 
   // CSV Export
   document.getElementById('ws-btn-export-reads-csv').addEventListener('click', () => {
@@ -7145,6 +7206,7 @@ async function generateReport() {
                   <td><code>${esc(r.source_area || '—')}</code></td>
                   <td>${esc(r.source_address ?? '—')}</td>
                   <td>${esc(r.source_count ?? '—')}</td>
+                  <td>${readAreaSupportsInvert(r.source_area) ? (r.invert === true ? 'Yes' : 'No') : '—'}</td>
                   <td><code>${target}</code></td>
                 </tr>`;
               }).join('');
@@ -7152,7 +7214,7 @@ async function generateReport() {
               const pollTable = reads.length === 0
                 ? '<p class="note">No reads configured.</p>'
                 : `<table>
-                    <thead><tr><th>Read Name</th><th>Area Type</th><th>Address</th><th>Count</th><th>Target</th></tr></thead>
+                    <thead><tr><th>Read Name</th><th>Area Type</th><th>Address</th><th>Count</th><th>Invert</th><th>Target</th></tr></thead>
                     <tbody>${pollRows}</tbody>
                   </table>`;
 

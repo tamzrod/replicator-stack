@@ -36,6 +36,7 @@ replicator:
         - fc: <function_code>         # derived from block.source_area
           address: <block.source_address>
           quantity: <block.source_count>
+          invert: true                # optional; emitted only for coils/discrete_inputs when enabled
       targets:
         - id: <device.unitId>
           endpoint: "<target.endpoint>"
@@ -90,6 +91,7 @@ Each area is represented as a single scalar `start`/`count` range. When a unit h
 | `reads[].fc` | Modbus FC from `block.source_area` (see table below) |
 | `reads[].address` | `block.source_address` |
 | `reads[].quantity` | `block.source_count` |
+| `reads[].invert` | Optional `true` only for `coils` / `discrete_inputs` reads when inversion is enabled; omitted otherwise |
 | `targets[].id` | `device.unitId` |
 | `targets[].endpoint` | `target.endpoint` |
 | `targets[].unit_id` | `device.unitId` |
@@ -106,6 +108,8 @@ Each area is represented as a single scalar `start`/`count` range. When a unit h
 | `coils` | 1 |
 | `input_registers` | 4 |
 | `discrete_inputs` | 2 |
+
+`invert` is a digital-only flag. The compiler emits `invert: true` only for `coils` and `discrete_inputs`; register reads do not get an `invert` key.
 
 ### MMA Unit
 

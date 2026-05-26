@@ -17,6 +17,10 @@
 #   FC3 (Holding Registers)
 #   Power Block  → start 999  quantity 30
 #   Energy Block → start 1099 quantity 16
+#
+# Optional digital read flag:
+#   FC1/FC2 reads may add `invert: true`
+#   FC3/FC4 reads ignore `invert`
 # ============================================================
 
 replicator:

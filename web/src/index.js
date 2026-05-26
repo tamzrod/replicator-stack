@@ -17,6 +17,19 @@ const GIT_SHA = process.env.GIT_SHA || null;
 const VALID_AREA_TYPES = new Set(['holding_registers', 'input_registers', 'coils', 'discrete_inputs']);
 const VALID_FC_SET = new Set([1, 2, 3, 4, 5, 6, 15, 16]);
 
+function coerceReadInvert(value) {
+    if (value === undefined || value === null) return false;
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'number') return value !== 0;
+    if (typeof value === 'string') {
+        const normalized = value.trim().toLowerCase();
+        if (!normalized) return false;
+        if (['true', '1', 'yes', 'y', 'on'].includes(normalized)) return true;
+        if (['false', '0', 'no', 'n', 'off'].includes(normalized)) return false;
+    }
+    return Boolean(value);
+}
+
 // ---------------------------------------------------------------------------
 // Access Events — constants, defaults, and validation
 // ---------------------------------------------------------------------------
@@ -1594,6 +1607,8 @@ app.post('/read', (req, res) => {
         // Apply defaults for target fields — target is always MMA holding registers at address 0
         if (!read.target_area) read.target_area = 'holding_registers';
         if (read.target_address == null) read.target_address = 0;
+        if (coerceReadInvert(read.invert)) read.invert = true;
+        else delete read.invert;
 
         for (const existing of device.reads) {
             if (readsOverlap(existing, read)) {
@@ -1715,6 +1730,10 @@ app.put('/read/:deviceId/:readId', (req, res) => {
         if (read.source_address !== undefined) existing.source_address = Number(read.source_address);
         if (read.source_count !== undefined) existing.source_count = Number(read.source_count);
         if (read.poll_interval !== undefined) existing.poll_interval = Number(read.poll_interval);
+        if (read.invert !== undefined) {
+            if (coerceReadInvert(read.invert)) existing.invert = true;
+            else delete existing.invert;
+        }
         ensureTargetMemory(model, device);
         writeModel(model);
         scheduleCompile();
@@ -1758,13 +1777,14 @@ app.get('/read/:deviceId/export-csv', (req, res) => {
             return res.status(404).json({ error: `Device ${deviceId} not found` });
         }
         const reads = device.reads || [];
-        const header = 'name,source_area,source_address,count,poll_interval_ms';
+        const header = 'name,source_area,source_address,count,poll_interval_ms,invert';
         const rows = reads.map(r => [
             csvCell(r.name || ''),
             csvCell(r.source_area || ''),
             r.source_address ?? 0,
             r.source_count ?? 1,
             r.poll_interval ?? 1000,
+            r.invert === true ? 'true' : 'false',
         ].join(','));
         const csv = [header, ...rows].join('\r\n');
         const filename = `reads_${deviceId}.csv`;
@@ -1810,6 +1830,7 @@ app.post('/read/:deviceId/import-csv', express.text({ type: 'text/plain' }), (re
             source_address:  header.indexOf('source_address'),
             count:           header.indexOf('count'),
             poll_interval_ms: header.indexOf('poll_interval_ms'),
+            invert:          header.indexOf('invert'),
         };
 
         const imported = [];
@@ -1822,6 +1843,7 @@ app.post('/read/:deviceId/import-csv', express.text({ type: 'text/plain' }), (re
             const source_address = Number(cols[colIdx.source_address]);
             const source_count  = Number(cols[colIdx.count]);
             const poll_interval = Number(cols[colIdx.poll_interval_ms]);
+            const invert = colIdx.invert >= 0 ? coerceReadInvert(cols[colIdx.invert]) : false;
 
             if (!VALID_AREA_TYPES.has(source_area)) {
                 errors.push(`Row ${i + 1}: invalid source_area "${source_area}"`);
@@ -1851,6 +1873,7 @@ app.post('/read/:deviceId/import-csv', express.text({ type: 'text/plain' }), (re
                 target_area:    'holding_registers',
                 target_address: 0,
             };
+            if (invert) newRead.invert = true;
 
             const overlap = device.reads.find(r => readsOverlap(r, newRead));
             if (overlap) {

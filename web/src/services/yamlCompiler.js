@@ -35,6 +35,8 @@ const AREA_TO_FC = {
     input_status: 2,
 };
 
+const DIGITAL_SOURCE_AREAS = new Set(['coils', 'discrete_inputs', 'input_status']);
+
 // All valid Modbus function codes across all area types.
 // "Allow-all" always includes every FC — MMA enforces area-specific validity at runtime.
 const ALL_VALID_FCS = [1, 2, 3, 4, 5, 6, 15, 16];
@@ -80,10 +82,14 @@ function toReplicatorYaml(model, excludedPortNums = new Set()) {
         }
         lines.push(`      reads:`);
         for (const read of deviceReads) {
-            const fc = AREA_TO_FC[read.source_area] || 3;
+            const sourceArea = read.source_area;
+            const fc = AREA_TO_FC[sourceArea] || 3;
             lines.push(`        - fc: ${fc}`);
             lines.push(`          address: ${read.source_address}`);
             lines.push(`          quantity: ${read.source_count}`);
+            if (DIGITAL_SOURCE_AREAS.has(sourceArea) && read.invert === true) {
+                lines.push(`          invert: true`);
+            }
         }
         lines.push(`      targets:`);
         lines.push(`        - id: ${device.unitId}`);
