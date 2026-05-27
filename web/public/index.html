@@ -8079,8 +8079,10 @@ function _aeAppendEvent(evt) {
     if (evt.status === 'allowed') prev.allowed++;
     else prev.denied++;
     prev.lastSeen = new Date();
+    // Delete-then-set to move this IP to the newest position (LRU order)
+    _aeSeenIps.delete(ip);
     _aeSeenIps.set(ip, prev);
-    // Enforce limit: drop oldest entry when over limit
+    // Enforce limit: drop the least-recently-seen entry (first in insertion order)
     if (_aeSeenIps.size > AE_SEEN_IPS_LIMIT) {
       _aeSeenIps.delete(_aeSeenIps.keys().next().value);
     }
@@ -8191,7 +8193,7 @@ function _aeRenderSeenIps() {
     tr.appendChild(tdDeny);
 
     const tdLast = document.createElement('td');
-    tdLast.textContent = info.lastSeen ? info.lastSeen.toISOString().replace('T', ' ').slice(0, 19) : '—';
+    tdLast.textContent = info.lastSeen ? info.lastSeen.toISOString().replace('T', ' ').slice(0, 19) + ' UTC' : '—';
     tr.appendChild(tdLast);
 
     const tdAct = document.createElement('td');
@@ -8350,7 +8352,7 @@ async function _aeSubmitIpDialog() {
   if (submitBtn) submitBtn.disabled = false;
 
   if (ok) {
-    banner.textContent = `✓ IP ${ip} added to policy. Don't forget to Save to apply.`;
+    banner.textContent = `✓ IP ${ip} added to policy. Remember to Save to apply changes.`;
     banner.className = 'ae-dialog-banner ok';
     setDirty(true);
     // Refresh model cache and close after a short delay
@@ -8359,7 +8361,7 @@ async function _aeSubmitIpDialog() {
       if (dlg) dlg.close();
     }, 1500);
   } else {
-    banner.textContent = `✗ ${(data && data.error) || 'Save failed'}`;
+    banner.textContent = `✗ ${(data && data.error) || 'Failed to update policy'}`;
     banner.className = 'ae-dialog-banner err';
   }
 }
