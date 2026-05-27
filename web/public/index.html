@@ -1843,6 +1843,111 @@
     .ae-toggle input:checked + .ae-toggle-slider { background: #22C55E; }
     .ae-toggle input:checked + .ae-toggle-slider::before { transform: translateX(18px); }
     .ae-toggle-label { font-size: .85rem; color: #374151; font-weight: 500; }
+
+    /* ── Recent Source IPs panel ───────────────────────────────────── */
+    .ae-recent-card {
+      background: #fff; border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.07); overflow: hidden;
+    }
+    .ae-recent-header {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 16px; border-bottom: 1px solid #E5E7EB; background: #F9FAFB;
+    }
+    .ae-recent-header h2 { font-size: .88rem; font-weight: 700; color: #0B3C5D; margin: 0; flex: 1; }
+    .ae-ip-count-badge {
+      font-size: .72rem; font-weight: 700; padding: 2px 9px;
+      border-radius: 20px; background: #EFF6FF; color: #1D4ED8;
+    }
+    .ae-recent-body { padding: 0; }
+    .ae-recent-empty {
+      padding: 20px; text-align: center;
+      font-size: .8rem; color: #9CA3AF; font-style: italic;
+    }
+    .ae-recent-table { width: 100%; border-collapse: collapse; font-size: .75rem; }
+    .ae-recent-table th {
+      text-align: left; padding: 6px 12px;
+      background: #F3F4F6; border-bottom: 1px solid #E5E7EB;
+      font-weight: 600; font-size: .68rem; color: #6B7280;
+      text-transform: uppercase; letter-spacing: .04em; white-space: nowrap;
+    }
+    .ae-recent-table td {
+      padding: 5px 12px; border-bottom: 1px solid #F3F4F6;
+      vertical-align: middle; white-space: nowrap;
+      font-family: 'Courier New', Courier, monospace; font-size: .73rem;
+    }
+    .ae-recent-table tr:last-child td { border-bottom: none; }
+    .ae-recent-ip-cell { font-weight: 600; color: #1E40AF; }
+    .ae-recent-allowed { color: #166534; font-weight: 700; }
+    .ae-recent-denied  { color: #991B1B; font-weight: 700; }
+
+    /* ── IP chip in event table ────────────────────────────────────── */
+    .ae-ip-chip {
+      display: inline-block; cursor: pointer;
+      padding: 1px 7px; border-radius: 12px;
+      border: 1px solid #BFDBFE; background: #EFF6FF;
+      color: #1D4ED8; font-weight: 600; font-size: .72rem;
+      transition: background .12s, border-color .12s;
+      font-family: 'Courier New', Courier, monospace;
+    }
+    .ae-ip-chip:hover { background: #DBEAFE; border-color: #93C5FD; }
+    .ae-ip-chip-denied { border-color: #FECACA; background: #FFF5F5; color: #B91C1C; }
+    .ae-ip-chip-denied:hover { background: #FEE2E2; border-color: #FCA5A5; }
+
+    /* ── Quick Allow btn in recent IPs table ───────────────────────── */
+    .ae-btn-quick-allow {
+      font-size: .7rem; font-weight: 600; padding: 2px 8px;
+      border-radius: 4px; border: none; cursor: pointer;
+      background: #DCFCE7; color: #166534; transition: background .12s;
+    }
+    .ae-btn-quick-allow:hover { background: #BBF7D0; }
+
+    /* ── IP Quick-Action dialog ────────────────────────────────────── */
+    #ae-ip-action-dialog {
+      width: 420px; max-width: 95vw;
+    }
+    .ae-dialog-body { padding: 20px 22px 16px; }
+    .ae-dialog-title {
+      font-size: 1rem; font-weight: 700; color: #0B3C5D; margin: 0 0 4px;
+    }
+    .ae-dialog-subtitle {
+      font-size: .8rem; color: #6B7280; margin: 0 0 16px;
+    }
+    .ae-dialog-ip-badge {
+      display: inline-block; font-family: 'Courier New', Courier, monospace;
+      font-weight: 700; font-size: .95rem; color: #1D4ED8;
+      background: #EFF6FF; border: 1px solid #BFDBFE;
+      border-radius: 6px; padding: 3px 10px; margin-bottom: 14px;
+    }
+    .ae-dialog-field { margin-bottom: 12px; }
+    .ae-dialog-field label {
+      display: block; font-size: .78rem; font-weight: 600; color: #374151; margin-bottom: 4px;
+    }
+    .ae-dialog-select, .ae-dialog-input {
+      width: 100%; font-size: .83rem; padding: 6px 9px;
+      border: 1px solid #D1D5DB; border-radius: 5px; color: #374151;
+    }
+    .ae-dialog-select:focus, .ae-dialog-input:focus {
+      outline: none; border-color: #145DA0; box-shadow: 0 0 0 3px rgba(20,93,160,.1);
+    }
+    .ae-dialog-fc-grid {
+      display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px;
+    }
+    .ae-dialog-fc-label {
+      font-size: .72rem; font-weight: 600; cursor: pointer;
+      display: flex; align-items: center; gap: 3px;
+      color: #374151;
+    }
+    .ae-dialog-hint { font-size: .71rem; color: #6B7280; margin-top: 3px; }
+    .ae-dialog-banner {
+      font-size: .8rem; font-weight: 500; min-height: 1.4em;
+      margin-top: 4px; padding: 0;
+    }
+    .ae-dialog-banner.ok  { color: #166534; }
+    .ae-dialog-banner.err { color: #991B1B; }
+    .ae-dialog-footer {
+      display: flex; gap: 8px; justify-content: flex-end;
+      padding: 12px 22px; border-top: 1px solid #E5E7EB; background: #F9FAFB;
+    }
   </style>
 </head>
 <body>
@@ -2199,6 +2304,30 @@
         </table>
       </div>
     </div>
+
+    <!-- Recent Source IPs panel -->
+    <div class="ae-recent-card">
+      <div class="ae-recent-header">
+        <h2>🌐 Recent Source IPs</h2>
+        <span class="ae-ip-count-badge" id="ae-ip-count-badge">0 / 50</span>
+        <button class="btn-log-clear" id="ae-btn-flush-ips" title="Clear the recent IPs list">🗑 Flush</button>
+      </div>
+      <div class="ae-recent-body" id="ae-recent-ips-body">
+        <div class="ae-recent-empty" id="ae-recent-ips-empty">No source IPs seen yet</div>
+        <table class="ae-recent-table" id="ae-recent-ips-table" style="display:none">
+          <thead>
+            <tr>
+              <th>Source IP</th>
+              <th>Allowed</th>
+              <th>Denied</th>
+              <th>Last Seen</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="ae-recent-ips-tbody"></tbody>
+        </table>
+      </div>
+    </div>
   </div>
 
   <!-- Settings Panel -->
@@ -2345,6 +2474,57 @@
   </div>
 
 </div><!-- #access-events-tab-container -->
+
+<!-- ── IP Quick-Allow Dialog ──────────────────────────────────────── -->
+<dialog id="ae-ip-action-dialog" aria-labelledby="ae-dlg-title" aria-modal="true">
+  <div class="ae-dialog-body">
+    <p class="ae-dialog-title" id="ae-dlg-title">🛡 Add IP to Allow Policy</p>
+    <p class="ae-dialog-subtitle">Select a memory unit and rule to add this IP to its allow list.</p>
+    <div class="ae-dialog-ip-badge" id="ae-dlg-ip">—</div>
+
+    <div class="ae-dialog-field">
+      <label for="ae-dlg-port">Memory Port</label>
+      <select id="ae-dlg-port" class="ae-dialog-select">
+        <option value="">— select port —</option>
+      </select>
+    </div>
+    <div class="ae-dialog-field">
+      <label for="ae-dlg-unit">Unit</label>
+      <select id="ae-dlg-unit" class="ae-dialog-select">
+        <option value="">— select unit —</option>
+      </select>
+    </div>
+    <div class="ae-dialog-field">
+      <label for="ae-dlg-rule">Rule</label>
+      <select id="ae-dlg-rule" class="ae-dialog-select">
+        <option value="__new__">+ Create new rule…</option>
+      </select>
+    </div>
+    <div class="ae-dialog-field" id="ae-dlg-rule-id-row">
+      <label for="ae-dlg-rule-id">New Rule ID</label>
+      <input id="ae-dlg-rule-id" class="ae-dialog-input" type="text" placeholder="e.g. allow-plc" />
+    </div>
+    <div class="ae-dialog-field">
+      <label>Function Codes <span class="ae-dialog-hint" style="display:inline">(for new rule; existing rule FCs are kept)</span></label>
+      <div class="ae-dialog-fc-grid" id="ae-dlg-fc-grid">
+        <label class="ae-dialog-fc-label"><input type="checkbox" value="1"  checked> FC1</label>
+        <label class="ae-dialog-fc-label"><input type="checkbox" value="2"  checked> FC2</label>
+        <label class="ae-dialog-fc-label"><input type="checkbox" value="3"  checked> FC3</label>
+        <label class="ae-dialog-fc-label"><input type="checkbox" value="4"  checked> FC4</label>
+        <label class="ae-dialog-fc-label"><input type="checkbox" value="5"  checked> FC5</label>
+        <label class="ae-dialog-fc-label"><input type="checkbox" value="6"  checked> FC6</label>
+        <label class="ae-dialog-fc-label"><input type="checkbox" value="15" checked> FC15</label>
+        <label class="ae-dialog-fc-label"><input type="checkbox" value="16" checked> FC16</label>
+      </div>
+      <div class="ae-dialog-hint">Only used when creating a new rule</div>
+    </div>
+    <div class="ae-dialog-banner" id="ae-dlg-banner"></div>
+  </div>
+  <div class="ae-dialog-footer">
+    <button type="button" class="btn-refresh" id="ae-dlg-cancel">Cancel</button>
+    <button type="button" class="btn-primary" id="ae-dlg-submit">Add to Allow List</button>
+  </div>
+</dialog>
 
 <!-- ── Add / Edit Group Dialog ───────────────────────────────────── -->
 <dialog id="group-dialog">
@@ -7862,6 +8042,10 @@ let _aeDeniedCount = 0;
 let _aeAutoScroll = true;
 const AE_ROW_LIMIT = 500;
 const AE_SCROLL_THRESHOLD_PX = 40;
+const AE_SEEN_IPS_LIMIT = 50;
+
+// Map: ip → { allowed: number, denied: number, lastSeen: Date }
+const _aeSeenIps = new Map();
 
 function _aeSetConnStatus(text, state) {
   const dot = document.getElementById('ae-conn-dot');
@@ -7888,6 +8072,23 @@ function _aeAppendEvent(evt) {
   else _aeDeniedCount++;
   _aeUpdateCounters();
 
+  // Track seen IPs
+  const ip = evt.src_ip || '';
+  if (ip) {
+    const prev = _aeSeenIps.get(ip) || { allowed: 0, denied: 0, lastSeen: null };
+    if (evt.status === 'allowed') prev.allowed++;
+    else prev.denied++;
+    prev.lastSeen = new Date();
+    // Delete-then-set to move this IP to the newest position (LRU order)
+    _aeSeenIps.delete(ip);
+    _aeSeenIps.set(ip, prev);
+    // Enforce limit: drop the least-recently-seen entry (first in insertion order)
+    if (_aeSeenIps.size > AE_SEEN_IPS_LIMIT) {
+      _aeSeenIps.delete(_aeSeenIps.keys().next().value);
+    }
+    _aeRenderSeenIps();
+  }
+
   const tbody = document.getElementById('ae-event-tbody');
   if (!tbody) return;
 
@@ -7909,20 +8110,29 @@ function _aeAppendEvent(evt) {
   }
 
   const cells = [
-    [tsStr,                                          ''],
-    [evt.port != null        ? String(evt.port)        : '', ''],
-    [evt.unit != null        ? String(evt.unit)        : '', ''],
-    [evt.function_code != null ? String(evt.function_code) : '', ''],
-    [evt.action  || '',                              ''],
-    [evt.status  || '',  evt.status === 'allowed' ? 'ae-status-allowed' : 'ae-status-denied'],
-    [evt.src_ip  || '',                              ''],
-    [evt.count      != null ? String(evt.count)      : '', ''],
-    [evt.window_sec != null ? String(evt.window_sec) : '', ''],
+    [tsStr,                                          '', false],
+    [evt.port != null        ? String(evt.port)        : '', '', false],
+    [evt.unit != null        ? String(evt.unit)        : '', '', false],
+    [evt.function_code != null ? String(evt.function_code) : '', '', false],
+    [evt.action  || '',                              '', false],
+    [evt.status  || '',  evt.status === 'allowed' ? 'ae-status-allowed' : 'ae-status-denied', false],
+    [ip,  '', true],
+    [evt.count      != null ? String(evt.count)      : '', '', false],
+    [evt.window_sec != null ? String(evt.window_sec) : '', '', false],
   ];
 
-  for (const [text, cls] of cells) {
+  for (const [text, cls, isIp] of cells) {
     const td = document.createElement('td');
-    td.textContent = text;
+    if (isIp && text) {
+      const chip = document.createElement('span');
+      chip.className = 'ae-ip-chip' + (evt.status !== 'allowed' ? ' ae-ip-chip-denied' : '');
+      chip.textContent = text;
+      chip.title = 'Click to add this IP to a unit allow policy';
+      chip.addEventListener('click', () => _aeOpenIpDialog(text));
+      td.appendChild(chip);
+    } else {
+      td.textContent = text;
+    }
     if (cls) td.className = cls;
     tr.appendChild(td);
   }
@@ -7938,6 +8148,221 @@ function _aeAppendEvent(evt) {
   if (_aeAutoScroll) {
     const tw = document.getElementById('ae-table-wrap');
     if (tw) tw.scrollTop = tw.scrollHeight;
+  }
+}
+
+// ── Recent IPs panel ──────────────────────────────────────────────────────────
+
+function _aeRenderSeenIps() {
+  const badge = document.getElementById('ae-ip-count-badge');
+  if (badge) badge.textContent = `${_aeSeenIps.size} / ${AE_SEEN_IPS_LIMIT}`;
+
+  const empty = document.getElementById('ae-recent-ips-empty');
+  const table = document.getElementById('ae-recent-ips-table');
+  const tbody = document.getElementById('ae-recent-ips-tbody');
+  if (!tbody) return;
+
+  if (_aeSeenIps.size === 0) {
+    if (empty) empty.style.display = '';
+    if (table) table.style.display = 'none';
+    return;
+  }
+
+  if (empty) empty.style.display = 'none';
+  if (table) table.style.display = '';
+
+  tbody.innerHTML = '';
+  // Newest first
+  const entries = [..._aeSeenIps.entries()].reverse();
+  for (const [ip, info] of entries) {
+    const tr = document.createElement('tr');
+
+    const tdIp = document.createElement('td');
+    tdIp.className = 'ae-recent-ip-cell';
+    tdIp.textContent = ip;
+    tr.appendChild(tdIp);
+
+    const tdAllow = document.createElement('td');
+    tdAllow.className = 'ae-recent-allowed';
+    tdAllow.textContent = info.allowed;
+    tr.appendChild(tdAllow);
+
+    const tdDeny = document.createElement('td');
+    tdDeny.className = 'ae-recent-denied';
+    tdDeny.textContent = info.denied;
+    tr.appendChild(tdDeny);
+
+    const tdLast = document.createElement('td');
+    tdLast.textContent = info.lastSeen ? info.lastSeen.toISOString().replace('T', ' ').slice(0, 19) + ' UTC' : '—';
+    tr.appendChild(tdLast);
+
+    const tdAct = document.createElement('td');
+    const btn = document.createElement('button');
+    btn.className = 'ae-btn-quick-allow';
+    btn.textContent = '+ Add to Policy';
+    btn.title = `Add ${ip} to a unit allow policy`;
+    btn.addEventListener('click', () => _aeOpenIpDialog(ip));
+    tdAct.appendChild(btn);
+    tr.appendChild(tdAct);
+
+    tbody.appendChild(tr);
+  }
+}
+
+function _aeFlushSeenIps() {
+  _aeSeenIps.clear();
+  _aeRenderSeenIps();
+}
+
+// ── IP Quick-Allow Dialog ─────────────────────────────────────────────────────
+
+let _aeDlgModel = null; // cached model for dialog
+
+async function _aeOpenIpDialog(ip) {
+  const dlg = document.getElementById('ae-ip-action-dialog');
+  if (!dlg) return;
+
+  document.getElementById('ae-dlg-ip').textContent = ip;
+  document.getElementById('ae-dlg-banner').textContent = '';
+  document.getElementById('ae-dlg-banner').className = 'ae-dialog-banner';
+
+  // Load model to populate ports/units
+  const portSel = document.getElementById('ae-dlg-port');
+  const unitSel = document.getElementById('ae-dlg-unit');
+  portSel.innerHTML = '<option value="">— loading… —</option>';
+  unitSel.innerHTML = '<option value="">—</option>';
+
+  dlg.showModal();
+
+  const { ok, data } = await api('GET', '/model');
+  if (!ok || !data) {
+    portSel.innerHTML = '<option value="">— failed to load —</option>';
+    return;
+  }
+  _aeDlgModel = data;
+
+  const ports = (data.memory && data.memory.ports) || [];
+  portSel.innerHTML = '<option value="">— select port —</option>' +
+    ports.map(p => `<option value="${escapeHtml(String(p.id))}">${escapeHtml('Port ' + p.port)}</option>`).join('');
+
+  // populate units when port changes
+  function _aeDlgPopulateUnits() {
+    const portId = portSel.value;
+    const port = ports.find(p => String(p.id) === portId);
+    const units = (port && port.units) || [];
+    unitSel.innerHTML = '<option value="">— select unit —</option>' +
+      units.map(u => `<option value="${escapeHtml(String(u.id))}">${escapeHtml('Unit ID ' + u.unit_id)}</option>`).join('');
+    _aeDlgPopulateRules();
+  }
+
+  function _aeDlgPopulateRules() {
+    const ruleSel = document.getElementById('ae-dlg-rule');
+    const portId = portSel.value;
+    const unitId = unitSel.value;
+    const port = ports.find(p => String(p.id) === portId);
+    const unit = port && (port.units || []).find(u => String(u.id) === unitId);
+    const rules = (unit && unit.policy && unit.policy.rules) || [];
+    const ruleIdRow = document.getElementById('ae-dlg-rule-id-row');
+    ruleSel.innerHTML = '<option value="__new__">+ Create new rule…</option>' +
+      rules.map(r => `<option value="${escapeHtml(r.id)}">${escapeHtml(r.id)} (${r.source_ip.length} IP${r.source_ip.length !== 1 ? 's' : ''})</option>`).join('');
+    ruleIdRow.style.display = ruleSel.value === '__new__' ? '' : 'none';
+  }
+
+  portSel.onchange = _aeDlgPopulateUnits;
+  unitSel.onchange = _aeDlgPopulateRules;
+  document.getElementById('ae-dlg-rule').onchange = function() {
+    const ruleIdRow = document.getElementById('ae-dlg-rule-id-row');
+    ruleIdRow.style.display = this.value === '__new__' ? '' : 'none';
+  };
+  _aeDlgPopulateUnits();
+}
+
+async function _aeSubmitIpDialog() {
+  const ip = document.getElementById('ae-dlg-ip').textContent.trim();
+  const portSel = document.getElementById('ae-dlg-port');
+  const unitSel = document.getElementById('ae-dlg-unit');
+  const ruleSel = document.getElementById('ae-dlg-rule');
+  const ruleIdInput = document.getElementById('ae-dlg-rule-id');
+  const banner = document.getElementById('ae-dlg-banner');
+
+  banner.textContent = '';
+  banner.className = 'ae-dialog-banner';
+
+  if (!portSel.value) {
+    banner.textContent = 'Please select a memory port.';
+    banner.className = 'ae-dialog-banner err';
+    return;
+  }
+  if (!unitSel.value) {
+    banner.textContent = 'Please select a unit.';
+    banner.className = 'ae-dialog-banner err';
+    return;
+  }
+
+  const portId = portSel.value;
+  const unitId = unitSel.value;
+  const isNew = ruleSel.value === '__new__';
+
+  // Build updated rules array
+  const ports = (_aeDlgModel && _aeDlgModel.memory && _aeDlgModel.memory.ports) || [];
+  const port = ports.find(p => String(p.id) === portId);
+  const unit = port && (port.units || []).find(u => String(u.id) === unitId);
+  const existingRules = (unit && unit.policy && unit.policy.rules) || [];
+  let rules;
+
+  if (isNew) {
+    const newId = (ruleIdInput.value || '').trim();
+    if (!newId) {
+      banner.textContent = 'Please enter a Rule ID for the new rule.';
+      banner.className = 'ae-dialog-banner err';
+      return;
+    }
+    if (existingRules.some(r => r.id === newId)) {
+      banner.textContent = `Rule ID "${newId}" already exists. Choose a different ID or select the existing rule.`;
+      banner.className = 'ae-dialog-banner err';
+      return;
+    }
+    const allow_fc = [...document.querySelectorAll('#ae-dlg-fc-grid input[type=checkbox]:checked')].map(c => Number(c.value));
+    rules = [...existingRules, { id: newId, source_ip: [ip], allow_fc }];
+  } else {
+    const ruleId = ruleSel.value;
+    rules = existingRules.map(r => {
+      if (r.id !== ruleId) return r;
+      const ips = r.source_ip.includes(ip) ? r.source_ip : [...r.source_ip, ip];
+      return { ...r, source_ip: ips };
+    });
+    // Check if IP was already present
+    const targetRule = existingRules.find(r => r.id === ruleId);
+    if (targetRule && targetRule.source_ip.includes(ip)) {
+      banner.textContent = `IP ${ip} is already in rule "${ruleId}".`;
+      banner.className = 'ae-dialog-banner err';
+      return;
+    }
+  }
+
+  const submitBtn = document.getElementById('ae-dlg-submit');
+  if (submitBtn) submitBtn.disabled = true;
+
+  const { ok, data } = await api(
+    'PUT',
+    `/memory/port/${encodeURIComponent(portId)}/unit/${encodeURIComponent(unitId)}`,
+    { unit: { policy: { rules } } }
+  );
+
+  if (submitBtn) submitBtn.disabled = false;
+
+  if (ok) {
+    banner.textContent = `✓ IP ${ip} added to policy. Remember to Save to apply changes.`;
+    banner.className = 'ae-dialog-banner ok';
+    setDirty(true);
+    // Refresh model cache and close after a short delay
+    setTimeout(() => {
+      const dlg = document.getElementById('ae-ip-action-dialog');
+      if (dlg) dlg.close();
+    }, 1500);
+  } else {
+    banner.textContent = `✗ ${(data && data.error) || 'Failed to update policy'}`;
+    banner.className = 'ae-dialog-banner err';
   }
 }
 
@@ -8151,6 +8576,12 @@ document.getElementById('access-events-tab-container').addEventListener('click',
 document.getElementById('ae-btn-clear').addEventListener('click', _aeClearEvents);
 document.getElementById('ae-btn-save').addEventListener('click', _aeSaveSettings);
 document.getElementById('ae-btn-reload').addEventListener('click', _aeLoadSettings);
+document.getElementById('ae-btn-flush-ips').addEventListener('click', _aeFlushSeenIps);
+
+document.getElementById('ae-dlg-cancel').addEventListener('click', () => {
+  document.getElementById('ae-ip-action-dialog').close();
+});
+document.getElementById('ae-dlg-submit').addEventListener('click', _aeSubmitIpDialog);
 
 document.getElementById('ae-cfg-enabled').addEventListener('change', e => {
   _aeUpdateEnabledLabel(e.target.checked);
