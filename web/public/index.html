@@ -3642,8 +3642,8 @@ function renderDeviceWorkspace() {
 
     // Any edit in the workspace/advanced config should stage this device for global Save.
     const markDeviceConfigDirty = () => {
-      if (_editingDeviceId !== device.id) return;
-      _appState.pendingDeviceId = device.id;
+      if (!_editingDeviceId) return;
+      _appState.pendingDeviceId = _editingDeviceId;
       setDirty(true);
     };
     [
@@ -3653,6 +3653,14 @@ function renderDeviceWorkspace() {
       'ws-ed-group',
       'ws-tgt-endpoint',
       'ws-tgt-unit',
+    ].forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('input', markDeviceConfigDirty);
+      el.addEventListener('change', markDeviceConfigDirty);
+    });
+
+    [
       'adv-override-toggle',
       'adv-mma-host',
       'adv-mma-port',
@@ -3662,7 +3670,8 @@ function renderDeviceWorkspace() {
       'adv-seal-recovery-debounce',
     ].forEach(id => {
       const el = document.getElementById(id);
-      if (!el) return;
+      if (!el || el.dataset.deviceDirtyBound === '1') return;
+      el.dataset.deviceDirtyBound = '1';
       el.addEventListener('input', markDeviceConfigDirty);
       el.addEventListener('change', markDeviceConfigDirty);
     });
