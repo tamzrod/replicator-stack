@@ -12,6 +12,7 @@ const { DOCKER_SOCKET, ALLOWED_SERVICES, DOCKER_LOG_TAIL_LINES, getAppVersion, g
 const { modbusReadHoldingRegisters, readDevicesStatus } = require('./services/modbusService');
 const { validateMmaConfig, validateReplicatorConfig } = require('./services/yamlCompiler');
 const { computeIntegrity } = require('./services/integrityService');
+const { DEFAULT_STATE_SEALING_OVERRIDE, normalizeStateSealingOverrideConfig, StateSealingRuntime } = require('./services/stateSealingRuntimeService');
 
 const GIT_SHA = process.env.GIT_SHA || null;
 const VALID_AREA_TYPES = new Set(['holding_registers', 'input_registers', 'coils', 'discrete_inputs']);
@@ -51,6 +52,60 @@ function validateAccessEventsConfig(cfg) {
     const win = Number(cfg.window);
     if (!Number.isFinite(win) || !Number.isInteger(win) || win <= 0) {
         errors.push('window must be a positive integer');
+    }
+
+    const _stateSealingRuntime = new StateSealingRuntime();
+    const STATE_SEALING_POLL_INTERVAL_MS = 5000;
+    let _stateSealingPollActive = false;
+
+    function _findUnitStateSealing(model, device) {
+        const portNum = endpointPort(device.target_endpoint);
+        if (portNum == null) return null;
+        const port = (model.memory && model.memory.ports || []).find(p => Number(p.port) === Number(portNum));
+        if (!port) return null;
+        const unit = (port.units || []).find(u => Number(u.unit_id) === Number(device.unitId));
+        if (!unit || !unit.state_sealing || unit.state_sealing.area !== 'coil') return null;
+        return unit.state_sealing;
+    }
+
+    function applyStateSealingOverrides(model, statusByDeviceId, emitLogs) {
+        const cfg = normalizeStateSealingOverrideConfig((model.system || {}).state_sealing_override || DEFAULT_STATE_SEALING_OVERRIDE);
+        for (const device of (model.devices || [])) {
+            const status = statusByDeviceId[device.id] || null;
+            const hasSealing = !!_findUnitStateSealing(model, device);
+            const evalResult = _stateSealingRuntime.evaluate(device.id, status, cfg);
+            const stateSealing = {
+                enabled: cfg.enabled,
+                has_sealing_config: hasSealing,
+                forced_state: evalResult.forcedState,
+                override_active: hasSealing ? evalResult.overrideActive : false,
+                effective_state: hasSealing ? evalResult.effectiveState : 'live',
+                reason_code: hasSealing ? evalResult.reasonCode : null,
+            };
+
+            if (statusByDeviceId[device.id]) {
+                statusByDeviceId[device.id].state_sealing = stateSealing;
+            } else {
+                statusByDeviceId[device.id] = { state_sealing: stateSealing };
+            }
+
+            if (!emitLogs || !hasSealing || !evalResult.transition) continue;
+            if (evalResult.transition === 'forced') {
+                console.log(JSON.stringify({
+                    event: 'state_sealing.override_forced',
+                    device_id: device.id,
+                    reason_code: evalResult.reasonCode,
+                    forced_state: evalResult.forcedState,
+                    message: `Device ${device.id} unhealthy -> forcing ${evalResult.forcedState} state`,
+                }));
+            } else if (evalResult.transition === 'recovered') {
+                console.log(JSON.stringify({
+                    event: 'state_sealing.override_cleared',
+                    device_id: device.id,
+                    message: `Device ${device.id} recovered -> restoring live state`,
+                }));
+            }
+        }
     }
 
     const kf = cfg.key_fields;
@@ -494,7 +549,11 @@ app.put('/system', (req, res) => {
             return res.status(400).json({ error: 'system is required' });
         }
         const model = readModel();
-        model.system = { ...model.system, ...system };
+        const merged = { ...model.system, ...system };
+        if (system.state_sealing_override !== undefined) {
+            merged.state_sealing_override = normalizeStateSealingOverrideConfig(system.state_sealing_override);
+        }
+        model.system = merged;
         writeModel(model);
         scheduleCompile();
         res.json({ ok: true });
@@ -506,7 +565,7 @@ app.put('/system', (req, res) => {
 // POST /config/save — unified save: device source+target config and system MMA endpoint in one atomic call
 app.post('/config/save', (req, res) => {
     try {
-        const { deviceId, sourceConfig, targetConfig, mmaEndpointConfig } = req.body;
+        const { deviceId, sourceConfig, targetConfig, mmaEndpointConfig, stateSealingOverrideConfig } = req.body;
 
         // Validate Source Unit ID — required
         const rawSourceUnitId = sourceConfig && sourceConfig.source_unit_id;
@@ -558,6 +617,12 @@ app.post('/config/save', (req, res) => {
         // Update system MMA endpoint
         if (mmaEndpointConfig !== undefined) {
             model.system = { ...model.system, mma_endpoint: mmaEndpointConfig || null };
+        }
+        if (stateSealingOverrideConfig !== undefined) {
+            model.system = {
+                ...model.system,
+                state_sealing_override: normalizeStateSealingOverrideConfig(stateSealingOverrideConfig),
+            };
         }
 
         // Slot commit point: assign any missing slots (gap-filling, no reshuffling).
@@ -2532,6 +2597,7 @@ app.get('/devices/status', async (req, res) => {
         const model = readModel();
         const devices = model.devices || [];
         const result = await readDevicesStatus(devices, TARGET_HOST, STATUS_SLOT_SIZE);
+        applyStateSealingOverrides(model, result, true);
         res.json({ ok: true, status: result });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -2760,8 +2826,28 @@ app.post('/test-connection', (req, res) => {
     socket.on('timeout', () => finish(false, 'Connection timed out'));
 });
 
+async function pollStateSealingRuntime() {
+    if (_stateSealingPollActive) return;
+    _stateSealingPollActive = true;
+    try {
+        const model = readModel();
+        const devices = model.devices || [];
+        if (devices.length === 0) return;
+        const result = await readDevicesStatus(devices, TARGET_HOST, STATUS_SLOT_SIZE);
+        applyStateSealingOverrides(model, result, true);
+    } catch (err) {
+        console.warn(`[state_sealing.poll_error] ${err.message}`);
+    } finally {
+        _stateSealingPollActive = false;
+    }
+}
+
 discoverVersion().finally(() => {
     app.listen(8080, () => {
         console.log('Web running on 8080');
     });
+    pollStateSealingRuntime().catch(() => {});
+    setInterval(() => {
+        pollStateSealingRuntime().catch(() => {});
+    }, STATE_SEALING_POLL_INTERVAL_MS);
 });
