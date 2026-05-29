@@ -562,6 +562,25 @@ Read actions: Edit, Delete. The "＋ Add Read" form is shown below the table.
 **Advanced Configuration** (collapsible):
 
 - Override MMA Endpoint: when checked, exposes Host and Port fields that override the global `TARGET_HOST` for this device's MMA connection.
+- Enable State Sealing on Offline/Error: enables runtime forced state-sealing override behavior.
+- Forced Sealed State: selects `sealed/locked` or `unsealed/unlocked` for forced export state when override is active.
+- Offline debounce (ms): unhealthy-state debounce before forcing override.
+- Recovery debounce (ms): healthy-state debounce before clearing override.
+
+Example persisted model snippet:
+
+```json
+{
+  "system": {
+    "state_sealing_override": {
+      "enabled": true,
+      "forced_state": "sealed",
+      "offline_debounce_ms": 1000,
+      "recovery_debounce_ms": 3000
+    }
+  }
+}
+```
 
 #### CHECK — Integrity Check section
 
