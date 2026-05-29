@@ -54,60 +54,6 @@ function validateAccessEventsConfig(cfg) {
         errors.push('window must be a positive integer');
     }
 
-    const _stateSealingRuntime = new StateSealingRuntime();
-    const STATE_SEALING_POLL_INTERVAL_MS = 5000;
-    let _stateSealingPollActive = false;
-
-    function _findUnitStateSealing(model, device) {
-        const portNum = endpointPort(device.target_endpoint);
-        if (portNum == null) return null;
-        const port = (model.memory && model.memory.ports || []).find(p => Number(p.port) === Number(portNum));
-        if (!port) return null;
-        const unit = (port.units || []).find(u => Number(u.unit_id) === Number(device.unitId));
-        if (!unit || !unit.state_sealing || unit.state_sealing.area !== 'coil') return null;
-        return unit.state_sealing;
-    }
-
-    function applyStateSealingOverrides(model, statusByDeviceId, emitLogs) {
-        const cfg = normalizeStateSealingOverrideConfig((model.system || {}).state_sealing_override || DEFAULT_STATE_SEALING_OVERRIDE);
-        for (const device of (model.devices || [])) {
-            const status = statusByDeviceId[device.id] || null;
-            const hasSealing = !!_findUnitStateSealing(model, device);
-            const evalResult = _stateSealingRuntime.evaluate(device.id, status, cfg);
-            const stateSealing = {
-                enabled: cfg.enabled,
-                has_sealing_config: hasSealing,
-                forced_state: evalResult.forcedState,
-                override_active: hasSealing ? evalResult.overrideActive : false,
-                effective_state: hasSealing ? evalResult.effectiveState : 'live',
-                reason_code: hasSealing ? evalResult.reasonCode : null,
-            };
-
-            if (statusByDeviceId[device.id]) {
-                statusByDeviceId[device.id].state_sealing = stateSealing;
-            } else {
-                statusByDeviceId[device.id] = { state_sealing: stateSealing };
-            }
-
-            if (!emitLogs || !hasSealing || !evalResult.transition) continue;
-            if (evalResult.transition === 'forced') {
-                console.log(JSON.stringify({
-                    event: 'state_sealing.override_forced',
-                    device_id: device.id,
-                    reason_code: evalResult.reasonCode,
-                    forced_state: evalResult.forcedState,
-                    message: `Device ${device.id} unhealthy -> forcing ${evalResult.forcedState} state`,
-                }));
-            } else if (evalResult.transition === 'recovered') {
-                console.log(JSON.stringify({
-                    event: 'state_sealing.override_cleared',
-                    device_id: device.id,
-                    message: `Device ${device.id} recovered -> restoring live state`,
-                }));
-            }
-        }
-    }
-
     const kf = cfg.key_fields;
     if (!Array.isArray(kf) || kf.length !== 6) {
         errors.push('key_fields must contain exactly the 6 required fields');
@@ -145,6 +91,65 @@ function validateAccessEventsConfig(cfg) {
     }
 
     return errors;
+}
+
+const _stateSealingRuntime = new StateSealingRuntime();
+const STATE_SEALING_POLL_INTERVAL_MS = 5000;
+let _stateSealingPollActive = false;
+
+function findUnitStateSealing(model, device) {
+    const portNum = endpointPort(device.target_endpoint);
+    if (portNum == null) return null;
+    const ports = (model.memory && model.memory.ports) || [];
+    const port = ports.find(p => Number(p.port) === Number(portNum));
+    if (!port) return null;
+    const unit = (port.units || []).find(u => Number(u.unit_id) === Number(device.unitId));
+    if (!unit || !unit.state_sealing || unit.state_sealing.area !== 'coil') return null;
+    return unit.state_sealing;
+}
+
+function applyStateSealingOverrides(model, statusByDeviceId, emitLogs) {
+    const cfg = normalizeStateSealingOverrideConfig((model.system || {}).state_sealing_override || DEFAULT_STATE_SEALING_OVERRIDE);
+    for (const device of (model.devices || [])) {
+        const status = statusByDeviceId[device.id] || null;
+        const hasSealing = !!findUnitStateSealing(model, device);
+        const evalResult = _stateSealingRuntime.evaluate(device.id, status, cfg);
+        const stateSealing = {
+            enabled: cfg.enabled,
+            has_sealing_config: hasSealing,
+            forced_state: evalResult.forcedState,
+            override_active: hasSealing ? evalResult.overrideActive : false,
+            effective_state: hasSealing ? evalResult.effectiveState : 'live',
+            reason_code: hasSealing ? evalResult.reasonCode : null,
+        };
+
+        const existing = Object.prototype.hasOwnProperty.call(statusByDeviceId, device.id)
+            ? statusByDeviceId[device.id]
+            : {};
+        Object.defineProperty(statusByDeviceId, device.id, {
+            value: { ...existing, state_sealing: stateSealing },
+            writable: true,
+            configurable: true,
+            enumerable: true,
+        });
+
+        if (!emitLogs || !hasSealing || !evalResult.transition) continue;
+        if (evalResult.transition === 'forced') {
+            console.log(JSON.stringify({
+                event: 'state_sealing.override_forced',
+                device_id: device.id,
+                reason_code: evalResult.reasonCode,
+                forced_state: evalResult.forcedState,
+                message: `Device ${device.id} unhealthy -> forcing ${evalResult.forcedState} state`,
+            }));
+        } else if (evalResult.transition === 'recovered') {
+            console.log(JSON.stringify({
+                event: 'state_sealing.override_cleared',
+                device_id: device.id,
+                message: `Device ${device.id} recovered -> restoring live state`,
+            }));
+        }
+    }
 }
 
 function makeRateLimiter(windowMs, max) {
@@ -2846,8 +2851,8 @@ discoverVersion().finally(() => {
     app.listen(8080, () => {
         console.log('Web running on 8080');
     });
-    pollStateSealingRuntime().catch(() => {});
+    pollStateSealingRuntime();
     setInterval(() => {
-        pollStateSealingRuntime().catch(() => {});
+        pollStateSealingRuntime();
     }, STATE_SEALING_POLL_INTERVAL_MS);
 });

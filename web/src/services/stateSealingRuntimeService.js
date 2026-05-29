@@ -92,16 +92,16 @@ class StateSealingRuntime {
 
         if (unhealthy) {
             state.healthySince = null;
-            if (state.unhealthySince == null) state.unhealthySince = now;
+            if (state.unhealthySince === null) state.unhealthySince = now;
+            state.reasonCode = reasonCodeForStatus(status);
             const elapsed = now - state.unhealthySince;
             if (!state.overrideActive && elapsed >= cfg.offline_debounce_ms) {
                 state.overrideActive = true;
-                state.reasonCode = reasonCodeForStatus(status);
                 transition = 'forced';
             }
         } else {
             state.unhealthySince = null;
-            if (state.healthySince == null) state.healthySince = now;
+            if (state.healthySince === null) state.healthySince = now;
             const elapsed = now - state.healthySince;
             if (state.overrideActive && elapsed >= cfg.recovery_debounce_ms) {
                 state.overrideActive = false;

@@ -3840,6 +3840,9 @@ function refreshGroupDropdowns(data) {
 
 // ── MMA Endpoint Settings ────────────────────────────────────────────────────
 
+const STATE_SEAL_OFFLINE_DEFAULT_MS = 1000;
+const STATE_SEAL_RECOVERY_DEFAULT_MS = 3000;
+
 async function loadMmaEndpoint() {
   const { ok, data } = await api('GET', '/system');
   if (!ok) return;
@@ -3886,8 +3889,12 @@ async function loadMmaEndpoint() {
   const ss = (data.system && data.system.state_sealing_override) || {};
   sealEnable.checked = !!ss.enabled;
   sealForced.value = ss.forced_state === 'unsealed' || ss.forced_state === 'unlocked' ? 'unsealed' : 'sealed';
-  sealOfflineDb.value = Number.isFinite(Number(ss.offline_debounce_ms)) ? Math.max(0, Number(ss.offline_debounce_ms)) : 1000;
-  sealRecoverDb.value = Number.isFinite(Number(ss.recovery_debounce_ms)) ? Math.max(0, Number(ss.recovery_debounce_ms)) : 3000;
+  sealOfflineDb.value = Number.isFinite(Number(ss.offline_debounce_ms))
+    ? Math.max(0, Number(ss.offline_debounce_ms))
+    : STATE_SEAL_OFFLINE_DEFAULT_MS;
+  sealRecoverDb.value = Number.isFinite(Number(ss.recovery_debounce_ms))
+    ? Math.max(0, Number(ss.recovery_debounce_ms))
+    : STATE_SEAL_RECOVERY_DEFAULT_MS;
 }
 
 async function loadModel() {
@@ -3986,8 +3993,8 @@ function _capturePendingDeviceFormSilent() {
     stateSealingOverrideConfig: {
       enabled: !!(sealEnable && sealEnable.checked),
       forced_state: (sealForced && sealForced.value === 'unsealed') ? 'unsealed' : 'sealed',
-      offline_debounce_ms: sealOffDb ? Math.max(0, Number(sealOffDb.value) || 0) : 1000,
-      recovery_debounce_ms: sealRecDb ? Math.max(0, Number(sealRecDb.value) || 0) : 3000,
+      offline_debounce_ms: sealOffDb ? Math.max(0, Number(sealOffDb.value) || 0) : STATE_SEAL_OFFLINE_DEFAULT_MS,
+      recovery_debounce_ms: sealRecDb ? Math.max(0, Number(sealRecDb.value) || 0) : STATE_SEAL_RECOVERY_DEFAULT_MS,
     },
   };
   _appState.pendingDeviceId = null;
@@ -7813,15 +7820,19 @@ function renderStatusTab() {
       successRate = ((s.responses_valid_total / s.requests_total) * 100).toFixed(1) + '%';
     }
     const sealInfo = s && s.state_sealing ? s.state_sealing : null;
-    const sealCell = !hasStatus
-      ? '<span class="st-muted">—</span>'
-      : !s
-        ? '<span class="st-muted">Polling…</span>'
-        : !sealInfo || !sealInfo.enabled
-          ? '<span class="st-muted">disabled</span>'
-          : sealInfo.override_active
-            ? `<span title="${escapeHtml(String(sealInfo.reason_code || 'unknown'))}">${escapeHtml(String(sealInfo.effective_state || 'sealed'))}</span>`
-            : '<span class="st-muted">live</span>';
+    let sealCell = '<span class="st-muted">—</span>';
+    if (!hasStatus) {
+      sealCell = '<span class="st-muted">—</span>';
+    } else if (!s) {
+      sealCell = '<span class="st-muted">Polling…</span>';
+    } else if (!sealInfo || !sealInfo.enabled) {
+      sealCell = '<span class="st-muted">disabled</span>';
+    } else if (sealInfo.override_active) {
+      const effectiveState = String(sealInfo.effective_state || sealInfo.forced_state || 'sealed');
+      sealCell = `<span title="${escapeHtml(String(sealInfo.reason_code || 'unknown'))}">${escapeHtml(effectiveState)}</span>`;
+    } else {
+      sealCell = '<span class="st-muted">live</span>';
+    }
 
     rows += `<tr>
       <td>
