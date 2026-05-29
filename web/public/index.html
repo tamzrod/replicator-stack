@@ -2074,6 +2074,9 @@
           <input id="adv-seal-recovery-debounce" class="info-edit-input" type="number" min="0" max="60000" step="100" value="3000" form="ws-config-form" />
         </div>
       </div>
+      <small style="color:#6B7280;font-size:.75rem;display:block;margin-top:8px">
+        Sealing coil address is configured per unit in <strong>Memory</strong> → Unit <strong>Advanced Settings</strong> → State Sealing <strong>Address</strong>.
+      </small>
     </div>
   </div>
 
@@ -3635,6 +3638,42 @@ function renderDeviceWorkspace() {
     document.getElementById('ws-btn-cancel-device').addEventListener('click', () => {
       _editingDeviceId = null;
       renderDeviceWorkspace();
+    });
+
+    // Any edit in the workspace/advanced config should stage this device for global Save.
+    const markDeviceConfigDirty = () => {
+      if (!_editingDeviceId) return;
+      _appState.pendingDeviceId = _editingDeviceId;
+      setDirty(true);
+    };
+    [
+      'ws-ed-name',
+      'ws-ed-src-endpoint',
+      'ws-ed-src-unit',
+      'ws-ed-group',
+      'ws-tgt-endpoint',
+      'ws-tgt-unit',
+    ].forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('input', markDeviceConfigDirty);
+      el.addEventListener('change', markDeviceConfigDirty);
+    });
+
+    [
+      'adv-override-toggle',
+      'adv-mma-host',
+      'adv-mma-port',
+      'adv-seal-enable',
+      'adv-seal-forced-state',
+      'adv-seal-offline-debounce',
+      'adv-seal-recovery-debounce',
+    ].forEach(id => {
+      const el = document.getElementById(id);
+      if (!el || el.dataset.deviceDirtyBound === '1') return;
+      el.dataset.deviceDirtyBound = '1';
+      el.addEventListener('input', markDeviceConfigDirty);
+      el.addEventListener('change', markDeviceConfigDirty);
     });
   } else {
     document.getElementById('ws-btn-edit-device').addEventListener('click', () => {
