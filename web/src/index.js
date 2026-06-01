@@ -848,10 +848,18 @@ app.put('/memory/port/:portId/unit/:unitId', (req, res) => {
         }
         if (hasUnitId) existing.unit_id = unitIdNum;
         if (hasStateSealing) {
-            if (stateSealingValue === null) {
-                delete existing.state_sealing;
-            } else {
-                existing.state_sealing = stateSealingValue;
+            // MMA config merges units by unit_id, so apply state_sealing changes
+            // across all units that currently share this unit_id on the same port.
+            const effectiveUnitId = Number(existing.unit_id);
+            const sameUnitIdUnits = (port.units || [])
+                .filter(u => Number(u.unit_id) === effectiveUnitId);
+            const targets = sameUnitIdUnits.length > 0 ? sameUnitIdUnits : [existing];
+            for (const target of targets) {
+                if (stateSealingValue === null) {
+                    delete target.state_sealing;
+                } else {
+                    target.state_sealing = stateSealingValue;
+                }
             }
         }
         if (hasPolicy) {
