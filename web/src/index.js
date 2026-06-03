@@ -215,6 +215,9 @@ function countRoutes(model, excludedPortNums) {
 const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'public')));
+app.get('/tools/modprobe', (req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
+});
 app.use(requireAuth);
 
 // ── Auth routes (public — no requireAuth) ──────────────────────────────────
