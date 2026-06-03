@@ -66,6 +66,19 @@ services:
     networks:
       - replicator-net
 
+  modprobe:
+    image: rodtamin/modprobe:1.001
+    container_name: modprobe
+    restart: unless-stopped
+    expose:
+      - "8080"
+    networks:
+      - replicator-net
+    labels:
+      - "stack.tool.name=ModProbe"
+      - "stack.tool.path=/tools/modprobe"
+      - "stack.tool.url=http://modprobe:8080"
+
 networks:
   replicator-net:
     driver: bridge
