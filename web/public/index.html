@@ -156,6 +156,29 @@
       transition: background .12s;
     }
     .burger-dropdown-item:hover { background: #374151; color: #fff; }
+    .burger-dropdown-has-sub { position: relative; }
+    .burger-dropdown-arrow {
+      margin-left: auto;
+      color: #9CA3AF;
+      font-size: .75rem;
+    }
+    .burger-submenu {
+      display: none;
+      position: absolute;
+      top: -1px;
+      right: 100%;
+      min-width: 170px;
+      background: #1F2933;
+      border: 1.5px solid #374151;
+      border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.45);
+      overflow: hidden;
+      z-index: 901;
+    }
+    .burger-dropdown-has-sub:hover .burger-submenu,
+    .burger-dropdown-has-sub:focus-within .burger-submenu {
+      display: block;
+    }
     .burger-dropdown-divider {
       height: 1px;
       background: #374151;
@@ -1702,6 +1725,22 @@
       gap: 16px;
     }
     #access-events-tab-container.active { display: flex; }
+    #modprobe-tool-container {
+      display: none;
+      width: 100%;
+      height: calc(100vh - 132px);
+      min-height: 560px;
+      padding: 16px 20px 20px;
+    }
+    #modprobe-tool-container.active { display: block; }
+    #modprobe-tool-frame {
+      width: 100%;
+      height: 100%;
+      border: none;
+      border-radius: 10px;
+      background: #fff;
+      box-shadow: 0 2px 8px rgba(0,0,0,.07);
+    }
     .ae-inner-tab-bar {
       display: flex;
       border-bottom: 2px solid #E5E7EB;
@@ -1984,6 +2023,20 @@
           ⬆ Import Config
         </button>
         <input type="file" id="input-global-import" accept=".json,application/json" style="display:none" aria-hidden="true" />
+        <div class="burger-dropdown-divider"></div>
+        <div class="burger-dropdown-has-sub" role="none">
+          <button class="burger-dropdown-item" id="btn-tools-menu" role="menuitem" aria-haspopup="true" aria-expanded="false"
+            title="Open tool integrations">
+            🧰 Tools
+            <span class="burger-dropdown-arrow">◂</span>
+          </button>
+          <div class="burger-submenu" role="menu" aria-label="Tools submenu">
+            <button class="burger-dropdown-item" id="btn-tool-modprobe" role="menuitem"
+              title="Open ModProbe in the integrated tool view">
+              ModProbe
+            </button>
+          </div>
+        </div>
         <div class="burger-dropdown-divider"></div>
         <button class="burger-dropdown-item" id="btn-change-password" role="menuitem"
           title="Change your login password">
@@ -2501,6 +2554,17 @@
   </div>
 
 </div><!-- #access-events-tab-container -->
+
+<!-- ── Tools: ModProbe ─────────────────────────────────────────────── -->
+<div id="modprobe-tool-container">
+  <iframe
+    id="modprobe-tool-frame"
+    src="http://modprobe:8080"
+    title="ModProbe"
+    loading="lazy"
+    sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
+  ></iframe>
+</div>
 
 <!-- ── IP Quick-Allow Dialog ──────────────────────────────────────── -->
 <dialog id="ae-ip-action-dialog" aria-labelledby="ae-dlg-title" aria-modal="true">
@@ -7034,20 +7098,14 @@ document.addEventListener('keydown', e => {
 
 // ── Tab Navigation ───────────────────────────────────────────────────────────
 
-document.getElementById('tab-bar').addEventListener('click', e => {
-  const btn = e.target.closest('.tab-btn');
-  if (!btn) return;
-  const tab = btn.dataset.tab;
-
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-
+function _resetTopLevelViews() {
   const appContainer = document.getElementById('app-container');
   const cvContainer = document.getElementById('config-viewer-container');
   const memContainer = document.getElementById('memory-tab-container');
   const rtContainer = document.getElementById('runtime-tab-container');
   const stContainer = document.getElementById('status-tab-container');
   const aeContainer = document.getElementById('access-events-tab-container');
+  const modprobeContainer = document.getElementById('modprobe-tool-container');
 
   appContainer.style.display = 'none';
   cvContainer.classList.remove('active');
@@ -7055,7 +7113,22 @@ document.getElementById('tab-bar').addEventListener('click', e => {
   rtContainer.classList.remove('active');
   stContainer.classList.remove('active');
   aeContainer.classList.remove('active');
+  modprobeContainer.classList.remove('active');
   stopAccessEventsStream();
+}
+
+function _showTab(tab, updateRoute = true) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  const tabBtn = document.querySelector(`.tab-btn[data-tab="${tab}"]`);
+  if (tabBtn) tabBtn.classList.add('active');
+
+  _resetTopLevelViews();
+  const appContainer = document.getElementById('app-container');
+  const cvContainer = document.getElementById('config-viewer-container');
+  const memContainer = document.getElementById('memory-tab-container');
+  const rtContainer = document.getElementById('runtime-tab-container');
+  const stContainer = document.getElementById('status-tab-container');
+  const aeContainer = document.getElementById('access-events-tab-container');
 
   if (tab === 'model') {
     appContainer.style.display = '';
@@ -7095,7 +7168,46 @@ document.getElementById('tab-bar').addEventListener('click', e => {
     stopLogStream();
     startAccessEventsStream();
   }
+  if (updateRoute && window.location.pathname === '/tools/modprobe') {
+    history.pushState({}, '', '/');
+  }
+}
+
+function _showModProbeTool(updateRoute = true) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  _resetTopLevelViews();
+  stopStatusPolling();
+  stopLogStream();
+  document.getElementById('modprobe-tool-container').classList.add('active');
+  if (updateRoute && window.location.pathname !== '/tools/modprobe') {
+    history.pushState({}, '', '/tools/modprobe');
+  }
+}
+
+document.getElementById('tab-bar').addEventListener('click', e => {
+  const btn = e.target.closest('.tab-btn');
+  if (!btn) return;
+  const tab = btn.dataset.tab;
+  _showTab(tab, true);
 });
+
+document.getElementById('btn-tool-modprobe').addEventListener('click', () => {
+  document.getElementById('burger-dropdown').classList.remove('open');
+  document.getElementById('btn-burger').setAttribute('aria-expanded', 'false');
+  _showModProbeTool(true);
+});
+
+window.addEventListener('popstate', () => {
+  if (window.location.pathname === '/tools/modprobe') {
+    _showModProbeTool(false);
+  } else {
+    _showTab('model', false);
+  }
+});
+
+if (window.location.pathname === '/tools/modprobe') {
+  _showModProbeTool(false);
+}
 
 // ── Runtime Tab ──────────────────────────────────────────────────────────────
 

@@ -213,8 +213,13 @@ function countRoutes(model, excludedPortNums) {
 }
 
 const app = express();
+const PUBLIC_DIR = path.join(__dirname, '..', 'public');
+const INDEX_HTML = fs.readFileSync(path.join(PUBLIC_DIR, 'index.html'), 'utf8');
 app.use(express.json());
-app.use(express.static(path.join(__dirname, '..', 'public')));
+app.use(express.static(PUBLIC_DIR));
+app.get('/tools/modprobe', requireAuth, rateLimit, (req, res) => {
+    res.type('html').send(INDEX_HTML);
+});
 app.use(requireAuth);
 
 // ── Auth routes (public — no requireAuth) ──────────────────────────────────
