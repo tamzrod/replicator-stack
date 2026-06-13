@@ -21,6 +21,8 @@ function endpointPort(endpoint) {
     return Number.isFinite(port) && port >= 1 && port <= 65535 ? port : null;
 }
 
+const { getControlCoilAddress } = require('./yamlCompiler');
+
 /**
  * Choose the canonical status_unit_id from a Map<suid, count>.
  * Highest count wins; lowest suid breaks ties.  Returns fallback when counts is empty.
@@ -161,6 +163,49 @@ function computeIntegrity(model) {
                 severity: 'error',
                 message: 'Device must have at least one read definition',
             });
+        }
+
+        // CHECK: when health_controlled_state_sealing is enabled, verify that the target
+        // memory port and unit exist so MCS can allocate a control coil and generate both
+        // MMA2 state_sealing and Replicator health_control configuration.
+        if (device.health_controlled_state_sealing) {
+            const targetPort = endpointPort(device.target_endpoint);
+            const memoryPorts = (model.memory && model.memory.ports) || [];
+            const port = targetPort !== null
+                ? memoryPorts.find(p => Number(p.port) === targetPort)
+                : null;
+            if (!port) {
+                deviceIssues.push({
+                    code: 'HEALTH_CONTROL_NO_MEMORY_PORT',
+                    severity: 'error',
+                    message: `HEALTH_CONTROL_NO_MEMORY_PORT — Health Controlled State Sealing is enabled but no memory port exists for endpoint "${device.target_endpoint || ''}" — allocate a memory port in the Memory tab`,
+                });
+            } else {
+                const unitId = Number(device.unitId);
+                const unit = Number.isFinite(unitId)
+                    ? (port.units || []).find(u => Number(u.unit_id) === unitId)
+                    : null;
+                if (!unit) {
+                    deviceIssues.push({
+                        code: 'HEALTH_CONTROL_NO_UNIT',
+                        severity: 'error',
+                        message: `HEALTH_CONTROL_NO_UNIT — Health Controlled State Sealing is enabled but no memory unit ${unitId} exists on port ${targetPort} — run Fix Issues or add a read to auto-allocate`,
+                    });
+                } else {
+                    // Verify the compiler can compute a valid control coil address.
+                    // getControlCoilAddress returns 0 both when no coils exist (allocates coil 0)
+                    // and when the first coil after existing segments is 0 (impossible given valid
+                    // segments, so 0 is always valid).  A NaN result indicates a structural fault.
+                    const addr = getControlCoilAddress(model, device);
+                    if (!Number.isFinite(addr) || addr < 0) {
+                        deviceIssues.push({
+                            code: 'HEALTH_CONTROL_INVALID_ADDRESS',
+                            severity: 'error',
+                            message: `HEALTH_CONTROL_INVALID_ADDRESS — Health Controlled State Sealing could not compute a valid control coil address for unit ${unitId}`,
+                        });
+                    }
+                }
+            }
         }
 
         const result = {

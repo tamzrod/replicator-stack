@@ -499,4 +499,5 @@ module.exports = {
     compileMma2Config,
     validateMmaConfig,
     validateReplicatorConfig,
+    getControlCoilAddress,
 };

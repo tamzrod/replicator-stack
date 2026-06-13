@@ -2113,6 +2113,15 @@
       <small style="color:#6B7280;font-size:.75rem;display:block;margin-top:8px">
         When enabled, MCS auto-allocates one control coil, configures MMA2 <code>state_sealing</code>, and configures Replicator <code>health_control</code> to use that same coil.
       </small>
+      <div id="adv-seal-info" style="display:none;margin-top:10px;padding:8px 10px;background:#F9FAFB;border:1px solid #E5E7EB;border-radius:6px;font-size:.75rem;color:#374151">
+        <table style="border-collapse:collapse;width:100%">
+          <tr><td style="padding:2px 8px 2px 0;color:#6B7280;white-space:nowrap">Control unit</td><td id="seal-info-unit" style="font-family:monospace">—</td></tr>
+          <tr><td style="padding:2px 8px 2px 0;color:#6B7280;white-space:nowrap">Memory area</td><td style="font-family:monospace">coil</td></tr>
+          <tr><td style="padding:2px 8px 2px 0;color:#6B7280;white-space:nowrap">Control address</td><td id="seal-info-address" style="font-family:monospace">—</td></tr>
+          <tr><td style="padding:2px 8px 2px 0;color:#6B7280;white-space:nowrap">Protected unit</td><td id="seal-info-protected" style="font-family:monospace">—</td></tr>
+          <tr><td style="padding:2px 8px 2px 0;color:#6B7280;white-space:nowrap">Exception code</td><td style="font-family:monospace">0x06 (Device Busy)</td></tr>
+        </table>
+      </div>
     </div>
   </div>
 
@@ -3384,6 +3393,54 @@ function generateUniqueReadId(reads) {
 function clearHealthControlledStateSealingToggle() {
   const sealToggle = document.getElementById('adv-seal-enable');
   if (sealToggle) sealToggle.checked = false;
+  const sealInfo = document.getElementById('adv-seal-info');
+  if (sealInfo) sealInfo.style.display = 'none';
+}
+
+// Compute the control coil address MCS would allocate for a device.
+// Mirrors the server-side getControlCoilAddress() in yamlCompiler.js.
+function getControlCoilAddressClient(model, device) {
+  if (!model || !device) return 0;
+  const targetStr = device.target_endpoint;
+  if (typeof targetStr !== 'string') return 0;
+  const lastColon = targetStr.lastIndexOf(':');
+  if (lastColon < 0) return 0;
+  const targetPort = Number(targetStr.slice(lastColon + 1));
+  if (!Number.isFinite(targetPort) || targetPort < 1 || targetPort > 65535) return 0;
+  const unitId = Number(device.unitId);
+  if (!Number.isFinite(unitId)) return 0;
+  const memoryPorts = (model.memory && model.memory.ports) || [];
+  const port = memoryPorts.find(p => Number(p.port) === targetPort);
+  if (!port) return 0;
+  const unit = (port.units || []).find(u => Number(u.unit_id) === unitId);
+  if (!unit) return 0;
+  const coilSegments = (unit.areas || [])
+    .filter(a => a && a.type === 'coils')
+    .flatMap(a => Array.isArray(a.segments) ? a.segments : [])
+    .map(seg => ({ start: Number(seg.start), count: Number(seg.count) }))
+    .filter(seg => Number.isFinite(seg.start) && Number.isFinite(seg.count) && seg.count > 0);
+  if (coilSegments.length === 0) return 0;
+  const maxEndExclusive = Math.max(...coilSegments.map(seg => seg.start + seg.count));
+  return Math.max(0, maxEndExclusive);
+}
+
+// Populate or hide the #adv-seal-info panel based on the saved model state.
+// Values are derived from the model (which drives YAML generation) so they
+// always reflect what the compiler actually produces.
+function updateHealthControlInfo(device, model) {
+  const sealInfo = document.getElementById('adv-seal-info');
+  if (!sealInfo) return;
+  const enabled = !!(device && device.health_controlled_state_sealing);
+  if (!enabled) {
+    sealInfo.style.display = 'none';
+    return;
+  }
+  const unitId = device.unitId != null ? device.unitId : '—';
+  const address = getControlCoilAddressClient(model, device);
+  document.getElementById('seal-info-unit').textContent = unitId;
+  document.getElementById('seal-info-address').textContent = address;
+  document.getElementById('seal-info-protected').textContent = unitId;
+  sealInfo.style.display = '';
 }
 
 function renderDeviceWorkspace() {
@@ -3419,6 +3476,8 @@ function renderDeviceWorkspace() {
       sealToggle.checked = !!device.health_controlled_state_sealing;
     }
   }
+  // Show generated health control config values from the saved model state.
+  updateHealthControlInfo(device, model);
 
   const grpName = groupName(model, device.groupId) || '— Ungrouped —';
   const reads = device.reads || [];
