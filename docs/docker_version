@@ -1,0 +1,2 @@
+docker pull rodtamin/modbus-memory-appliance:2.3.6
+docker pull rodtamin/modbus-replicator:v0.1.5
