@@ -65,7 +65,7 @@ test('disabling health control removes state_sealing and health_control from out
             { id: 'a1', type: 'coils', segments: [{ start: 0, count: 100 }] },
             { id: 'a2', type: 'holding_registers', segments: [{ start: 0, count: 500 }] },
         ],
-    }, false /* healthControlled = false */);
+    }, false);
 
     const replicatorYaml = toReplicatorYaml(model);
     const { yaml: mmaYaml } = toMmaYaml(model);

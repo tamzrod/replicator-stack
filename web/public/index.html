@@ -3398,7 +3398,8 @@ function clearHealthControlledStateSealingToggle() {
 }
 
 // Compute the control coil address MCS would allocate for a device.
-// Mirrors the server-side getControlCoilAddress() in yamlCompiler.js.
+// Mirrors the server-side getControlCoilAddress() in web/src/services/yamlCompiler.js.
+// Keep both implementations in sync when the allocation algorithm changes.
 function getControlCoilAddressClient(model, device) {
   if (!model || !device) return 0;
   const targetStr = device.target_endpoint;

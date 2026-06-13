@@ -193,9 +193,10 @@ function computeIntegrity(model) {
                     });
                 } else {
                     // Verify the compiler can compute a valid control coil address.
-                    // getControlCoilAddress returns 0 both when no coils exist (allocates coil 0)
-                    // and when the first coil after existing segments is 0 (impossible given valid
-                    // segments, so 0 is always valid).  A NaN result indicates a structural fault.
+                    // getControlCoilAddress returns 0 when there are no existing coil segments
+                    // (the compiler will allocate coil 0) or the index of the first free coil
+                    // after existing segments.  A non-finite or negative result indicates a
+                    // structural fault in the unit's coil configuration.
                     const addr = getControlCoilAddress(model, device);
                     if (!Number.isFinite(addr) || addr < 0) {
                         deviceIssues.push({
