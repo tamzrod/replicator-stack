@@ -58,7 +58,7 @@ function getControlCoilAddress(model, device) {
 
     if (coilSegments.length === 0) return 0;
     const maxEndExclusive = Math.max(...coilSegments.map(seg => seg.start + seg.count));
-    return maxEndExclusive;
+    return Math.max(0, maxEndExclusive);
 }
 
 // ---------------------------------------------------------------------------
@@ -333,10 +333,6 @@ function toMmaYaml(model) {
                 if (u.policy && !(u.unit_id in policyByUnitId)) {
                     policyByUnitId[u.unit_id] = u.policy;
                 }
-
-                for (const [unitId, address] of Object.entries(healthControlByUnitId)) {
-                    stateSealingByUnitId[unitId] = { enabled: true, area: 'coil', address: Number(address) || 0 };
-                }
                 return (u.areas || []).flatMap(a => {
                     const segs = Array.isArray(a.segments) ? a.segments : [];
                     return segs.map(seg => ({
@@ -351,6 +347,9 @@ function toMmaYaml(model) {
             // Fall back to auto-derived blocks from device reads
             blocksForCompile = port.blocks || [];
         }
+        for (const [unitId, address] of Object.entries(healthControlByUnitId)) {
+            stateSealingByUnitId[unitId] = { enabled: true, area: 'coil', address: Math.max(0, Number(address) || 0) };
+        }
 
         // Run the MMA2 compiler: group all segments for this port.
         const { mergedUnits, mergeLog } = compileMma2Config(blocksForCompile, statusMap);
@@ -364,6 +363,9 @@ function toMmaYaml(model) {
             for (const unit of mergedUnits) {
                 lines.push(`      - unit_id: ${unit.unitId}`);
                 const healthControlAddress = healthControlByUnitId[unit.unitId];
+                const safeHealthControlAddress = Number.isFinite(healthControlAddress)
+                    ? Math.max(0, healthControlAddress)
+                    : null;
                 let emittedCoils = false;
 
                 // Emit each domain section as a scalar range (MMA2 v2.3.4 schema).
@@ -374,19 +376,19 @@ function toMmaYaml(model) {
                     let end   = Math.max(...segments.map(s => s.start + s.count));
                     if (area === 'coils') {
                         emittedCoils = true;
-                        if (Number.isFinite(healthControlAddress)) {
-                            start = Math.min(start, healthControlAddress);
-                            end = Math.max(end, healthControlAddress + 1);
+                        if (safeHealthControlAddress !== null) {
+                            start = Math.min(start, safeHealthControlAddress);
+                            end = Math.max(end, safeHealthControlAddress + 1);
                         }
                     }
                     lines.push(`        ${area}:`);
                     lines.push(`          start: ${start}`);
                     lines.push(`          count: ${end - start}`);
                 }
-                if (!emittedCoils && Number.isFinite(healthControlAddress)) {
+                if (!emittedCoils && safeHealthControlAddress !== null) {
                     lines.push(`        coils:`);
                     lines.push(`          start: 0`);
-                    lines.push(`          count: ${Math.max(1, healthControlAddress + 1)}`);
+                    lines.push(`          count: ${safeHealthControlAddress + 1}`);
                 }
 
                 // Emit state_sealing if configured on this unit.

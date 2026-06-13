@@ -3380,13 +3380,18 @@ function generateUniqueReadId(reads) {
   while (existingIds.has(`read_${n}`)) n++;
   return `read_${n}`;
 }
+
+function clearHealthControlledStateSealingToggle() {
+  const sealToggle = document.getElementById('adv-seal-enable');
+  if (sealToggle) sealToggle.checked = false;
+}
+
 function renderDeviceWorkspace() {
   console.debug('[canonical:%s] renderDeviceWorkspace', _canonicalVersion);
   const el = document.getElementById('device-workspace');
 
   if (!_selectedDeviceId || !_currentModel) {
-    const sealToggle = document.getElementById('adv-seal-enable');
-    if (sealToggle) sealToggle.checked = false;
+    clearHealthControlledStateSealingToggle();
     el.innerHTML = `<div class="card">
       <div class="ws-placeholder">
         <div class="ws-icon">📡</div>
@@ -3400,8 +3405,7 @@ function renderDeviceWorkspace() {
   const device = (model.devices || []).find(d => d.id === _selectedDeviceId);
   if (!device) {
     _selectedDeviceId = null;
-    const sealToggle = document.getElementById('adv-seal-enable');
-    if (sealToggle) sealToggle.checked = false;
+    clearHealthControlledStateSealingToggle();
     el.innerHTML = `<div class="card"><div class="ws-placeholder">Device not found — select another from the tree.</div></div>`;
     return;
   }
