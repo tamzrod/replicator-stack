@@ -39,6 +39,28 @@ const AREA_TO_FC = {
 // "Allow-all" always includes every FC — MMA enforces area-specific validity at runtime.
 const ALL_VALID_FCS = [1, 2, 3, 4, 5, 6, 15, 16];
 
+function getControlCoilAddress(model, device) {
+    const targetPort = endpointPort(device && device.target_endpoint);
+    const unitId = Number(device && device.unitId);
+    if (!Number.isFinite(targetPort) || !Number.isFinite(unitId)) return 0;
+
+    const memoryPorts = (model && model.memory && model.memory.ports) || [];
+    const port = memoryPorts.find(p => Number(p.port) === targetPort);
+    if (!port) return 0;
+    const unit = (port.units || []).find(u => Number(u.unit_id) === unitId);
+    if (!unit) return 0;
+
+    const coilSegments = (unit.areas || [])
+        .filter(a => a && a.type === 'coils')
+        .flatMap(a => Array.isArray(a.segments) ? a.segments : [])
+        .map(seg => ({ start: Number(seg.start), count: Number(seg.count) }))
+        .filter(seg => Number.isFinite(seg.start) && Number.isFinite(seg.count) && seg.count > 0);
+
+    if (coilSegments.length === 0) return 0;
+    const maxEndExclusive = Math.max(...coilSegments.map(seg => seg.start + seg.count));
+    return maxEndExclusive;
+}
+
 // ---------------------------------------------------------------------------
 // Exported functions
 // ---------------------------------------------------------------------------
@@ -96,6 +118,13 @@ function toReplicatorYaml(model, excludedPortNums = new Set()) {
         lines.push(`          unit_id: ${device.unitId}`);
         if (device.status_unit_id != null) {
             lines.push(`          status_unit_id: ${Number(device.status_unit_id)}`);
+        }
+        if (device.health_controlled_state_sealing) {
+            const controlCoilAddress = getControlCoilAddress(model, device);
+            lines.push(`          health_control:`);
+            lines.push(`            enabled: true`);
+            lines.push(`            area: coil`);
+            lines.push(`            address: ${controlCoilAddress}`);
         }
         lines.push(`          memories:`);
         lines.push(`            - memory_id: ${device.unitId}`);
@@ -271,6 +300,14 @@ function toMmaYaml(model) {
     for (let pi = 0; pi < memoryPorts.length; pi++) {
         const port = memoryPorts[pi];
         const portNum = Number(port.port) || 502;
+        const healthControlByUnitId = {};
+        for (const device of (model.devices || [])) {
+            if (!device.health_controlled_state_sealing) continue;
+            if (endpointPort(device.target_endpoint) !== portNum) continue;
+            const unitId = Number(device.unitId);
+            if (!Number.isFinite(unitId)) continue;
+            healthControlByUnitId[unitId] = getControlCoilAddress(model, device);
+        }
         // First listener is named "main" (matches sample YAML convention); additional
         // listeners use port-based IDs to stay unique.
         const listenerId = pi === 0 ? 'main' : `port-${portNum}`;
@@ -295,6 +332,10 @@ function toMmaYaml(model) {
                 }
                 if (u.policy && !(u.unit_id in policyByUnitId)) {
                     policyByUnitId[u.unit_id] = u.policy;
+                }
+
+                for (const [unitId, address] of Object.entries(healthControlByUnitId)) {
+                    stateSealingByUnitId[unitId] = { enabled: true, area: 'coil', address: Number(address) || 0 };
                 }
                 return (u.areas || []).flatMap(a => {
                     const segs = Array.isArray(a.segments) ? a.segments : [];
@@ -322,22 +363,37 @@ function toMmaYaml(model) {
         } else {
             for (const unit of mergedUnits) {
                 lines.push(`      - unit_id: ${unit.unitId}`);
+                const healthControlAddress = healthControlByUnitId[unit.unitId];
+                let emittedCoils = false;
 
                 // Emit each domain section as a scalar range (MMA2 v2.3.4 schema).
                 // MMA2 accepts one contiguous start/count range per area — not a list.
                 // When multiple segments exist, span them into the widest contiguous range.
                 for (const [area, segments] of unit.domains) {
-                    const start = Math.min(...segments.map(s => s.start));
-                    const end   = Math.max(...segments.map(s => s.start + s.count));
+                    let start = Math.min(...segments.map(s => s.start));
+                    let end   = Math.max(...segments.map(s => s.start + s.count));
+                    if (area === 'coils') {
+                        emittedCoils = true;
+                        if (Number.isFinite(healthControlAddress)) {
+                            start = Math.min(start, healthControlAddress);
+                            end = Math.max(end, healthControlAddress + 1);
+                        }
+                    }
                     lines.push(`        ${area}:`);
                     lines.push(`          start: ${start}`);
                     lines.push(`          count: ${end - start}`);
+                }
+                if (!emittedCoils && Number.isFinite(healthControlAddress)) {
+                    lines.push(`        coils:`);
+                    lines.push(`          start: 0`);
+                    lines.push(`          count: ${Math.max(1, healthControlAddress + 1)}`);
                 }
 
                 // Emit state_sealing if configured on this unit.
                 const ss = stateSealingByUnitId[unit.unitId];
                 if (ss && ss.area === 'coil') {
                     lines.push(`        state_sealing:`);
+                    lines.push(`          enabled: true`);
                     lines.push(`          area: coil`);
                     lines.push(`          address: ${ss.address}`);
                 }
