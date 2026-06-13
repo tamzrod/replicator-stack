@@ -372,6 +372,7 @@ app.post('/device', (req, res) => {
             source_unit_id: sourceUnitId,
             target_endpoint: device.target_endpoint.trim(),
             unitId,
+            health_controlled_state_sealing: false,
             status_slot: assignNextSlot(model, device.target_endpoint.trim()),
             status_unit_id: getCanonicalStatusUnitId(model, device.target_endpoint.trim()),
             reads: []
@@ -425,6 +426,9 @@ app.put('/device/:id', (req, res) => {
                 return res.status(400).json({ error: `Group "${device.groupId}" not found` });
             }
             existing.groupId = device.groupId || null;
+        }
+        if (device.health_controlled_state_sealing !== undefined) {
+            existing.health_controlled_state_sealing = !!device.health_controlled_state_sealing;
         }
         if (device.source_unit_id !== undefined) existing.source_unit_id = Number(device.source_unit_id);
         // status_slot and status_unit_id are system-controlled — ignored if present in body.
@@ -520,6 +524,7 @@ app.post('/device/:id/duplicate', (req, res) => {
             source_unit_id: newSourceUnitId,
             target_endpoint: newTargetEndpoint,
             unitId: newUnitId,
+            health_controlled_state_sealing: !!orig.health_controlled_state_sealing,
             // status_slot is NOT copied from the original — it must be reallocated
             // via the FIX flow (POST /yaml-integrity/fix) so the system assigns the
             // correct slot within the new endpoint group without copying stale state.
@@ -575,7 +580,7 @@ app.put('/system', (req, res) => {
 // POST /config/save — unified save: device source+target config and system MMA endpoint in one atomic call
 app.post('/config/save', (req, res) => {
     try {
-        const { deviceId, sourceConfig, targetConfig, mmaEndpointConfig, stateSealingOverrideConfig } = req.body;
+        const { deviceId, sourceConfig, targetConfig, mmaEndpointConfig, healthControlledStateSealingEnabled } = req.body;
 
         // Validate Source Unit ID — required
         const rawSourceUnitId = sourceConfig && sourceConfig.source_unit_id;
@@ -622,19 +627,15 @@ app.post('/config/save', (req, res) => {
 
             existing.target_endpoint = targetConfig.target_endpoint.trim();
             existing.unitId = targetUnitId;
+            if (healthControlledStateSealingEnabled !== undefined) {
+                existing.health_controlled_state_sealing = !!healthControlledStateSealingEnabled;
+            }
         }
 
         // Update system MMA endpoint
         if (mmaEndpointConfig !== undefined) {
             model.system = { ...model.system, mma_endpoint: mmaEndpointConfig || null };
         }
-        if (stateSealingOverrideConfig !== undefined) {
-            model.system = {
-                ...model.system,
-                state_sealing_override: normalizeStateSealingOverrideConfig(stateSealingOverrideConfig),
-            };
-        }
-
         // Slot commit point: assign any missing slots (gap-filling, no reshuffling).
         const { modified: slotsModified } = recompileStatusSlots(model);
         if (slotsModified) {

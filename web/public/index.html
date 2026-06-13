@@ -2107,28 +2107,11 @@
       <div class="adv-override-row">
         <label class="adv-override-label">
           <input type="checkbox" id="adv-seal-enable" form="ws-config-form" />
-          Enable State Sealing on Offline/Error
+          Health Controlled State Sealing
         </label>
       </div>
-      <div class="row" style="max-width:560px">
-        <div class="field">
-          <label for="adv-seal-forced-state">Forced Sealed State</label>
-          <select id="adv-seal-forced-state" class="info-edit-input" form="ws-config-form">
-            <option value="sealed">sealed / locked</option>
-            <option value="unsealed">unsealed / unlocked</option>
-          </select>
-        </div>
-        <div class="field" style="max-width:180px">
-          <label for="adv-seal-offline-debounce">Offline debounce (ms)</label>
-          <input id="adv-seal-offline-debounce" class="info-edit-input" type="number" min="0" max="60000" step="100" value="1000" form="ws-config-form" />
-        </div>
-        <div class="field" style="max-width:180px">
-          <label for="adv-seal-recovery-debounce">Recovery debounce (ms)</label>
-          <input id="adv-seal-recovery-debounce" class="info-edit-input" type="number" min="0" max="60000" step="100" value="3000" form="ws-config-form" />
-        </div>
-      </div>
       <small style="color:#6B7280;font-size:.75rem;display:block;margin-top:8px">
-        Sealing coil address is configured per unit in <strong>Memory</strong> → Unit <strong>Advanced Settings</strong> → State Sealing <strong>Address</strong>.
+        When enabled, MCS auto-allocates one control coil, configures MMA2 <code>state_sealing</code>, and configures Replicator <code>health_control</code> to use that same coil.
       </small>
     </div>
   </div>
@@ -3397,11 +3380,18 @@ function generateUniqueReadId(reads) {
   while (existingIds.has(`read_${n}`)) n++;
   return `read_${n}`;
 }
+
+function clearHealthControlledStateSealingToggle() {
+  const sealToggle = document.getElementById('adv-seal-enable');
+  if (sealToggle) sealToggle.checked = false;
+}
+
 function renderDeviceWorkspace() {
   console.debug('[canonical:%s] renderDeviceWorkspace', _canonicalVersion);
   const el = document.getElementById('device-workspace');
 
   if (!_selectedDeviceId || !_currentModel) {
+    clearHealthControlledStateSealingToggle();
     el.innerHTML = `<div class="card">
       <div class="ws-placeholder">
         <div class="ws-icon">📡</div>
@@ -3415,8 +3405,19 @@ function renderDeviceWorkspace() {
   const device = (model.devices || []).find(d => d.id === _selectedDeviceId);
   if (!device) {
     _selectedDeviceId = null;
+    clearHealthControlledStateSealingToggle();
     el.innerHTML = `<div class="card"><div class="ws-placeholder">Device not found — select another from the tree.</div></div>`;
     return;
+  }
+
+  const staged = _appState.stagedDeviceForms[device.id];
+  const sealToggle = document.getElementById('adv-seal-enable');
+  if (sealToggle) {
+    if (staged && typeof staged.healthControlledStateSealingEnabled === 'boolean') {
+      sealToggle.checked = staged.healthControlledStateSealingEnabled;
+    } else {
+      sealToggle.checked = !!device.health_controlled_state_sealing;
+    }
   }
 
   const grpName = groupName(model, device.groupId) || '— Ungrouped —';
@@ -3729,9 +3730,6 @@ function renderDeviceWorkspace() {
       'adv-mma-host',
       'adv-mma-port',
       'adv-seal-enable',
-      'adv-seal-forced-state',
-      'adv-seal-offline-debounce',
-      'adv-seal-recovery-debounce',
     ].forEach(id => {
       const el = document.getElementById(id);
       if (!el || el.dataset.deviceDirtyBound === '1') return;
@@ -3943,9 +3941,6 @@ function refreshGroupDropdowns(data) {
 
 // ── MMA Endpoint Settings ────────────────────────────────────────────────────
 
-const STATE_SEAL_OFFLINE_DEFAULT_MS = 1000;
-const STATE_SEAL_RECOVERY_DEFAULT_MS = 3000;
-
 async function loadMmaEndpoint() {
   const { ok, data } = await api('GET', '/system');
   if (!ok) return;
@@ -3961,10 +3956,6 @@ async function loadMmaEndpoint() {
   const portInput     = document.getElementById('adv-mma-port');
   const hint          = document.getElementById('adv-endpoint-hint');
   const summaryEl     = document.getElementById('adv-summary-text');
-  const sealEnable    = document.getElementById('adv-seal-enable');
-  const sealForced    = document.getElementById('adv-seal-forced-state');
-  const sealOfflineDb = document.getElementById('adv-seal-offline-debounce');
-  const sealRecoverDb = document.getElementById('adv-seal-recovery-debounce');
 
   if (mmaEndpoint) {
     // Override active — parse stored host:port
@@ -3988,16 +3979,6 @@ async function loadMmaEndpoint() {
     hint.dataset.autoLabel = autoLabel;
     summaryEl.textContent = `MMA Endpoint: Auto (${autoLabel})`;
   }
-
-  const ss = (data.system && data.system.state_sealing_override) || {};
-  sealEnable.checked = !!ss.enabled;
-  sealForced.value = ss.forced_state === 'unsealed' || ss.forced_state === 'unlocked' ? 'unsealed' : 'sealed';
-  sealOfflineDb.value = Number.isFinite(Number(ss.offline_debounce_ms))
-    ? Math.max(0, Number(ss.offline_debounce_ms))
-    : STATE_SEAL_OFFLINE_DEFAULT_MS;
-  sealRecoverDb.value = Number.isFinite(Number(ss.recovery_debounce_ms))
-    ? Math.max(0, Number(ss.recovery_debounce_ms))
-    : STATE_SEAL_RECOVERY_DEFAULT_MS;
 }
 
 async function loadModel() {
@@ -4068,9 +4049,6 @@ function _capturePendingDeviceFormSilent() {
   const advHost     = document.getElementById('adv-mma-host');
   const advPort     = document.getElementById('adv-mma-port');
   const sealEnable  = document.getElementById('adv-seal-enable');
-  const sealForced  = document.getElementById('adv-seal-forced-state');
-  const sealOffDb   = document.getElementById('adv-seal-offline-debounce');
-  const sealRecDb   = document.getElementById('adv-seal-recovery-debounce');
 
   if (!nameEl || !srcUnitEl) { _appState.pendingDeviceId = null; return; }
 
@@ -4093,12 +4071,7 @@ function _capturePendingDeviceFormSilent() {
       const p = advPort ? advPort.value.trim() : '';
       return h && p ? `${h}:${p}` : null;
     })(),
-    stateSealingOverrideConfig: {
-      enabled: !!(sealEnable && sealEnable.checked),
-      forced_state: (sealForced && sealForced.value === 'unsealed') ? 'unsealed' : 'sealed',
-      offline_debounce_ms: sealOffDb ? Math.max(0, Number(sealOffDb.value) || 0) : STATE_SEAL_OFFLINE_DEFAULT_MS,
-      recovery_debounce_ms: sealRecDb ? Math.max(0, Number(sealRecDb.value) || 0) : STATE_SEAL_RECOVERY_DEFAULT_MS,
-    },
+    healthControlledStateSealingEnabled: !!(sealEnable && sealEnable.checked),
   };
   _appState.pendingDeviceId = null;
 }
