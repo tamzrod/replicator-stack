@@ -1,0 +1,11 @@
+KDE-SIGNATURE:
+  signature_id: KDE-SIG-D2EDE3D05AF94ACC
+  artifact_id: INV-017
+  artifact_type: experiment
+  artifact_hash: 6371aa895c7608666d456d14d55f1cc97405b34a014547b98534002d89be5a5e
+  metadata_hash: 83c88910654c367db5828e09fc6fee6a3f8e6897416a0ba1f4940bb3556a5050
+  signed_at: 2026-07-30T12:16:42.747048Z
+  expires_at: 2027-07-30T12:16:42.747048Z
+  issuer: KDE-RUNTIME
+  version: 1.0
+  chain:
