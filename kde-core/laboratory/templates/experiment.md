@@ -1,6 +1,29 @@
 # Experiment Template
 
-**Template Version**: 1.0.0
+**Template Version**: 2.0.0
+
+---
+
+## ⚠️ KDE SIGNATURE REQUIRED
+
+**ALL experiments must be signed by KDE Runtime.**
+
+```python
+from runtime.auth import KDEExperimentSigner
+
+signer = KDEExperimentSigner()
+signature = signer.sign_experiment(
+    experiment_id='LAB-XXX',
+    hypothesis='...',
+    design={...},
+    author='AI Agent'
+)
+
+# Write signature file
+signer._signer.write_signature_file(signature, 'laboratory/experiments/LAB-XXX')
+```
+
+**Without KDE-SIGNATURE, experiment will be REJECTED.**
 
 ---
 
@@ -14,6 +37,7 @@
 | Created | YYYY-MM-DD |
 | Engine | Engine name |
 | Author | Author name |
+| Signature Required | ✅ YES |
 
 ---
 
@@ -120,3 +144,20 @@ What conclusions can be drawn from this experiment?
 
 - Investigation: INV-XXX
 - Evidence: (evidence files)
+- Signature: KDE-SIGNATURE.yaml
+
+---
+
+## KDE Signature
+
+```
+KDE-SIGNATURE:
+  signature_id: KDE-SIG-XXXXXXXX
+  artifact_id: LAB-XXX
+  artifact_type: experiment
+  artifact_hash: xxxx...
+  issuer: KDE-RUNTIME
+  version: 1.0
+  signed_at: YYYY-MM-DDTHH:MM:SSZ
+  expires_at: YYYY-MM-DDTHH:MM:SSZ
+```
