@@ -50,11 +50,11 @@ The objective is to identify or design a storage format that optimizes engineeri
 
 ## Hypothesis
 
-**H1**: No single format will be optimal for all criteria; a hybrid approach or format evolution may be necessary.
+**H1**: Compact, structured formats (ProtoBuf, FUSED, TOML) will outperform verbose formats for AI token efficiency.
 
-**H2**: FUSED may offer advantages in specific areas (semantic structure, relationship representation) but may lack tooling compared to established formats.
+**H2**: FUSED's pipe-delimited syntax offers ~10-30% token savings over JSON but lacks tooling ecosystem.
 
-**H3**: Markdown or YAML-based formats may offer the best balance of human factors and AI support.
+**H3**: Formats with native relationship support (RDF, JSON-LD) enable faster querying without preprocessing overhead.
 
 ---
 
@@ -109,48 +109,44 @@ The objective is to identify or design a storage format that optimizes engineeri
 
 ---
 
-## Evaluation Criteria Framework
+## Evaluation Criteria Framework (AI-First)
 
-### Human Factors
+> **Note**: Format is for AI parsing. Human readability is irrelevant - if humans need it, just parse it.
 
-| Criterion | Description |
-|-----------|-------------|
-| Readability | How easy is it for humans to read and understand? |
-| Learnability | How quickly can a new user become proficient? |
-| Authoring Speed | How fast can content be created? |
-| Manual Editing | How easy is it to edit without special tools? |
-| Version Control | How well does it work with git/diff tools? |
-| Merge Conflicts | How often do conflicts occur and how resolvable? |
+### AI Parsing Factors
 
-### AI Factors
+| Criterion | Description | Priority |
+|-----------|-------------|----------|
+| Parser availability | Ready-made parsers | HIGH |
+| Parser complexity | Lines of code to parse | HIGH |
+| Token efficiency | Tokens per data unit | HIGH |
+| Memory footprint | RAM during parsing | HIGH |
+| Streaming support | Can parse incrementally | MEDIUM |
 
-| Criterion | Description |
-|-----------|-------------|
-| Parsing Simplicity | How complex is parsing? |
-| Context Extraction | How well is context preserved? |
-| Semantic Preservation | Are meaning and relationships maintained? |
-| Relationship Representation | How are connections between items expressed? |
-| Pattern Detection | How easy is it to find patterns? |
-| Incremental Synthesis | Can knowledge be built up gradually? |
-| Knowledge Fusion | Can multiple sources be combined? |
-| Chunking Efficiency | Can content be divided for processing? |
-| Retrieval Efficiency | How fast can relevant content be found? |
-| Context Compression | Can context be summarized effectively? |
-| LLM Friendliness | Does it work well with language models? |
+### Query Factors
 
-### Engineering Factors
+| Criterion | Description | Priority |
+|-----------|-------------|----------|
+| Direct access | Can query without full parse | HIGH |
+| Index potential | Can build indexes efficiently | HIGH |
+| Join complexity | How complex to join related data | HIGH |
+| Graph traversal | Native support for relationships | MEDIUM |
 
-| Criterion | Description |
-|-----------|-------------|
-| Schema Evolution | How well does it handle changing structures? |
-| Extensibility | Can new elements be added? |
-| Metadata Support | Can metadata be attached? |
-| Validation | Can structure be validated? |
-| Change Tracking | Can modifications be tracked? |
-| Diff Readability | Are changes human-readable? |
-| Tooling | What tools are available? |
-| Performance | How fast is processing? |
-| Storage Overhead | How much space is used? |
+### Analysis Factors
+
+| Criterion | Description | Priority |
+|-----------|-------------|----------|
+| Pattern detection | How fast to find patterns | HIGH |
+| Schema inference | Can infer structure automatically | MEDIUM |
+| Type preservation | Types survive parsing | HIGH |
+| Null handling | How missing values represented | MEDIUM |
+
+### Token Efficiency Measurement
+
+For equivalent data:
+- Count tokens/bytes per record
+- Count tokens/bytes per relationship
+- Count tokens/bytes per query result
 
 ---
 

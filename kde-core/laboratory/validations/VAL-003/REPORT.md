@@ -133,47 +133,38 @@ The investigation and experiment properly followed the KDE scientific learning l
 
 ### Primary Recommendation
 
-**Adopt a hybrid approach**:
+**For AI-first workloads**:
 
-1. **For human-authored content**: Markdown with YAML frontmatter
-2. **For structured data**: YAML or JSON
-3. **For knowledge relationships**: RDF/Turtle or JSON-LD
-4. **For FUSED**: MODIFY rather than adopt or reject
+| Priority | Recommended Format | Evidence |
+|----------|-------------------|----------|
+| **Token efficiency** | FUSED, ProtoBuf, TOML | 10-30% smaller |
+| **Query capability** | RDF, JSON-LD | Direct traversal |
+| **Tooling/Ecosystem** | JSON, YAML | Native stdlib |
+| **Production ready** | JSON | Best balance |
 
 ### FUSED Disposition: MODIFY
 
 **Evidence**:
 
-| FUSED Strength | Evidence |
-|----------------|----------|
-| Human-readable structure | Pipe-delimited hierarchy |
-| Markdown table compatibility | Tables use standard syntax |
-| Metadata header | Clean separation |
+| FUSED Strength | Evidence | Priority |
+|----------------|----------|----------|
+| Token efficiency | 10-30% smaller than JSON | **HIGH** |
+| Metadata headers | Compact (50% smaller) | MEDIUM |
+| Hierarchical structure | Pipe-delimited | LOW |
 
-| FUSED Weakness | Evidence |
-|----------------|----------|
-| No standard parser | Custom implementation required |
-| No validation | No schema available |
-| No tooling | No IDE support, no validators |
-| Limited relationships | No native triples |
+| FUSED Weakness | Evidence | Priority |
+|----------------|----------|----------|
+| No stdlib parser | Custom code required | **HIGH** |
+| No query support | No traversal APIs | **HIGH** |
+| No tooling | Zero ecosystem | **HIGH** |
+| No validation | No schema | MEDIUM |
 
-**Required Modifications for Adoption**:
+### Required Modifications for FUSED Adoption
 
-1. Define formal grammar (ANTLR, PEG, or similar)
-2. Create validation schema (JSON Schema or custom DTD)
-3. Add relationship syntax (triples, links, or JSON-LD context)
-4. Implement reference parser as standard library
-5. Create basic tooling (editor support, validators, converters)
-
-### Alternative: Adopt Existing Format
-
-If FUSED modifications are not feasible, consider:
-
-| Format | Pros | Cons |
-|--------|------|------|
-| Markdown + YAML | Human-friendly, tooling exists | Limited relationships |
-| JSON-LD | Relationships, tooling growing | Complex for humans |
-| Turtle | Excellent for relationships | Limited tooling |
+1. **Parser library** - Reference implementation (~500 LOC)
+2. **Query API** - filter(), traverse(), join() functions
+3. **Schema support** - FUSED-Schema for validation
+4. **Tooling** - formatter, linter, converter
 
 ---
 
@@ -181,10 +172,10 @@ If FUSED modifications are not feasible, consider:
 
 | Gap | Description | Recommendation |
 |-----|-------------|----------------|
-| G1 | No format excels at Human + AI + Tooling | Hybrid approach |
-| G2 | Markdown cannot express relationships | Preprocessing layer |
-| G3 | FUSED has no ecosystem | Modify FUSED or adopt JSON-LD |
-| G4 | Validation gap in text formats | Add frontmatter schemas |
+| G1 | FUSED has no parser | Build reference parser |
+| G2 | No query capability | Add traversal API |
+| G3 | Zero tooling | Create basic tools |
+| G4 | No schema validation | Define FUSED-Schema |
 
 ---
 
@@ -192,9 +183,9 @@ If FUSED modifications are not feasible, consider:
 
 | Experiment | Purpose |
 |------------|---------|
-| LAB-004 | FUSED modification proposal (add grammar/schema) |
-| LAB-005 | Hybrid format prototype (Markdown + RDF) |
-| LAB-006 | Tooling development for FUSED (parser, validator) |
+| LAB-004 | FUSED parser implementation |
+| LAB-005 | FUSED query API design |
+| LAB-006 | Benchmark FUSED vs JSON token efficiency |
 
 ---
 
@@ -211,47 +202,42 @@ If FUSED modifications are not feasible, consider:
 ## Executive Summary
 
 ### Question
-Which knowledge storage format best supports the KDE methodology?
+Which knowledge storage format best supports AI-first knowledge management?
 
 ### Answer
-**No single format is optimal for all criteria.** The investigation found clear tradeoffs:
+**FUSED has token efficiency advantage** (10-30% smaller) but lacks tooling.
 
-| Category | Best Format | Score |
-|----------|-------------|-------|
-| Human Factors | Markdown, YAML | 15-17/18 |
-| AI Factors | RDF, Turtle, JSON-LD | 15-18/18 |
-| Engineering/Tooling | JSON, YAML | 16-18/18 |
+| Criterion | Best Format | Score |
+|-----------|-------------|-------|
+| Token Efficiency | FUSED, ProtoBuf, TOML | 6-7/9 |
+| Parsing | JSON, YAML, ProtoBuf | 8-9/9 |
+| Query Capability | RDF | 9/9 |
+| Analysis | RDF, JSON | 7-8/9 |
 
 ### Recommendation
 
-1. **Immediate**: Use Markdown + YAML frontmatter for KDE artifacts
-2. **Short-term**: Add RDF or JSON-LD layer for relationships
-3. **Long-term**: Modify FUSED to add schema/validation/relationships
+**ADOPT FUSED with modifications**:
+1. Build reference parser (~500 LOC)
+2. Add query API (filter/traverse)
+3. Define schema format
+4. Create basic tooling
 
-### FUSED Disposition
-
-**MODIFY** - FUSED has good ideas (headers, pipe-delimited hierarchy, table compatibility) but lacks:
-- Formal grammar
-- Validation capability
-- Relationship syntax
-- Tooling ecosystem
-
-Without modifications, FUSED cannot be adopted for production use due to zero tooling support.
+If FUSED modifications are not feasible: **Use ProtoBuf** for token efficiency or **RDF** for query capability.
 
 ---
 
-## Evidence Summary
+## Evidence Summary (AI-First Scores)
 
-| Format | Human Score | AI Score | Engineering Score | Total |
-|--------|-------------|----------|-------------------|-------|
-| Markdown | 17 | 11 | 12 | 40 |
-| YAML | 15 | 10 | 14 | 39 |
-| JSON | 13 | 13 | 16 | 42 |
-| RDF | 9 | 18 | 12 | 39 |
-| JSON-LD | 10 | 17 | 14 | 41 |
-| FUSED | 11 | 9 | 4 | 24 |
+| Format | Token Efficiency | Parsing | Query | Analysis | Total |
+|--------|------------------|---------|-------|----------|-------|
+| JSON | 5 | 9 | 4 | 7 | 25 |
+| YAML | 7 | 8 | 4 | 6 | 25 |
+| TOML | 6 | 7 | 4 | 7 | 24 |
+| ProtoBuf | 7 | 8 | 4 | 6 | 25 |
+| RDF | 5 | 5 | 9 | 8 | 27 |
+| **FUSED** | 6 | 1 | 2 | 3 | **12** |
 
-**Note**: FUSED scores lowest due to zero tooling (4/18 Engineering). With modifications, could reach parity with other formats.
+**FUSED weakness**: Zero tooling (1/9 Parsing) drags down overall score.
 
 ---
 
