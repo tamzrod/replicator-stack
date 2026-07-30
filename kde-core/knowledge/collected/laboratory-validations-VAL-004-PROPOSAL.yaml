@@ -1,0 +1,17 @@
+id: KO-2E06875C
+type: evidence
+title: 'Artifact: laboratory-validations-VAL-004-PROPOSAL'
+statement: Collected from laboratory/validations/VAL-004/PROPOSAL.md
+evidence:
+- laboratory-validations-VAL-004-PROPOSAL
+source_artifacts:
+- laboratory-validations-VAL-004-PROPOSAL
+confidence: 0.8
+status: active
+relationships: []
+metadata:
+  source_path: laboratory/validations/VAL-004/PROPOSAL.md
+version: 1.0.0
+created_at: '2026-07-30T12:34:01.855432Z'
+provenance:
+  collected_from: laboratory/validations/VAL-004/PROPOSAL.md

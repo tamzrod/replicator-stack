@@ -1,0 +1,17 @@
+id: KO-3755CCCC
+type: evidence
+title: 'Artifact: laboratory-experiments-LAB-003-DESIGN'
+statement: Collected from laboratory/experiments/LAB-003/DESIGN.md
+evidence:
+- laboratory-experiments-LAB-003-DESIGN
+source_artifacts:
+- laboratory-experiments-LAB-003-DESIGN
+confidence: 0.8
+status: active
+relationships: []
+metadata:
+  source_path: laboratory/experiments/LAB-003/DESIGN.md
+version: 1.0.0
+created_at: '2026-07-30T12:34:01.827951Z'
+provenance:
+  collected_from: laboratory/experiments/LAB-003/DESIGN.md

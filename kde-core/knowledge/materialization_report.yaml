@@ -1,0 +1,45 @@
+started_at: '2026-07-30T12:34:01.823539Z'
+steps:
+- step: collect
+  action: Collected knowledge from artifacts
+  result: 31 knowledge objects created
+- step: relationships
+  action: Built relationships between objects
+  result: 0 relationships created
+- step: patterns
+  action: Discovered patterns across objects
+  result: 1 patterns discovered
+- step: fuse
+  action: Fused knowledge into higher-level concepts
+  result: 1 fused knowledge objects created
+- step: indexes
+  action: Built repository indexes
+  result: 4 indexes created
+- step: manifest
+  action: Built repository manifest
+  result: 31 objects indexed
+- step: validation
+  action: Validated knowledge repository
+  result: 'Valid: True'
+completed_at: '2026-07-30T12:34:02.490299Z'
+summary:
+  version: 1.0.0
+  object_count: 31
+  pattern_count: 1
+  relationship_count: 0
+  fused_count: 1
+  principle_count: 0
+  avg_confidence: 0.8
+  index_paths:
+    object_index: knowledge/indexes/object_index.yaml
+    type_index: knowledge/indexes/type_index.yaml
+    artifact_index: knowledge/indexes/artifact_index.yaml
+    confidence_index: knowledge/indexes/confidence_index.yaml
+  created_at: '2026-07-30T12:34:02.443257Z'
+validation:
+  valid: true
+  checks:
+  - 'Provenance check: 31 objects'
+  - 'Relationship check: 0 relationships'
+  - 'Index check: 4 indexes'
+  issues: []

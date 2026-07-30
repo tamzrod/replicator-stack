@@ -1,0 +1,17 @@
+id: KO-C66A8C39
+type: evidence
+title: 'Artifact: laboratory-investigations-INV-006-PROPOSAL'
+statement: Collected from laboratory/investigations/INV-006/PROPOSAL.md
+evidence:
+- laboratory-investigations-INV-006-PROPOSAL
+source_artifacts:
+- laboratory-investigations-INV-006-PROPOSAL
+confidence: 0.8
+status: active
+relationships: []
+metadata:
+  source_path: laboratory/investigations/INV-006/PROPOSAL.md
+version: 1.0.0
+created_at: '2026-07-30T12:34:01.844525Z'
+provenance:
+  collected_from: laboratory/investigations/INV-006/PROPOSAL.md
