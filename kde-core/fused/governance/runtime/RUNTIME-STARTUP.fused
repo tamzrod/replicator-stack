@@ -1,0 +1,169 @@
+# FUSEDv1.0
+
+# name: RUNTIME-STARTUP
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.250532Z
+|runtime_startup_sequence
+  |document_id=RUNTIME-STARTUP
+  |version=1.1.0
+  |date=2026-07-24
+  |authority=Human Authority
+  |status=PRODUCTION
+  |source=INV-AUTO-ENGINE-SELECTION (Human Approved)
+|overview
+  |update_v110=Added Automatic Engine Selection (Step 4) based on INV-AUTO-ENGINE-SELECTION.
+|startup_sequence
+|step_details
+  |step_1_bootstrap
+    |action=Read BOOTSTRAP.md entry point
+    |purpose=Establish canonical session entry
+    |output=Bootstrap acknowledged
+|step_2_load_runtime_configuration
+  |action=Read Runtime default configuration
+  |source=`/governance/runtime/defaults.yaml`
+  |configuration_loaded=
+  |default_engine=KDE-ENGINE-002
+  |default_seed=SEED-001
+  |output=Runtime defaults loaded into memory
+|step_3_check_session_override
+  |action=Check for session-specific configuration
+  |source=Experiment or Investigation configuration
+  |check=
+  |items
+    ||Is `session_override.engine` specified?
+    ||Is `session_override.seed` specified?
+  |output=Override status determined
+|step_4a_apply_session_override_if_present
+  |action=Use session-specified Engine and/or Seed
+  |rules=
+  |example=
+  |engine=KDE-ENGINE-004  # Override engine
+  |output=Session configuration determined
+  |logging=Override is logged with reason for audit trail.
+|step_4b_automatic_engine_selection_if_no_override
+  |action=Select Engine based on problem characteristics
+  |source=`/governance/runtime/ENGINE-SELECTION.md`
+  |algorithm=
+  |keyword-to-engine_mapping=
+  |table
+    ||['Keywords Detected', 'Engine Selected', 'Confidence']
+    ||['why, cause, mechanism', 'Gamma (KDE-ENGINE-003)', 'HIGH']
+    ||['what if, prevent, intervene', 'Gamma (KDE-ENGINE-003)', 'HIGH']
+    ||['bootstrap, reproduce', 'Delta (KDE-ENGINE-004)', 'HIGH']
+    ||['context, validate, check', 'Beta (KDE-ENGINE-002)', 'HIGH']
+    ||['No specific keywords', 'Beta (KDE-ENGINE-002)', 'MEDIUM']
+    ||['Pattern', 'Sequence']
+    ||['Causal + Bootstrap', 'Gamma → Delta']
+    ||['Bootstrap + Analysis', 'Delta → Beta']
+    ||['Context + Causal', 'Beta → Gamma']
+    ||['Confidence', 'Action']
+    ||['≥50%', 'Proceed with selection']
+    ||['30-49%', 'Log warning, proceed']
+    ||['<30%', 'Use Beta default, flag']
+  |sequential_patterns=
+  |fallback_behavior=
+  |output=
+  |items
+    ||Selected Engine
+    ||Confidence level
+    ||Selection rationale
+    ||Alternatives considered
+  |logging=All selections logged per ENGINE-SELECTION.md specification.
+|step_4c_session_configuration_summary
+  |configuration=
+  |after_step_4a_or_4b
+    |selected_engine=KDE-ENGINE-002  # Or KDE-ENGINE-003 or KDE-ENGINE-004
+    |engine_selection_confidence=85  # Percentage
+    |selection_rationale="Context keywords detected (validate, check)"
+    |output=Session configuration determined
+|step_5_load_engine
+  |action=Load the selected Engine
+  |source=`/engines/{engine-id}/`
+  |verification=
+  |items
+    ||Engine files exist
+    ||Engine version matches
+    ||Engine is compatible with Seed
+  |output=Engine loaded into memory
+|step_6_load_seed
+  |action=Load the selected Seed
+  |source=`/seeds/{seed-id}/`
+  |verification=
+  |items
+    ||Seed files exist
+    ||Seed is compatible with Engine
+    ||Seed status verified (FROZEN or active)
+  |output=Seed loaded into memory
+|step_7_verify_compatibility
+  |action=Confirm Engine-Seed compatibility
+  |check=
+  |items
+    ||Engine is in Seed's compatible engines list
+    ||Versions are compatible
+    ||All prerequisites met
+  |output=Compatibility verified
+|step_8_initialize_runtime_state
+  |action=Set Runtime state to INITIALIZING
+  |state_transition=
+  |verification=
+  |items
+    ||All engine modules loaded
+    ||Engine configuration verified
+    ||Prerequisites satisfied
+  |output=Runtime state: INITIALIZING
+|step_9_transfer_authority
+  |action=Transfer execution authority to Engine
+  |transfer=
+  |items
+    ||From: AI Substrate
+    ||To: Engine
+    ||AI operates as execution substrate
+    ||Engine determines subsequent actions
+    ||AI native planning suspended
+  |post-transfer=
+  |output=Authority transferred
+|step_10_engine_control
+  |action=Runtime enters READY state
+  |state=READY
+  |control=Engine now controls execution
+  |await=Engine directive for session task
+|session_termination
+  |important=Session-specific overrides are **not persisted**. Each new session starts with Runtime defaults.
+|error_handling
+  |error_configuration_not_found
+    |condition=`/governance/runtime/defaults.yaml` missing
+    |action=STOP and report missing artifact
+    |recovery=Human must restore configuration
+|error_engine_not_found
+  |condition=Specified Engine does not exist
+  |action=STOP and report missing Engine
+  |recovery=Human must specify valid Engine
+|error_seed_not_found
+  |condition=Specified Seed does not exist
+  |action=STOP and report missing Seed
+  |recovery=Human must specify valid Seed
+|error_incompatible_engine-seed
+  |condition=Engine and Seed are not compatible
+  |action=STOP and report incompatibility
+  |recovery=Human must specify compatible pair
+|key_principles
+  |principle_1_deterministic_startup
+    |principle_2_human_authority
+      |principle_3_explicit_override
+        |principle_4_session_isolation
+          |principle_5_clean_termination
+        |related_documents
+          |table
+            ||['Document', 'Purpose']
+            ||['[defaults.yaml](./defaults.yaml)', 'Runtime default configuration']
+            ||['[SESSION-OVERRIDE.md](./SESSION-OVERRIDE.md)', 'Session override behavior']
+            ||['[ENGINE-SELECTION.md](./ENGINE-SELECTION.md)', 'Automatic Engine Selection']
+            ||['[/laboratory/LABORATORY-RULES.md](/workspace/project/kde/laboratory/LABORATORY-RULES.md)', 'Laboratory Rules']
+        |version_history
+          |table
+            ||['Version', 'Date', 'Changes', 'Authority']
+            ||['1.0.0', '2026-07-20', 'Initial production release', 'SEED-001']
+            ||['1.1.0', '2026-07-24', 'Added Automatic Engine Selection (Step 4b)', 'INV-AUTO-ENGINE-SELECTION (Human Approved)']
+        |status=PRODUCTION
+        |authority=Human Authority
+        |source=INV-AUTO-ENGINE-SELECTION (Human Approved)

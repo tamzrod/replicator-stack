@@ -1,0 +1,284 @@
+# FUSEDv1.0
+
+# name: LABORATORY-SOP
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.235003Z
+|kde_laboratory_standard_operating_procedures
+  |document_id=SOP-001
+  |title=Laboratory Standard Operating Procedures
+  |version=1.0.0
+  |status=APPROVED
+  |effective_date=2026-07-21
+  |owner=KDE Governance
+  |supersedes=None
+|purpose
+|scope
+  |items
+    ||All investigations conducted within the KDE Laboratory
+    ||All experiments performed during investigations
+    ||All evidence collected and synthesized
+    ||All knowledge recommendations generated
+    ||All research recommendations produced
+|architecture_hierarchy
+  |responsibilities_by_layer
+    |table
+      ||['Layer', 'Responsibility', 'Defines']
+|sop-001_investigation_lifecycle
+  |purpose
+    |lifecycle_stages
+      |stage_definitions
+        |input=Closed investigation
+        |output=Knowledge recommendations, research recommendations
+        |responsible=Engine (recommends), Governance (approves)
+        |completion_requirements
+          |table
+            ||['Requirement', 'Verification']
+            ||['Research question answered', 'Conclusion documented with evidence']
+            ||['All planned experiments completed', 'Experiment records present']
+            ||['Evidence archived', 'Evidence artifacts in investigation directory']
+            ||['Self-review performed', 'Review documented']
+            ||['Lessons learned recorded', 'Lessons documented']
+            ||['Recommendations prepared', 'Knowledge and research recommendations documented']
+            ||['Human approval obtained', 'Governance approval recorded']
+      |sop-002_experiment_lifecycle
+        |purpose
+          |relationship_to_investigation
+            |clarification_experiments_vs_investigations
+              |table
+                ||['Aspect', 'Investigation', 'Experiment']
+              |experiment_lifecycle
+                |experiment_definition
+                  |items
+                    ||Hypothesis being tested
+                    ||Data sources
+                    ||Tools and resources required
+                    ||Constraints and assumptions
+                  |experiment_documentation
+                    |table
+                      ||['Document', 'Required', 'Description']
+                      ||['Hypothesis', 'YES', 'Testable claim']
+                      ||['Design', 'YES', 'Methodology']
+                      ||['Execution Log', 'YES', 'What was actually done']
+                      ||['Raw Data', 'YES', 'Unprocessed results']
+                      ||['Analysis', 'YES', 'Interpretation of results']
+                      ||['Conclusion', 'YES', 'Support/refute hypothesis']
+                      ||['Integration Notes', 'YES', 'How results inform investigation']
+                    |success_vs_failure
+                      |table
+                        ||['Failure Mode', 'Definition']
+                        ||['Execution Failure', 'Experiment could not be completed']
+                        ||['Data Quality Failure', 'Data collected is insufficient or invalid']
+                        ||['Scope Failure', 'Experiment did not test what it intended']
+                  |sop-003_documentation_standards
+                    |purpose
+                      |required_documents_by_artifact_type
+                        |table
+                          ||['Document', 'Purpose', 'Required']
+                          ||['Investigation Plan', 'Define scope and methodology', 'YES']
+                          ||['Index', 'Quick reference to all artifacts', 'YES']
+                          ||['Status Reports', 'Track progress', 'YES']
+                          ||['Lessons Learned', 'Capture insights', 'YES']
+                          ||['Conclusion', 'Final findings', 'YES']
+                          ||['Investigation Report', 'Complete narrative', 'YES']
+                          ||['Document', 'Purpose', 'Required']
+                          ||['Hypothesis', 'Testable claim', 'YES']
+                          ||['Design', 'Methodology', 'YES']
+                          ||['Execution Log', 'What was done', 'YES']
+                          ||['Raw Data', 'Unprocessed results', 'YES']
+                          ||['Analysis', 'Interpretation', 'YES']
+                          ||['Conclusion', 'Hypothesis verdict', 'YES']
+                          ||['Document', 'Purpose', 'Required']
+                          ||['Evidence Record', 'What was collected', 'YES']
+                          ||['Evidence Chain', 'How it was obtained', 'YES']
+                          ||['Evidence Analysis', 'What it means', 'YES']
+                          ||['Document', 'Purpose', 'Required']
+                          ||['Knowledge Recommendation', 'Promote evidence to knowledge', 'YES (if applicable)']
+                          ||['Research Recommendation', 'Recommend future work', 'YES (if applicable)']
+                        |document_metadata
+                          |table
+                            ||['Field', 'Description']
+                            ||['Document ID', 'Unique identifier']
+                            ||['Title', 'Descriptive title']
+                            ||['Version', 'Semantic version']
+                            ||['Status', 'Draft, Review, Approved, Archived']
+                            ||['Created', 'ISO-8601 timestamp']
+                            ||['Modified', 'ISO-8601 timestamp']
+                            ||['Author', 'Creator identity']
+                            ||['Investigation ID', 'Parent investigation (if applicable)']
+                          |document_naming_convention
+                            |items
+                              ||`INV-015-investigation.md`
+                              ||`INV-015-index.md`
+                              ||`EXP-001-hypothesis.md`
+                              ||`EVD-001-runtime-trace.md`
+                            |purpose_documentation
+                              |purpose
+                                |purpose
+                              |sop-004_evidence_standards
+                                |purpose
+                                  |evidence_definition
+                                    |acceptable_evidence_types
+                                      |table
+                                        ||['Type', 'Description', 'Examples']
+                                      |evidence_hierarchy
+                                        |table
+                                          ||['Level', 'Type', 'Reliability']
+                                          ||['1', 'Experimental', 'Highest reliability']
+                                          ||['2', 'Observational', 'High reliability']
+                                          ||['3', 'Documented', 'Medium reliability']
+                                          ||['4', 'Referenced', 'Requires verification']
+                                          ||['5', 'Inferred', 'Requires strong support']
+                                        |evidence_requirements_by_investigation_type
+                                          |table
+                                            ||['Investigation Type', 'Minimum Evidence']
+                                            ||['Root Cause Analysis', 'Observable behavior + source trace']
+                                            ||['Architecture Design', 'Comparative analysis + tradeoffs']
+                                            ||['Validation', 'Experimental results']
+                                            ||['Recommendation', 'Evidence synthesis']
+                                          |prohibited_conclusions
+                                            |table
+                                              ||['Prohibited Statement', 'Requirement']
+                                              ||['"The system works correctly"', 'Requires test results']
+                                              ||['"Knowledge was used"', 'Requires retrieval trace']
+                                              ||['"Performance improved"', 'Requires measurements']
+                                              ||['"Quality is acceptable"', 'Requires defined criteria']
+                                              ||['"The approach is better"', 'Requires comparative evidence']
+                                            |evidence_chain
+                                              |table
+                                                ||['Stage', 'Requirement']
+                                                ||['Source', 'Document origin']
+                                                ||['Collection', 'Timestamp, method']
+                                                ||['Storage', 'Location, access']
+                                                ||['Analysis', 'Process documented']
+                                                ||['Presentation', 'Context preserved']
+                                              |evidence_citation_format
+                                                |evd-number_type={Description}
+                                                |link=investigation/INV-015/logs/session.log:45
+                                                |retrieved=2026-07-21T14:30:00Z
+                                                |evd-001_runtime_trace=Git status during session
+                                            |sop-005_knowledge_retrieval_policy
+                                              |purpose
+                                                |policy_statement
+                                                  |retrieval_decision_framework
+                                                    |retrieval_context_matrix
+                                                      |table
+                                                        ||['Context', 'Retrieval', 'Documentation']
+                                                      |retrieval_documentation_requirements
+                                                        |table
+                                                          ||['Field', 'Description']
+                                                          ||['Relevant knowledge', 'List of knowledge artifacts reviewed']
+                                                          ||['Retrieval decision', 'Why retrieval was or was not performed']
+                                                          ||['Applied knowledge', 'Specific knowledge applied']
+                                                          ||['Ignored knowledge', 'Relevant knowledge not applied and why']
+                                                        |retrieval_execution
+                                                          |retrieval_measurement
+                                                            |table
+                                                              ||['Metric', 'Purpose']
+                                                              ||['Retrieval rate', 'Artifacts accessed / artifacts available']
+                                                              ||['Application rate', 'Artifacts applied / artifacts accessed']
+                                                              ||['Coverage rate', 'Relevant artifacts / total artifacts']
+                                                              ||['Decision accuracy', 'Appropriate retrieval decisions / total decisions']
+                                                        |sop-006_knowledge_promotion
+                                                          |purpose
+                                                            |promotion_hierarchy
+                                                              |clarification_of_roles
+                                                                |table
+                                                                  ||['Artifact', 'Created By', 'Approved By']
+                                                                |promotion_criteria
+                                                                  |table
+                                                                    ||['Criterion', 'Requirement']
+                                                                  |promotion_process
+                                                                    |knowledge_recommendation_document
+                                                                      |table
+                                                                        ||['Section', 'Description']
+                                                                      |role_clarification
+                                                                    |sop-007_research_recommendations
+                                                                      |purpose
+                                                                        |research_recommendation_definition
+                                                                          |recommendation_authority
+                                                                            |table
+                                                                              ||['Artifact', 'May Recommend Research', 'May Initiate Research']
+                                                                              ||['Experiment', 'YES', 'NO']
+                                                                              ||['Investigation', 'YES', 'NO']
+                                                                              ||['Governance', 'YES', 'YES']
+                                                                            |recommendation_contents
+                                                                              |table
+                                                                                ||['Section', 'Description']
+                                                                              |approval_process
+                                                                                |research_recommendation_document
+                                                                                  |research_recommendation
+                                                                                    |recommendation_id=REC-{NUMBER}
+                                                                                    |source={Investigation or Experiment ID}
+                                                                                    |date={ISO-8601}
+                                                                                    |rationale
+                                                                                      |proposed_scope
+                                                                                        |priority
+                                                                                          |dependencies
+                                                                                            |expected_outcome
+                                                                                              |governance_decision
+                                                                                                |status=[PENDING / APPROVED / REJECTED]
+                                                                                                |approved_by=
+                                                                                                |date=
+                                                                                                |automatic_initiation_prohibition
+                                                                                              |sop-008_investigation_completion
+                                                                                                |purpose
+                                                                                                  |completion_requirements
+                                                                                                    |table
+                                                                                                      ||['Requirement', 'Verification', 'Evidence']
+                                                                                                      ||['Research question answered', 'Conclusion present', 'Conclusion document']
+                                                                                                      ||['All hypotheses tested', 'Experiment records', 'Experiment logs']
+                                                                                                      ||['Evidence archived', 'All evidence stored', 'Evidence directory']
+                                                                                                      ||['Recommendations prepared', 'Documents present', 'Recommendation docs']
+                                                                                                      ||['Requirement', 'Verification', 'Evidence']
+                                                                                                      ||['Investigation complete', 'All sections present', 'Investigation doc']
+                                                                                                      ||['Index updated', 'All artifacts listed', 'Index document']
+                                                                                                      ||['Lessons learned', 'Insights captured', 'Lessons doc']
+                                                                                                      ||['Self-review performed', 'Review documented', 'Review doc']
+                                                                                                      ||['Requirement', 'Verification', 'Evidence']
+                                                                                                      ||['Human review', 'Reviewer approval', 'Approval record']
+                                                                                                      ||['Governance approval', 'Official approval', 'Governance doc']
+                                                                                                      ||['Closure authorized', 'Closure permission', 'Closure authorization']
+                                                                                                    |completion_checklist
+                                                                                                      |closure_process
+                                                                                                        |post-closure
+                                                                                                          |table
+                                                                                                            ||['Action', 'Responsible', 'Timeline']
+                                                                                                            ||['Update index', 'Runtime', 'Immediately']
+                                                                                                            ||['Archive artifacts', 'Runtime', 'Within 24h']
+                                                                                                            ||['Process recommendations', 'Governance', 'Within 7 days']
+                                                                                                            ||['Notify stakeholders', 'Runtime', 'Within 24h']
+                                                                                                      |implementation
+                                                                                                        |runtime_responsibilities
+                                                                                                          |engine_responsibilities
+                                                                                                            |governance_responsibilities
+                                                                                                          |exceptions
+                                                                                                            |emergency_procedures
+                                                                                                              |table
+                                                                                                                ||['Normal Requirement', 'Exception', 'Justification Required']
+                                                                                                                ||['Full documentation', 'Summary only', 'Post-incident completion']
+                                                                                                                ||['Complete review', 'Expedited review', 'Time constraint']
+                                                                                                                ||['All experiments', 'Critical experiments only', 'Prioritization']
+                                                                                                              |waiver_process
+                                                                                                            |compliance
+                                                                                                              |compliance_monitoring
+                                                                                                                |table
+                                                                                                                  ||['Metric', 'Measurement']
+                                                                                                                  ||['SOP adherence', 'Investigation reviews pass/fail']
+                                                                                                                  ||['Completion rate', 'Investigations closed on time']
+                                                                                                                  ||['Documentation quality', 'Review scores']
+                                                                                                                  ||['Evidence quality', 'Evidence chain completeness']
+                                                                                                                |non-compliance
+                                                                                                              |document_history
+                                                                                                                |table
+                                                                                                                  ||['Version', 'Date', 'Author', 'Changes']
+                                                                                                                  ||['1.0.0', '2026-07-21', 'KDE Governance', 'Initial release']
+                                                                                                              |related_documents
+                                                                                                                |table
+                                                                                                                  ||['Document', 'Relationship']
+                                                                                                                  ||['[ENGINE-VERSIONING.md](./ENGINE-VERSIONING.md)', 'Engine management']
+                                                                                                                  ||['[STATE-MACHINE.md](./STATE-MACHINE.md)', 'Artifact lifecycle']
+                                                                                                                  ||['[seeds/seed-001/README.md](../seeds/seed-001/README.md)', 'Seed information']
+                                                                                                              |document_status=APPROVED
+                                                                                                              |effective_date=2026-07-21
+                                                                                                              |review_date=2027-07-21
+                                                                                                              |owner=KDE Governance

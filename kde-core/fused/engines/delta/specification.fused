@@ -1,0 +1,139 @@
+# FUSEDv1.0
+
+# name: specification
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.227994Z
+|kde-engine-004_delta_specification
+  |engine_id=KDE-ENGINE-004
+  |version=0.1.0
+  |codename=Delta
+  |name=Bootstrap-Enhanced Knowledge Discovery Engine
+  |status=Active
+  |effective_date=2026-07-20
+  |parent_engine=KDE-ENGINE-002 (Beta)
+  |promotion_date=2026-07-22 (to Experimental)
+  |activation_date=2026-07-24 (INV-EVOLUTION-001 REC-004)
+  |promotion_evidence=LAB-DELTA-VALIDATION-001
+|engine_identity
+  |table
+    ||['Field', 'Value']
+|purpose
+|scope
+  |what_this_engine_covers
+    |items
+      ||Deterministic bootstrap procedures
+      ||Canonical entry point enforcement
+      ||Pre-initialization restrictions
+      ||Authority transfer protocols
+      ||Runtime initialization verification
+      ||All Beta capabilities (context detection, boundary detection, statistical validation)
+    |what_this_engine_does_not_cover
+      |items
+        ||Runtime execution validation (see Candidate B for this)
+        ||Formal verification
+        ||Network-level testing
+        ||External benchmarking
+  |design_philosophy
+    |from_beta_to_delta
+      |the_bootstrap_addition
+        |question_transformation
+          |table
+            ||['Engine', 'Session Question', 'Bootstrap Question']
+      |engine_pipeline
+      |engine_modules
+        |module_0_bootstrap_module_new
+          |items
+            ||Present canonical entry point
+            ||Verify Laboratory Rules acknowledgment
+            ||Execute Runtime initialization
+            ||Transfer execution authority to Engine
+            ||Enforce pre-initialization restrictions
+          |module_1-6_inherited_from_beta
+            |items
+              ||Observation Engine
+              ||Pattern Detector
+              ||Statistical Validator
+              ||Context Detector
+              ||Boundary Detector
+              ||Knowledge Generator
+        |relationship_to_previous_engines
+          |table
+            ||['Engine', 'Discovery Type', 'Bootstrap', 'Status']
+          |key_differences_from_beta
+            |table
+              ||['Aspect', 'Beta', 'Delta']
+              ||['Bootstrap', 'Not addressed', 'Canonical (BOOTSTRAP.md)']
+              ||['Entry Point', 'Repository-based', 'Enforced']
+              ||['Initialization', 'Undefined', 'Deterministic']
+              ||['Authority Transfer', 'Implicit', 'Explicit']
+              ||['Pre-restrictions', 'Not documented', 'Enforced']
+        |hypotheses
+          |h1_deterministic_bootstrap_hypothesis
+            |statement=Canonical bootstrap produces deterministic session initialization.
+            |evidence=Bootstrap failures observed in fresh sessions.
+            |prediction=Delta's bootstrap module will achieve 100% reproducible initialization.
+            |h2_authority_transfer_hypothesis
+              |statement=Explicit authority transfer improves reproducibility.
+              |evidence=AI-native planning observed before Runtime control.
+              |prediction=Delta's explicit transfer will prevent premature planning.
+              |h3_pre-restriction_enforcement_hypothesis
+                |statement=Documented pre-initialization restrictions prevent premature work.
+                |evidence=Session failures when initialization skipped.
+                |prediction=Delta's restrictions will ensure initialization precedes work.
+            |expected_advantages
+              |table
+                ||['Advantage', 'Evidence Base']
+                ||['Deterministic startup', 'Bootstrap failures']
+                ||['Reproducible initialization', 'Session variance']
+                ||['Authority clarity', 'AI bypass observations']
+                ||['Compliance enforcement', 'Pre-restriction documentation']
+                ||['Entry point consistency', 'Multiple entry points observed']
+            |known_risks
+              |table
+                ||['Risk', 'Likelihood', 'Impact', 'Mitigation']
+                ||['Bootstrap overhead', 'Low', 'Low', 'Optimize initialization']
+                ||['Overly restrictive', 'Medium', 'Medium', 'Allow valid alternatives']
+                ||['Validation complexity', 'Medium', 'Medium', 'Clear validation criteria']
+                ||['Maintenance burden', 'Medium', 'Low', 'Reuse Beta patterns']
+            |validation_requirements
+              |required_validation_experiments
+                |table
+                  ||['Experiment', 'Purpose', 'Expected Outcome']
+                  ||['Bootstrap validation', 'Verify deterministic init', '100% success rate']
+                  ||['Authority transfer', 'Verify transfer timing', 'Authority transfers before discovery']
+                  ||['Pre-restriction test', 'Verify restriction enforcement', 'No work before init']
+                  ||['Comparative benchmark', 'Compare to Beta', '+0.6 overall score']
+                |validation_metrics
+                  |table
+                    ||['Metric', 'Target', 'Threshold']
+                    ||['Bootstrap success rate', '100%', '≥95%']
+                    ||['Session consistency', '100%', '≥90%']
+                    ||['Authority transfer timing', 'Immediate', '≤1 second']
+                    ||['Pre-restriction compliance', '100%', '100%']
+              |engine_lifecycle
+                |current_status_active
+                  |validation_status
+                    |table
+                      ||['Validation', 'Result', 'Date']
+                      ||['VAL-001', 'COMPLETE', '2026-07-20']
+                      ||['LAB-DELTA-VALIDATION-001', 'COMPLETE', '2026-07-22']
+                      ||['INV-EVOLUTION-001 REC-004', 'APPROVED', '2026-07-24']
+                      ||['Evidence', '+6.7 avg advantage, high consistency', '—']
+                    |lifecycle_states
+                      |table
+                        ||['State', 'Description']
+                      |conditions_for_promotion_to_active_all_met
+                        |table
+                          ||['Condition', 'Status', 'Evidence']
+                          ||['Delta performs well in experimental investigations', '✅ MET', 'LAB-DELTA-VALIDATION-001']
+                          ||['No significant failure modes observed', '✅ MET', '0 failures in LAB-DELTA-VALIDATION-001']
+                          ||['Consistency maintained across diverse tasks', '✅ MET', 'Std dev 0.5 (vs Beta 0.8)']
+                          ||['Human review approves promotion', '✅ MET', 'INV-EVOLUTION-001 REC-004']
+                    |provenance
+                    |version_information
+                      |table
+                        ||['Field', 'Value']
+                    |document_status=ACTIVE
+                    |validation_complete=LAB-DELTA-VALIDATION-001
+                    |activation_authority=INV-EVOLUTION-001 REC-004 (Human Approved)
+                    |default=NO (Beta remains default)

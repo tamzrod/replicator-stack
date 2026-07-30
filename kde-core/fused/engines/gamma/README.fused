@@ -1,0 +1,86 @@
+# FUSEDv1.0
+
+# name: README
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.219087Z
+|kde-engine-003_gamma_readme
+  |engine_id=KDE-ENGINE-003
+  |version=0.1.0
+  |codename=Gamma
+  |name=Causal Knowledge Discovery Engine
+  |status=Experimental
+|quick_reference
+  |table
+    ||['Aspect', 'Value']
+|overview
+|engine_comparison
+  |table
+    ||['Engine', 'Discovery', 'Question', 'Confidence']
+|key_features
+  |whats_new_in_gamma
+    |pipeline
+  |discovery_question
+    |alpha
+      |beta
+        |gamma
+      |knowledge_output
+        |beta_knowledge_know-xxx
+          |statement="X correlates with Y under conditions C"
+          |confidence=92%
+          |context=[conditions]
+          |boundary=[limitations]
+          |gamma_causal_knowledge_causal-xxx
+            |statement="X causes Y via mechanism M"
+            |confidence=94%
+            |type=ATE
+            |value=0.85
+            |dox=Y predicted to increase by 0.85
+        |when_to_use_gamma
+          |use_gamma_when
+            |dont_use_gamma_when
+          |status_and_validation
+            |current_status_experimental
+              |validation_checklist
+                |table
+                  ||['Requirement', 'Status']
+                  ||['Methodology documented', '✅ Complete']
+                  ||['Pipeline defined', '✅ Complete']
+                  ||['Knowledge model specified', '✅ Complete']
+                  ||['Laboratory experiments', '⏳ Pending']
+                  ||['Empirical validation', '⏳ Pending']
+                  ||['Production readiness', '⏳ Pending']
+            |documentation_index
+              |table
+                ||['Document', 'Purpose']
+                ||['[specification.md](./specification.md)', 'Engine identity and scope']
+                ||['[methodology.md](./methodology.md)', 'Full causal discovery methodology']
+                ||['[pipeline.md](./pipeline.md)', '8-stage processing pipeline']
+                ||['[knowledge-model.md](./knowledge-model.md)', 'Causal knowledge object structure']
+                ||['[changes.md](./changes.md)', 'Changes from Beta']
+                ||['[provenance.md](./provenance.md)', 'Engine lineage and history']
+            |quick_start
+              |using_gamma_in_experiments
+                |id=KDE-ENGINE-003
+                |version=0.1.0
+                |codename=Gamma
+                |expected_output
+                  |items
+                    ||CAUSAL-XXX knowledge objects
+                    ||Causal diagrams
+                    ||Effect size estimates
+                    ||Intervention predictions
+                    ||Assumption documentation
+              |limitations
+                |known_limitations
+                  |required_assumptions
+                |engine_lineage
+                |contact_and_support
+                |related_documentation
+                  |items
+                    ||[Engine Framework](../README.md) — Overall engine architecture
+                    ||[Engine Interface](../interface.md) — Standard interface specification
+                    ||[Alpha Specification](../alpha/specification.md) — Alpha engine
+                    ||[Beta Specification](../beta/specification.md) — Beta engine
+                    ||[Future Engines](../future-engines.md) — Engine roadmap
+                |status=EXPERIMENTAL
+                |review_date=Upon completion of validation experiments

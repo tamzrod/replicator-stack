@@ -1,0 +1,123 @@
+# FUSEDv1.0
+
+# name: current
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.213135Z
+|current_kde_engine
+  |last_updated=2026-07-24 (INV-EVOLUTION-001 REC-003/REC-004, INV-AUTO-ENGINE-SELECTION)
+|engine_selection
+  |table
+    ||['Engine ID', 'Version', 'Codename', 'Status', 'Default', 'Auto-Select Keywords']
+    ||['KDE-ENGINE-001', '0.1.0', 'Alpha', 'Historical', 'NO', '—']
+  |see=[/governance/runtime/ENGINE-SELECTION.md](/workspace/project/kde/governance/runtime/ENGINE-SELECTION.md) for Automatic Engine Selection specification.
+|understanding_status_vs_default
+  |important=Engine "Status" and "Default" are independent concepts.
+  |status_scientific_lifecycle
+    |table
+      ||['Status', 'Description']
+    |default_runtime_configuration
+      |table
+        ||['Default', 'Description']
+      |key_distinction
+        |table
+          ||['Scenario', 'Status', 'Default', 'Explanation']
+          ||['Beta', 'Active', 'YES', 'Scientifically active AND Runtime default']
+          ||['Gamma', 'Active', 'NO', 'Causal discovery capability, not default']
+          ||['Delta', 'Active', 'NO', 'Bootstrap capability, not default']
+          ||['Future Engine', 'Active', 'NO', "Could be scientifically superior but human hasn't selected as default"]
+        |principle=Scientific validation does NOT automatically change Runtime defaults. Only human authority can change defaults.
+    |default_engine_authority
+    |active_engine
+      |table
+        ||['Field', 'Value']
+    |engine_details
+      |beta_kde-engine-002_active
+        |items
+          ||[beta/specification.md](./beta/specification.md) — Engine identity and scope
+          ||[beta/methodology.md](./beta/methodology.md) — Detailed methodology
+          ||[beta/pipeline.md](./beta/pipeline.md) — Processing pipeline
+          ||[beta/knowledge-model.md](./beta/knowledge-model.md) — Knowledge object specification
+          ||[beta/changes.md](./beta/changes.md) — Version history
+          ||[beta/provenance.md](./beta/provenance.md) — Engine lineage
+        |alpha_kde-engine-001_historical
+          |items
+            ||[alpha/specification.md](./alpha/specification.md) — Engine identity and scope
+            ||[alpha/methodology.md](./alpha/methodology.md) — Detailed methodology
+            ||[alpha/changes.md](./alpha/changes.md) — Version history
+            ||[alpha/provenance.md](./alpha/provenance.md) — Engine lineage
+          |delta_kde-engine-004_candidate
+            |items
+              ||[delta/README.md](./delta/README.md) — Quick reference
+              ||[delta/specification.md](./delta/specification.md) — Engine identity and scope
+              ||[delta/methodology.md](./delta/methodology.md) — Detailed methodology
+              ||[delta/pipeline.md](./delta/pipeline.md) — Processing pipeline
+              ||[delta/knowledge-model.md](./delta/knowledge-model.md) — Knowledge object specification
+              ||[delta/changes.md](./delta/changes.md) — Version history
+              ||[delta/provenance.md](./delta/provenance.md) — Engine lineage
+            |note=Delta is a Candidate Engine (Validated). VAL-001 validation complete. Additional validation recommended before promotion.
+        |engine_lineage
+          |table
+            ||['Engine ID', 'Version', 'Codename', 'Status', 'Default', 'Effective', 'Purpose']
+            ||['KDE-ENGINE-001', '0.1.0', 'Alpha', 'Historical', 'NO', '2026-07-19', 'Pattern discovery']
+        |engine_selection
+          |when_to_use_beta_kde-engine-002
+            |items
+              ||Context detection is required
+              ||Boundary definition is important
+              ||Statistical validation is mandatory
+              ||Complete knowledge objects needed
+            |when_to_use_alpha_kde-engine-001
+              |items
+                ||Legacy compatibility required
+                ||Simple pattern discovery sufficient
+                ||Historical comparison needed
+              |when_to_use_gamma_kde-engine-003
+                |items
+                  ||Root cause analysis required ("why does X cause Y?")
+                  ||Causal mechanism documentation needed
+                  ||Intervention prediction is required ("what if we change X?")
+                  ||Failure propagation analysis needed
+                |gamma_selection_keywords=why, cause, mechanism, intervention, what if, predict outcome, root cause, lead to
+                |when_to_use_delta_kde-engine-004
+                  |items
+                    ||Bootstrap enforcement required
+                    ||Reproducibility is critical
+                    ||Session initialization consistency needed
+              |transition_rules
+                |2_update_the_new_engines_specification_with_status=Active
+                |3_update_the_old_engines_specification_with_status=Historical
+                |note=Engine status transitions do NOT automatically change Runtime defaults. See Session Override for how to use non-default engines.
+                |session_override
+                  |engine=KDE-ENGINE-004  # Use Delta instead of default (Beta)
+              |engine_details_gamma
+                |gamma_kde-engine-003_active
+                  |items
+                    ||[gamma/README.md](./gamma/README.md) — Quick reference
+                    ||[gamma/specification.md](./gamma/specification.md) — Engine identity and scope
+                    ||[gamma/methodology.md](./gamma/methodology.md) — Detailed methodology
+                    ||[gamma/pipeline.md](./gamma/pipeline.md) — Processing pipeline
+                    ||[gamma/knowledge-model.md](./gamma/knowledge-model.md) — Knowledge object specification
+                    ||[gamma/changes.md](./gamma/changes.md) — Version history
+                    ||[gamma/provenance.md](./gamma/provenance.md) — Engine lineage
+                  |activation_evidence=LAB-017, LAB-044, LAB-045, LAB-046 (Repeatability: 100%)
+                  |activation_date=2026-07-24 (INV-EVOLUTION-001 REC-003)
+              |migration_history
+                |table
+                  ||['Date', 'Transition', 'Rationale']
+                  ||['2026-07-19', 'Initial Engine', 'KDE-ENGINE-001 (Alpha) established']
+                  ||['2026-07-20', 'Engine Evolution', 'KDE-ENGINE-002 (Beta) released, Alpha → Historical']
+                  ||['2026-07-20', 'Engine Expansion', 'KDE-ENGINE-003 (Gamma) experimental release']
+                  ||['2026-07-20', 'Bootstrap Engine', 'KDE-ENGINE-004 (Delta) created, Candidate']
+                  ||['2026-07-22', 'Delta Promotion', 'Delta: Candidate → Experimental (LAB-DELTA-VALIDATION-001)']
+                  ||['2026-07-23', 'Gamma Promotion', 'Gamma: Experimental → Candidate (LAB-045/046)']
+              |related_documents
+                |runtime_configuration
+                  |items
+                    ||[/governance/runtime/defaults.yaml](/workspace/project/kde/governance/runtime/defaults.yaml) — Runtime default configuration
+                    ||[/governance/runtime/RUNTIME-STARTUP.md](/workspace/project/kde/governance/runtime/RUNTIME-STARTUP.md) — Runtime startup sequence
+                    ||[/governance/runtime/SESSION-OVERRIDE.md](/workspace/project/kde/governance/runtime/SESSION-OVERRIDE.md) — Session override behavior
+                    ||[/governance/runtime/ENGINE-SELECTION.md](/workspace/project/kde/governance/runtime/ENGINE-SELECTION.md) — Automatic Engine Selection
+                  |engine_framework
+                    |items
+                      ||[interface.md](./interface.md) — Engine interface specification
+                      ||[README.md](./README.md) — Engine framework overview

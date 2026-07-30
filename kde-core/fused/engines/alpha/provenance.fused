@@ -1,0 +1,82 @@
+# FUSEDv1.0
+
+# name: provenance
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.221714Z
+|kde-engine-001_provenance
+  |engine_id=KDE-ENGINE-001
+  |version=0.1.0
+  |codename=Alpha
+|overview
+|experiment_registry
+  |table
+    ||['ID', 'Title', 'Status', 'Domain', 'Assessment', 'Engine Version']
+    ||['LAB-001', 'Tier 1 Knowledge Framework Validation', 'COMPLETE', 'Software', 'MIXED', '0.1.0']
+    ||['LAB-002', 'Improved Methodology Validation', 'COMPLETE', 'Software', 'MIXED', '0.1.0']
+    ||['LAB-003', 'Traceability Validation', 'COMPLETE', 'Software', 'MIXED', '0.1.0']
+    ||['LAB-004', 'Creative Domain Validation', 'COMPLETE', 'Creative', 'MIXED', '0.1.0']
+    ||['LAB-005', 'Living Knowledge Validation', 'COMPLETE', 'Creative', 'MIXED', '0.1.0']
+    ||['LAB-006', 'Standards Compliance Validation', 'COMPLETE', 'Engineering', 'MIXED', '0.1.0']
+    ||['LAB-007', 'Knowledge-to-Implementation Validation', 'COMPLETE', 'Engineering', 'SUPPORTS', '0.1.0']
+    ||['LAB-008', 'Universal Knowledge DNA Discovery', 'COMPLETE', 'Cross-Domain', 'SUPPORTS', '0.1.0']
+    ||['LAB-009', 'Knowledge DNA Discovery', 'COMPLETE', 'Cross-Domain', 'SUPPORTS', '0.1.0']
+    ||['LAB-010', 'Knowledge-to-Simulation Validation', 'COMPLETE', 'Engineering', 'SUPPORTS', '0.1.0']
+    ||['LAB-011', 'Center Control Strategy Discovery', 'ACTIVE', 'Chess Strategy', 'PARTIALLY SUPPORTS', '0.1.0']
+|experiment_details
+  |lab-001_tier_1_knowledge_framework_validation
+    |table
+      ||['Field', 'Value']
+    |purpose=Apply the Tier 1 knowledge framework (KDE-001, KDE-002, KDE-003) to ten consecutive real engineering decisions.
+|lab-002_improved_methodology_validation
+  |table
+    ||['Field', 'Value']
+  |purpose=Validate improved methodology with trigger, observation, and evidence fields.
+|lab-003_traceability_validation
+  |table
+    ||['Field', 'Value']
+  |purpose=Validate that every conclusion traces back to its evidence source.
+|lab-004_creative_domain_validation
+  |table
+    ||['Field', 'Value']
+  |purpose=Apply Laboratory methodology to creative decisions.
+|lab-005_living_knowledge_validation
+  |table
+    ||['Field', 'Value']
+  |purpose=Validate that knowledge can evolve and be maintained over time.
+|lab-006_standards_compliance_validation
+  |table
+    ||['Field', 'Value']
+  |purpose=Validate knowledge application against real engineering standards.
+|lab-007_knowledge-to-implementation_validation
+  |table
+    ||['Field', 'Value']
+  |purpose=Validate that knowledge can be implemented without orphan code.
+|lab-008_universal_knowledge_dna_discovery
+  |table
+    ||['Field', 'Value']
+  |purpose=Discover universal attributes across diverse information artifacts.
+|lab-009_knowledge_dna_discovery
+  |table
+    ||['Field', 'Value']
+  |purpose=Validate Knowledge DNA across diverse domains.
+|lab-010_knowledge-to-simulation_validation
+  |table
+    ||['Field', 'Value']
+  |purpose=Validate that knowledge can drive executable simulations.
+|lab-011_center_control_strategy_discovery
+  |table
+    ||['Field', 'Value']
+  |purpose=Discover chess strategy through evidence-driven experimentation.
+|statistics
+  |table
+    ||['Metric', 'Value']
+|lineage
+  |engine_lineage
+    |table
+      ||['Engine', 'Version', 'Status', 'Experiments']
+      ||['KDE-ENGINE-001', '0.1.0', 'Active', '11']
+|verification
+  |id=KDE-ENGINE-001
+  |version=0.1.0
+  |codename=Alpha
+|document_status=APPROVED

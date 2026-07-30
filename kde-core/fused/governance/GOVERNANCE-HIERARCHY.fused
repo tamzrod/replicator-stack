@@ -1,0 +1,119 @@
+# FUSEDv1.0
+
+# name: GOVERNANCE-HIERARCHY
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.243720Z
+|kde_governance_authority_hierarchy
+  |document_id=GOV-HIERARCHY-001
+  |version=1.0.0
+  |date=2026-07-25
+  |status=APPROVED
+  |authority=KDE Governance (per KDE-INV-002)
+|purpose
+|governance_authority_hierarchy
+  |overview
+|authority_types
+  |1_governance_authority
+    |definition=The external entity (human or organization) that defines KDE methodology and governance policies.
+    |characteristics=
+    |items
+      ||Creates the KDE Runtime Framework
+      ||Defines governance principles and policies
+      ||Does not participate in day-to-day execution
+      ||Authority is external to any specific project
+      ||Creates and defines the Runtime Framework
+      ||Runtime executes governance as defined by Governance Authority
+    |relationship_to_runtime=
+    |2_runtime_authority
+      |definition=The KDE Runtime instance that executes governance for a project.
+      |characteristics=
+      |items
+        ||Instantiated from the KDE Runtime Framework
+        ||Executes governance policies
+        ||Authorizes execution agents
+        ||Maintains runtime state
+        ||Owns project artifacts
+        ||Operates under authority of Governance Authority
+        ||Cannot modify its own governance structure
+        ||Authorizes execution agents
+        ||Receives artifacts from execution agents
+      |relationship_to_governance_authority=
+      |relationship_to_execution_authority=
+      |3_execution_authority
+        |definition=The agents and humans who perform work under the authority of the KDE Runtime.
+        |characteristics=
+        |items
+          ||Performs investigations, experiments, implementations
+          ||Produces artifacts under Runtime Authority
+          ||May be AI agents or humans
+          ||Authority is derived from Runtime
+          ||Authorized by Runtime
+          ||Operates within boundaries set by Runtime
+          ||Produces artifacts owned by Runtime
+        |relationship_to_runtime_authority=
+        |4_approval_authority
+          |definition=Humans who provide approval for governance-affecting decisions.
+          |characteristics=
+          |items
+            ||Reviews and approves governance-affecting artifacts
+            ||Can accept, reject, or request modifications
+            ||Authority is separate from Execution Authority
+            ||Human oversight for accountability
+            ||Provides oversight for Governance Authority decisions
+            ||Reviews Runtime Authority proposals (if any)
+            ||Approves Execution Authority artifacts (when required)
+          |relationship_to_other_authorities=
+      |decision_authority_matrix
+        |table
+          ||['Decision Type', 'Authority', 'Approval Required']
+          ||['Governance policies', 'Governance Authority', 'Yes (by Governance Authority)']
+          ||['Runtime configuration', 'Runtime Instance', 'No']
+          ||['Investigation execution', 'Execution Agent', 'No']
+          ||['Investigation conclusions', 'Execution Agent', 'Recommended']
+          ||['Governance-affecting decisions', 'Execution Agent', 'Yes (Human Approver)']
+          ||['Artifact acceptance', 'Execution Agent', 'Recommended']
+          ||['Governance change proposals', 'Any', 'Yes (Human Approver)']
+      |responsibility_matrix_raci
+        |table
+          ||['Activity', 'Governance Authority', 'Runtime Authority', 'Execution Authority', 'Approval Authority']
+          ||['Define governance', 'R, A', 'I', 'I', 'I']
+          ||['Create Runtime', 'R', 'A', 'I', 'I']
+          ||['Execute investigation', 'I', 'I', 'R, A', 'I']
+          ||['Approve investigation', 'I', 'I', 'R', 'A']
+          ||['Modify governance', 'R', 'C', 'C', 'A']
+          ||['Resolve conflicts', 'A', 'R', 'R', 'C']
+        |legend=
+      |governance_evolution
+        |process_overview
+          |governance_change_process
+            |identification=Execution Agent identifies need for governance change
+            |investigation=Conduct KDE investigation to analyze the need
+            |proposal=Document proposed governance change
+            |review=Human Approver reviews the proposal
+            |decision=Human Approver approves or rejects
+            |implementation=If approved, governance is updated
+            |propagation=Updated governance applies to all Runtime instances
+        |artifact_metadata
+          |standard_metadata_fields
+            |authority=KDE Runtime ([Project Name])
+            |execution_agent=[Agent Name]
+            |human_approver=[Name] (if applicable)
+            |extended_metadata_for_governance_documents
+              |governance_authority=KDE Runtime Framework (External)
+              |runtime_authority=KDE Runtime ([Project Name])
+              |execution_agent=[Agent Name]
+              |human_approver=[Name] (if applicable)
+          |related_policies
+            |table
+              ||['Policy ID', 'Name', 'Relationship']
+              ||['GOV-HIERARCHY-001', 'This document', 'Defines authority hierarchy']
+              ||['GOV-NAMING-001', 'Laboratory Artifact Naming Conventions', 'Uses hierarchy for artifact naming']
+              ||['GOV-AUTH-001', 'Authorization Requirements', '(Future) Defines authorization rules']
+              ||['GOV-EVIDENCE-001', 'Evidence Preservation Standards', 'Evidence supports hierarchy decisions']
+          |references
+            |items
+              ||KDE-INV-001: Investigation Artifact Authority Model
+              ||KDE-INV-002: KDE Governance Authority Hierarchy
+          |status=ENFORCED
+          |review_date=Upon any governance incident or KDE-INV-002 follow-up
+        |per_kde-inv-002_recommendation=ADOPT MODEL C - Hierarchical Governance*

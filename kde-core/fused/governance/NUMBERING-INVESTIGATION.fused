@@ -1,0 +1,90 @@
+# FUSEDv1.0
+
+# name: NUMBERING-INVESTIGATION
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.238746Z
+|investigation_numbering_investigation
+  |document_id=INV-NUMBER-AUDIT
+  |date=2026-07-24
+  |source=INV-EVOLUTION-001 REC-006
+  |status=INVESTIGATION_COMPLETE
+|purpose
+|findings
+  |numbering_analysis
+    |table
+      ||['Investigation', 'Issue']
+      ||['INV-BENCHMARK-REVALIDATION', 'Non-standard naming']
+      ||['INV-DIMINISHING-RETURNS-001', 'Non-standard naming']
+      ||['INV-EVOLUTION-001', 'Non-standard naming (current)']
+      ||['INV-HYPOTHESIS-REGISTRY-001', 'Non-standard naming']
+      ||['INV-REGRESSION-001', 'Non-standard naming']
+      ||['INV-WEB-001.md', 'File (not directory) + .md extension']
+      ||['INV-003-new', 'Duplicate with suffix']
+      ||['INV-008, INV-009', 'Zero-padded variants exist']
+      ||['INV-016, INV-018, INV-019', 'Zero-padded variants exist']
+      ||['INV-024, INV-025, INV-026', 'Zero-padded variants exist']
+      ||['INV-029', 'Numbered but files appear incomplete']
+      ||['INV-033, INV-034', 'Listed as missing but may exist']
+    |zero-padding_variants
+      |items
+        ||INV-000008, INV-000009 (should be INV-008, INV-009)
+        ||INV-001018, INV-001019 (should be INV-018, INV-019)
+        ||INV-002028 (should be INV-028)
+      |non-standard_named_investigations
+        |items
+          ||INV-BENCHMARK-REVALIDATION
+          ||INV-DIMINISHING-RETURNS-001
+          ||INV-HYPOTHESIS-REGISTRY-001
+          ||INV-REGRESSION-001
+    |root_cause_analysis
+      |table
+        ||['Cause', 'Evidence']
+        ||['Multiple naming conventions', 'Sequential (INV-001) vs descriptive (INV-EVOLUTION-001)']
+        ||['Zero-padding errors', 'INV-008 vs INV-000008']
+        ||['Legacy naming', 'INV-003-new suffix']
+        ||['File vs directory', 'INV-WEB-001.md (file, not directory)']
+        ||['Missing sequential numbers', 'INV-029, INV-033, INV-034']
+    |recommendations
+      |rec-006_section_1_standardization
+        |table
+          ||['Issue', 'Recommendation', 'Priority']
+          ||['Zero-padded variants', 'Standardize to INV-XXX format', 'Medium']
+          ||['INV-003-new', 'Archive as historical or complete', 'Low']
+          ||['INV-WEB-001.md', 'Move to proper directory if needed', 'Low']
+          ||['Non-standard names', 'Keep as-is (specialized investigations)', 'N/A']
+          ||['Missing numbers', 'Investigate and document', 'Medium']
+        |rec-006_section_2_future_standards
+          |table
+            ||['Type', 'Format', 'Example']
+            ||['Sequential', 'INV-XXX', 'INV-001, INV-002']
+            ||['Specialized', 'INV-[NAME]-001', 'INV-EVOLUTION-001']
+            ||['Variant', 'INV-XXX-[variant]', 'INV-003-new']
+            ||['Meta', 'INV-[META]-[NAME]', 'INV-WEB-001']
+          |rec-006_section_3_investigation_to_implement
+            |table
+              ||['Investigation', 'Recommended Action', 'Status']
+              ||['INV-000008 → INV-008', 'Rename directory', 'PENDING']
+              ||['INV-000009 → INV-009', 'Rename directory', 'PENDING']
+              ||['INV-001018 → INV-018', 'Rename directory', 'PENDING']
+              ||['INV-001019 → INV-019', 'Rename directory', 'PENDING']
+              ||['INV-002028 → INV-028', 'Rename directory', 'PENDING']
+              ||['INV-003-new', 'Archive as incomplete or complete', 'PENDING']
+              ||['INV-WEB-001.md', 'Move to directory if investigation continues', 'PENDING']
+        |actions_taken
+          |table
+            ||['Date', 'Action', 'Status']
+            ||['2026-07-24', 'Investigation documented', 'COMPLETE']
+        |pending_actions
+          |table
+            ||['Priority', 'Action', 'Owner']
+            ||['Medium', 'Investigate why INV-033, INV-034 are missing', 'Governance']
+            ||['Medium', 'Rename zero-padded directories', 'Governance']
+            ||['Low', 'Decide fate of INV-003-new', 'Governance']
+            ||['Low', 'Handle INV-WEB-001.md', 'Governance']
+        |related_documents
+          |items
+            ||[INV-EVOLUTION-001 ANALYSIS.md](../laboratory/investigations/INV-EVOLUTION-001/ANALYSIS.md)
+            ||[INV-EVOLUTION-001 CONCLUSION.md](../laboratory/investigations/INV-EVOLUTION-001/CONCLUSION.md)
+        |document_status=INVESTIGATION_COMPLETE
+        |findings=Documented
+        |actions=Pending

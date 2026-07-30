@@ -1,0 +1,120 @@
+# FUSEDv1.0
+
+# name: ARCHIVE-SOP
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.239199Z
+|archive_standard_operating_procedure
+  |document_id=SOP-ARCHIVE
+  |title=Archive Management SOP
+  |version=1.0.0
+  |status=APPROVED (INV-EVOLUTION-001 REC-005)
+  |effective_date=2026-07-24
+  |authority=Human Authority (Governance)
+  |source=INV-EVOLUTION-001 Section 5.3
+|purpose
+|scope
+  |items
+    ||All investigations in `/laboratory/investigations/`
+    ||All experiments in `/laboratory/experiments/`
+    ||Archive-eligible artifacts as defined by criteria below
+|archive_criteria
+  |rec-005_section_1_archive_eligibility
+    |table
+      ||['Criterion', 'Description', 'Required']
+      ||['', 'No pending recommendations requiring action', '']
+    |archive_decision_matrix
+      |table
+        ||['Completion', 'Age', 'Relevance', 'Replacement', 'Archive?']
+        ||['COMPLETE', '>90 days', 'Not referenced', 'YES', '✅ Archive']
+        ||['COMPLETE', '>90 days', 'Not referenced', 'N/A', '✅ Archive']
+        ||['COMPLETE', '>90 days', 'Referenced', 'YES', '⚠️ Review']
+        ||['COMPLETE', '<90 days', 'Any', 'Any', '❌ No']
+        ||['IN_PROGRESS', 'Any', 'Any', 'Any', '❌ No']
+        ||['ACTIVE', 'Any', 'Any', 'Any', '❌ No']
+  |archive_categories
+    |rec-005_section_2_archive_categories
+      |table
+        ||['Category', 'Description', 'Directory']
+  |archive_process
+    |rec-005_section_3_archive_procedure
+      |archive_steps
+        |table
+          ||['Step', 'Action', 'Owner']
+          ||['1', 'Identify archive candidate', 'Governance']
+          ||['2', 'Verify completion status', 'Investigator']
+          ||['3', 'Check for active references', 'Governance']
+          ||['4', 'Determine archive category', 'Governance']
+          ||['5', 'Move files to archive directory', 'Governance']
+          ||['6', 'Update registry (if applicable)', 'Governance']
+          ||['7', 'Document archive decision', 'Governance']
+    |archive_directory_structure
+      |standard_archive_structure
+        |archive_note_format
+          |archive_note_inv-xxxlab-xxx
+            |original_id=[INV-XXX|LAB-XXX]
+            |archive_date=YYYY-MM-DD
+            |archive_category=[HISTORICAL|SUPERSEDED|REFERENCE|INCOMPLETE]
+            |original_status=[COMPLETE|INCOMPLETE|...]
+            |archived_by=[Name]
+            |archive_reason=[Brief explanation]
+            |why_archived
+              |historical_reference
+                |unarchive_criteria
+              |archive_metrics
+                |rec-005_section_4_archive_tracking
+                  |table
+                    ||['Metric', 'Target', 'Current']
+                    ||['Investigations archived', 'All eligible', '0']
+                    ||['Experiments archived', 'All eligible', '0']
+                    ||['Archive review frequency', 'Quarterly', 'N/A']
+                    ||['Archive compliance', '100% eligible archived', '0%']
+                  |quarterly_archive_review
+                    |table
+                      ||['Quarter', 'Reviews Conducted', 'Items Archived']
+                      ||['2026-Q3', '(Initial)', 'TBD']
+                |reference_archives
+                  |reference_category_criteria
+                    |table
+                      ||['Criterion', 'Description']
+                    |items
+                      ||NOT actively maintained
+                      ||NOT updated with new information
+                      ||KEPT for lookup purposes only
+                |incomplete_archives
+                  |incomplete_category_criteria
+                    |table
+                      ||['Criterion', 'Description']
+                    |items
+                      ||Why the work was never completed
+                      ||What would be needed to complete it
+                      ||Whether completion is still valuable
+                |legacy_audit
+                  |rec-005_section_5_initial_archive_audit
+                    |table
+                      ||['Category', 'Count', 'Action']
+                      ||['Question-only (never started)', '~30', 'Archive as INCOMPLETE']
+                      ||['Started, incomplete', '~16', 'Review for closure or archive']
+                      ||['Complete', '~5', 'Archive as HISTORICAL']
+                    |recommended_actions
+                      |immediate_30_days=
+                      |short-term_90_days=
+                  |enforcement_rules
+                    |rule_1_quarterly_review
+                      |rule_2_reference_maintenance
+                        |rule_3_unarchive_process
+                      |related_documents
+                        |table
+                          ||['Document', 'Relationship']
+                          ||['[INVESTIGATION-CLOSURE-SOP.md](./INVESTIGATION-CLOSURE-SOP.md)', 'Closure requirements']
+                          ||['[LESSONS-LEARNED-SOP.md](./LESSONS-LEARNED-SOP.md)', 'Lessons capture']
+                          ||['[LABORATORY/registry.md](../laboratory/registry.md)', 'Investigation registry']
+                          ||['[laboratory/investigations/archive/](../laboratory/investigations/archive/)', 'Archive directory']
+                      |version_history
+                        |table
+                          ||['Version', 'Date', 'Author', 'Changes']
+                          ||['1.0.0', '2026-07-24', 'INV-EVOLUTION-001', 'Initial SOP (REC-005 implementation)']
+                      |sop_status=APPROVED
+                      |authority=Human Authority
+                      |enforcement=MANDATORY
+                      |review_cadence=Quarterly
+                      |source=INV-EVOLUTION-001 REC-005

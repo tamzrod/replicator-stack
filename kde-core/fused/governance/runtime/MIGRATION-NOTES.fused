@@ -1,0 +1,108 @@
+# FUSEDv1.0
+
+# name: MIGRATION-NOTES
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.247749Z
+|migration_notes_browser-style_default_management
+  |document_id=MIGRATION-DEFAULT-MANAGEMENT
+  |version=1.0.0
+  |date=2026-07-20
+  |authority=Human Authority
+  |status=PRODUCTION
+|overview
+|problem_statement
+  |before_implicit_default_selection
+    |items
+      ||Scientific validation level (Engine Status)
+      ||Operational configuration (which Engine is actually used)
+      ||"Active" Engine was assumed to be the default
+      ||Scientific validation seemed to imply operational selection
+      ||No clear separation between "scientific state" and "runtime behavior"
+    |example_of_the_problem
+  |solution_browser-style_default_management
+    |core_principle
+      |table
+        ||['Concept', 'Governed By', 'Changes When']
+        ||['Engine Status', 'Scientific validation', 'Engine undergoes validation']
+        ||['Runtime Default', 'Human configuration', 'Human edits defaults.yaml']
+      |browser_metaphor
+        |table
+          ||['Browser Behavior', 'KDE Runtime Behavior']
+          ||['User sets home page', 'Human sets default Engine']
+          ||['User can change anytime', 'Human can change anytime']
+          ||['Extensions can override temporarily', 'Sessions can override temporarily']
+          ||['User always has final authority', 'Human always has final authority']
+    |key_changes
+      |1_new_configuration_file
+        |created=`/governance/runtime/defaults.yaml`
+        |default_engine=KDE-ENGINE-002
+        |default_seed=SEED-001
+        |2_explicit_default_column_in_registry
+          |changed=`/engines/current.md`
+          |table
+            ||['Engine ID', 'Status', 'Default']
+            ||['KDE-ENGINE-003', 'Experimental', 'NO']
+            ||['KDE-ENGINE-004', 'Candidate (Validated)', 'NO']
+          |3_session_override_mechanism
+            |created=`/governance/runtime/SESSION-OVERRIDE.md`
+            |engine=KDE-ENGINE-004  # Use Delta instead of default
+            |4_governance_directive
+              |added=Human Authority Over Runtime Defaults
+              |items
+                ||Only humans can change defaults
+                ||KDE shall never change defaults automatically
+                ||Scientific validation does not imply default selection
+          |what_changed_and_what_didnt
+            |what_changed
+              |table
+                ||['Before', 'After']
+                ||['No explicit default configuration', '`defaults.yaml` is single source of truth']
+                ||['"Active" implied default', 'Status and Default are independent']
+                ||['No session override', 'Session override mechanism exists']
+                ||['Implicit default selection', 'Explicit Runtime configuration']
+                ||['No governance directive', 'Human authority directive added']
+              |what_did_not_change
+                |table
+                  ||['Aspect', 'Status Quo']
+                  ||['Current default Engine', 'Still KDE-ENGINE-002 (Beta)']
+                  ||['Current default Seed', 'Still SEED-001']
+                  ||['Runtime behavior', 'Still loads configured Engine and Seed']
+                  ||['Engine implementations', 'Unchanged']
+                  ||['Scientific lifecycle', 'Unchanged']
+            |migration_path
+              |for_existing_sessions
+                |for_new_experiments
+                  |for_validation_experiments
+                |common_questions
+                  |q_does_delta_becoming_validated_mean_it_becomes_the_default
+                    |a=No. Status and Default are independent. Delta remains "Candidate (Validated)" with Default="NO" until a human explicitly changes `defaults.yaml`.
+                    |q_how_do_i_use_delta_for_an_experiment
+                      |a=Add a session override to your experiment configuration:
+                      |engine=KDE-ENGINE-004
+                      |q_who_can_change_the_default_engine
+                        |a=Only humans can modify `/governance/runtime/defaults.yaml`. KDE shall never change this automatically.
+                        |q_what_happens_if_an_experiment_doesnt_specify_an_override
+                          |a=Runtime uses the defaults from `defaults.yaml` (currently Beta + SEED-001).
+                          |q_does_this_affect_how_experiments_are_validated
+                            |a=No. Validations should specify `session_override` to use the Engine under test, but the validation results are the same.
+                        |breaking_changes
+                          |items
+                            ||Existing experiments continue to work
+                            ||Default Engine and Seed remain the same
+                            ||Runtime behavior is unchanged
+                        |rollback_plan
+                          |restore_previous_behavior=Remove `defaults.yaml` (Runtime will need alternative config source)
+                          |revert_registry_changes=Remove "Default" column from Engine registry
+                          |remove_governance_directive=Remove "Human Authority" section from Laboratory Rules
+                          |not_recommended=Changes are additive and low-risk.
+                        |related_documents
+                          |table
+                            ||['Document', 'Purpose']
+                            ||['[defaults.yaml](./defaults.yaml)', 'Runtime default configuration']
+                            ||['[RUNTIME-STARTUP.md](./RUNTIME-STARTUP.md)', 'Runtime startup sequence']
+                            ||['[SESSION-OVERRIDE.md](./SESSION-OVERRIDE.md)', 'Session override behavior']
+                            ||['[/laboratory/LABORATORY-RULES.md](/workspace/project/kde/laboratory/LABORATORY-RULES.md)', 'Laboratory Rules (updated)']
+                            ||['[/engines/current.md](/workspace/project/kde/engines/current.md)', 'Engine registry (updated)']
+                        |migration_date=2026-07-20
+                        |status=Complete
+                        |authority=Human Authority

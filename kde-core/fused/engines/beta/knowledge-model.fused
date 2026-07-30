@@ -1,0 +1,238 @@
+# FUSEDv1.0
+
+# name: knowledge-model
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.224132Z
+|beta_engine_knowledge_model
+  |engine_id=KDE-ENGINE-002
+  |version=0.1.0
+|overview
+|knowledge_object_hierarchy
+|field_specifications
+  |1_identity
+    |id=KNOW-XXX          # Unique knowledge identifier
+    |version="1.0"        # Knowledge version
+    |name=[optional name] # Human-readable name
+    |table
+      ||['Field', 'Type', 'Required', 'Description']
+      ||['`id`', 'String', 'Yes', 'Unique identifier (format: KNOW-XXX)']
+      ||['`version`', 'String', 'Yes', 'Semantic version of knowledge']
+      ||['`name`', 'String', 'No', 'Human-readable name']
+    |2_statement
+      |statement=|
+      |table
+        ||['Field', 'Type', 'Required', 'Description']
+        ||['`statement`', 'String', 'Yes', 'Clear, testable claim']
+      |items
+        ||State "what" is true
+        ||Include "when" conditions
+        ||Be specific, not general
+        ||Avoid absolute claims unless justified
+        ||Include directionality (increases, decreases, correlates)
+      |3_evidence
+        |-_evidence_id=EV-XXX
+        |description=[description]
+        |contribution=[contradiction|exception]
+        |total_count=n
+        |table
+          ||['Field', 'Type', 'Required', 'Description']
+          ||['`supporting`', 'Array', 'Yes', 'Evidence that supports the claim']
+          ||['`contradicting`', 'Array', 'No', 'Evidence that contradicts']
+          ||['`total_count`', 'Integer', 'Yes', 'Total evidence items']
+          ||['Field', 'Type', 'Required', 'Description']
+          ||['`evidence_id`', 'String', 'Yes', 'Reference to evidence']
+          ||['`description`', 'String', 'Yes', 'What this evidence shows']
+          ||['`contribution`', 'Enum', 'Yes', 'How evidence contributes']
+        |4_statistics
+          |sample_size=n
+          |p_value=p
+          |correlation=r
+          |lower=x
+          |upper=y
+          |confidence_level=95
+          |chi_square=χ²
+          |effect_size=d
+          |power=1-β
+          |table
+            ||['Field', 'Type', 'Required', 'Description']
+            ||['`sample_size`', 'Integer', 'Yes', 'Number of observations']
+            ||['`p_value`', 'Float', 'Yes', 'Statistical significance']
+            ||['`correlation`', 'Float', 'No', 'Correlation coefficient']
+            ||['`confidence_interval`', 'Object', 'No', 'Range of likely values']
+            ||['`chi_square`', 'Float', 'No', 'Chi-square statistic']
+            ||['`effect_size`', 'Float', 'No', "Cohen's d or similar"]
+            ||['`power`', 'Float', 'No', 'Statistical power']
+          |5_confidence
+            |value=97           # 0-100
+            |level=high         # high, medium, low
+            |basis=statistical  # statistical, expert, heuristic
+            |table
+              ||['Field', 'Type', 'Required', 'Description']
+              ||['`value`', 'Integer', 'Yes', 'Confidence percentage (0-100)']
+              ||['`level`', 'Enum', 'Yes', 'Qualitative assessment']
+              ||['`basis`', 'Enum', 'Yes', 'How confidence was derived']
+              ||['`factors`', 'Array', 'Yes', 'Contributing factors']
+              ||['Level', 'Value Range', 'Description']
+              ||['`high`', '80-100', 'Strong evidence, likely stable']
+              ||['`medium`', '50-79', 'Moderate evidence, needs validation']
+              ||['`low`', '0-49', 'Weak evidence, preliminary']
+              ||['Basis', 'Description']
+              ||['`statistical`', 'Derived from statistical analysis']
+              ||['`expert`', 'Expert assessment']
+              ||['`heuristic`', 'Rule-of-thumb or experience']
+            |6_context
+              |-_name=dimension_name
+              |values=[applicable values]
+              |evidence_count=n
+              |confidence=high
+              |conditions=|
+              |applicability=conditional  # universal, conditional, limited
+              |applicability_confidence=high
+              |table
+                ||['Field', 'Type', 'Required', 'Description']
+                ||['`dimensions`', 'Array', 'Yes', 'Applicable dimensions']
+                ||['`conditions`', 'String', 'No', 'Detailed conditions']
+                ||['`applicability`', 'Enum', 'Yes', 'Scope of applicability']
+                ||['`applicability_confidence`', 'Enum', 'Yes', 'Confidence in applicability']
+                ||['Field', 'Type', 'Required', 'Description']
+                ||['`name`', 'String', 'Yes', 'Dimension identifier']
+                ||['`values`', 'Array', 'Yes', 'Applicable values']
+                ||['`evidence_count`', 'Integer', 'Yes', 'Evidence for this dimension']
+                ||['`confidence`', 'Enum', 'Yes', 'Confidence in this dimension']
+                ||['Level', 'Description']
+                ||['`universal`', 'Applies in all contexts']
+                ||['`conditional`', 'Applies under specific conditions']
+                ||['`limited`', 'Applies in narrow scope']
+              |7_boundaries
+                |type=exception  # contradiction, exception, edge_case, reverse, diminishing
+                |description=|
+                |conditions=|
+                |severity=minor  # critical, major, minor
+                |evidence_count=n
+                |handling=|
+                |table
+                  ||['Field', 'Type', 'Required', 'Description']
+                  ||['`type`', 'Enum', 'Yes', 'Type of boundary']
+                  ||['`description`', 'String', 'Yes', 'What the boundary is']
+                  ||['`conditions`', 'String', 'No', 'When boundary applies']
+                  ||['`severity`', 'Enum', 'Yes', 'Impact of boundary']
+                  ||['`evidence_count`', 'Integer', 'Yes', 'Evidence for boundary']
+                  ||['`handling`', 'String', 'No', 'How to handle']
+                  ||['Type', 'Description']
+                  ||['`contradiction`', 'Pattern reverses']
+                  ||['`exception`', 'Specific failure cases']
+                  ||['`edge_case`', 'Extreme condition failure']
+                  ||['`reverse`', 'Opposite relationship']
+                  ||['`diminishing`', 'Pattern weakens over time']
+                  ||['Level', 'Description']
+                  ||['`critical`', 'Major impact on applicability']
+                  ||['`major`', 'Moderate impact']
+                  ||['`minor`', 'Small impact']
+                |8_assumptions
+                  |-_assumption=[assumption text]
+                  |verified=true
+                  |notes=[optional notes]
+                  |table
+                    ||['Field', 'Type', 'Required', 'Description']
+                    ||['`assumption`', 'String', 'Yes', 'Assumption text']
+                    ||['`verified`', 'Boolean', 'Yes', 'Whether verified']
+                    ||['`notes`', 'String', 'No', 'Additional notes']
+                  |9_reproducibility
+                    |verified=true
+                    |verification_count=3
+                    |-_experiment_id=LAB-YYY
+                    |result=partial
+                    |date=2026-07-21
+                    |table
+                      ||['Field', 'Type', 'Required', 'Description']
+                      ||['`verified`', 'Boolean', 'Yes', 'Whether independently verified']
+                      ||['`verification_count`', 'Integer', 'Yes', 'Number of verifications']
+                      ||['`replications`', 'Array', 'No', 'Individual replications']
+                      ||['Result', 'Description']
+                      ||['`confirmed`', 'Fully reproduced']
+                      ||['`partial`', 'Partially reproduced']
+                      ||['`failed`', 'Not reproduced']
+                    |10_version
+                      |major=1
+                      |minor=0
+                      |patch=0
+                      |-_version=1.0.0
+                      |date=2026-07-20
+                      |11_provenance
+                        |engine_id=KDE-ENGINE-002
+                        |engine_version=0.1.0
+                        |engine_codename=Beta
+                        |created=2026-07-20T12:00:00Z
+                        |created_by=[actor]
+                        |source_pattern=VP-XXX
+                        |source_context=PC-XXX
+                        |source_boundary=PB-XXX
+                        |-_parent_knowledge=null
+                        |relationship=derived_from
+                    |complete_knowledge_object_example
+                      |id=KNOW-001
+                      |version="1.0"
+                      |name="Classical Opening Center Control"
+                      |statement=|
+                      |-_evidence_id=EV-003
+                      |description=|
+                      |contribution=exception
+                      |total_count=52
+                      |sample_size=70
+                      |p_value=0.003
+                      |correlation=0.72
+                      |lower=0.58
+                      |upper=0.82
+                      |confidence_level=95
+                      |chi_square=15.3
+                      |effect_size=0.89
+                      |value=97
+                      |level=high
+                      |basis=statistical
+                      |-_name=player_rating
+                      |values=[intermediate, expert]
+                      |evidence_count=12
+                      |confidence=medium
+                      |conditions=|
+                      |applicability=conditional
+                      |applicability_confidence=high
+                      |type=exception
+                      |severity=minor
+                      |handling=|
+                      |-_assumption="Center" is defined as e4, d4, e5, d5 squares
+                      |verified=true
+                      |notes=Partial due to data quality issues
+                      |verification_count=3
+                      |-_experiment_id=LAB-014
+                      |result=partial
+                      |date=2026-07-20
+                      |major=1
+                      |minor=0
+                      |patch=0
+                      |-_version=1.0.0
+                      |engine_id=KDE-ENGINE-002
+                      |engine_version=0.1.0
+                      |engine_codename=Beta
+                      |created=2026-07-20T12:00:00Z
+                      |created_by=automated
+                      |source_pattern=VP-001
+                      |source_context=PC-001
+                      |source_boundary=PB-001
+                      |-_parent_knowledge=null
+                      |relationship=original
+                      |status=approved
+                      |review_date=2026-07-27
+                      |approved_by=governance
+                    |knowledge_validation_checklist
+                      |items
+                        ||[ ] `id` is unique and follows format
+                        ||[ ] `statement` is precise and testable
+                        ||[ ] `evidence` has at least one supporting item
+                        ||[ ] `statistics` include sample_size and p_value
+                        ||[ ] `confidence` has value, level, basis, and factors
+                        ||[ ] `context` has at least one dimension or applicability
+                        ||[ ] `boundary` is documented if pattern has limits
+                        ||[ ] `assumptions` are listed and verified status noted
+                        ||[ ] `reproducibility` is tracked
+                        ||[ ] `provenance` includes engine information
+                    |document_status=APPROVED

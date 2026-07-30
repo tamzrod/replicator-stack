@@ -1,0 +1,136 @@
+# FUSEDv1.0
+
+# name: KDE-GOVERNANCE-STATE-VOCABULARY
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.244693Z
+|kde_unified_state_vocabulary
+  |document_id=KDE-GOVERNANCE-STATE-001
+  |version=1.0.0
+  |status=APPROVED
+  |authority=INV-AUDIT-REVIEW-001 (Priority 6)
+  |effective_date=2026-07-27
+  |source=State Machine Standardization
+|purpose
+|the_problem
+  |table
+    ||['Subsystem', 'Active State', 'Complete State', 'Frozen State']
+  |issues=
+  |items
+    ||"ACTIVE" means different things in different contexts
+    ||"VALIDATED" has different meanings
+    ||No consistent "terminal state" terminology
+|unified_state_vocabulary
+  |core_states
+    |table
+      ||['State', 'Meaning', 'Terminal?', 'AI Can Set?']
+    |domain-specific_states
+      |table
+        ||['State', 'Domain', 'Meaning', 'Terminal?']
+  |state_mapping_by_subsystem
+    |investigation_states
+      |table
+        ||['Current State', 'Unified State', 'Notes']
+        ||['DRAFT', 'DRAFT', 'Work in progress']
+        ||['PROPOSED', 'IN_REVIEW', 'Submitted for approval']
+        ||['ACTIVE', 'ACTIVE', 'Investigation in progress']
+        ||['COMPLETE', 'COMPLETE', 'Investigation finished']
+        ||['PROMOTED', 'DEPRECATED', 'Superseded']
+      |knowledge_states
+        |table
+          ||['Current State', 'Unified State', 'Notes']
+          ||['DRAFT', 'DRAFT', 'Work in progress']
+          ||['CANDIDATE', 'IN_REVIEW', 'Ready for validation']
+          ||['VALIDATED', 'VALIDATED', 'Domain-specific state']
+          ||['PROMOTED', 'PROMOTED', 'Domain-specific terminal state']
+          ||['DEPRECATED', 'DEPRECATED', 'Superseded']
+        |expert_states
+          |table
+            ||['Current State', 'Unified State', 'Notes']
+            ||['SYNTHESIZED', 'SYNTHESIZED', 'Domain-specific initial state']
+            ||['CANDIDATE', 'IN_REVIEW', 'Ready for validation']
+            ||['VALIDATED', 'VALIDATED', 'Domain-specific state']
+            ||['REGISTERED', 'REGISTERED', 'Domain-specific state']
+            ||['ACTIVE', 'ACTIVE', 'In production use']
+          |seed_states
+            |table
+              ||['Current State', 'Unified State', 'Notes']
+              ||['PROPOSED', 'IN_REVIEW', 'Under consideration']
+              ||['ACTIVE', 'ACTIVE', 'In production use']
+              ||['FROZEN', 'FROZEN', 'Immutable']
+            |document_states
+              |table
+                ||['Current State', 'Unified State', 'Notes']
+                ||['DRAFT', 'DRAFT', 'Work in progress']
+                ||['REVIEW', 'IN_REVIEW', 'Submitted for review']
+                ||['APPROVED', 'ACTIVE', 'Human approved']
+                ||['REVISION_REQUIRED', 'DRAFT', 'Returned for changes']
+                ||['VALIDATED', 'VALIDATED', 'Domain-specific state']
+                ||['PROMOTED', 'PROMOTED', 'Domain-specific state']
+                ||['REJECTED', 'REJECTED', 'Rejected']
+          |transition_rules
+            |universal_rules
+              |no_skip=States must be traversed in order (no jumping from DRAFT to COMPLETE)
+              |no_backward_skip=Cannot skip backward (no COMPLETE to DRAFT)
+              |terminal_states=Once COMPLETE, REJECTED, or DEPRECATED, state is final
+              |human_authority=ACTIVE, REJECTED, and DEPRECATED require human action
+              |state_transition_matrix
+                |table
+                  ||['From', 'To', 'Authority', 'Evidence Required']
+                  ||['(new)', 'DRAFT', 'Any', 'None']
+                  ||['DRAFT', 'IN_REVIEW', 'Author', 'Work complete']
+                  ||['IN_REVIEW', 'ACTIVE', 'Human', 'Approval granted']
+                  ||['IN_REVIEW', 'DRAFT', 'Human', 'Revision requested']
+                  ||['IN_REVIEW', 'REJECTED', 'Human', 'Rejection reason']
+                  ||['ACTIVE', 'COMPLETE', 'Author', 'Work finished']
+                  ||['ACTIVE', 'DEPRECATED', 'Human', 'Deprecation reason']
+                  ||['COMPLETE', 'DEPRECATED', 'Human', 'Deprecation reason']
+                |domain-specific_transitions
+                  |table
+                    ||['From', 'To', 'Authority', 'Evidence Required']
+                    ||['DRAFT', 'IN_REVIEW', 'Author', 'Document complete']
+                    ||['IN_REVIEW', 'VALIDATED', 'Validator', 'Validation passed']
+                    ||['VALIDATED', 'PROMOTED', 'Human', 'Promotion approved']
+                    ||['From', 'To', 'Authority', 'Evidence Required']
+                    ||['SYNTHESIZED', 'IN_REVIEW', 'Expert author', 'Synthesis complete']
+                    ||['IN_REVIEW', 'VALIDATED', 'Validator', 'Validation passed']
+                    ||['VALIDATED', 'REGISTERED', 'Governance', 'Registration approved']
+                    ||['REGISTERED', 'ACTIVE', 'Governance', 'Activation approved']
+                    ||['From', 'To', 'Authority', 'Evidence Required']
+                    ||['PROPOSED', 'ACTIVE', 'Human', 'Approval granted']
+                    ||['ACTIVE', 'FROZEN', 'Human', 'Freeze approved']
+              |naming_conventions
+                |state_field_names
+                  |table
+                    ||['Use', 'Not']
+                  |state_values
+                    |table
+                      ||['Use', 'Not']
+                      ||['`ACTIVE`', '`Active`, `active`, `IN PROGRESS`']
+                      ||['`IN_REVIEW`', '`IN_REVIEW`, `In_Review`, `IN REVIEW`']
+                      ||['`COMPLETE`', '`COMPLETE`, `Complete`, `completed`']
+                |migration_guide
+                  |for_new_documents
+                    |for_existing_documents
+                      |checklist
+                        |items
+                          ||[ ] Uses uppercase state values
+                          ||[ ] Follows transition rules
+                          ||[ ] Documents state transitions in commit messages
+                    |enforcement
+                      |template_updates=All templates updated to use unified vocabulary
+                      |documentation=This document establishes the standard
+                      |review=Governance reviews ensure compliance
+                    |references
+                      |table
+                        ||['Document', 'Relationship']
+                        ||['`governance/STATE-MACHINE.md`', 'Document state machine (updated to match)']
+                        ||['`knowledge/KDE-KNOWLEDGE-LIFECYCLE.md`', 'Knowledge lifecycle']
+                        ||['`experts/_lifecycle.md`', 'Expert lifecycle']
+                        ||['`laboratory/templates/investigation-template.md`', 'Investigation template']
+                    |version_history
+                      |table
+                        ||['Version', 'Date', 'Changes', 'Authority']
+                        ||['1.0.0', '2026-07-27', 'Initial unified vocabulary', 'INV-AUDIT-REVIEW-001']
+                    |document_status=APPROVED
+                    |authority=INV-AUDIT-REVIEW-001
+                    |compliance=RECOMMENDED (vocabulary standard)

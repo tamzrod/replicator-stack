@@ -1,0 +1,78 @@
+# FUSEDv1.0
+
+# name: MIGRATION-GUIDE
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.238218Z
+|migration_guide_grandfathered_to_kde_runtime
+  |document_version=1.0.0
+  |date=2026-07-28
+  |source=INV-081 (Caveman/ENZO Evolution Analysis)
+  |status=APPROVED
+|purpose
+  |this_guide_helps_investigations_migrate_from_the_grandfathered_kde_runtime_authenticity=GENERIC_AI_WITH_KDE_FORMAT` format to the new `EXECUTION_MODE: KDE_RUNTIME` format required by Rule 8.
+|background
+  |why_migration_is_needed
+    |--_kde_runtime_authenticity=GENERIC_AI_WITH_KDE_FORMAT -->
+    |new_format_benefits
+      |table
+        ||['Aspect', 'Old Format', 'New Format']
+        ||['Authenticity Score', '15%', '100%']
+        ||['Engine Recognition', 'Limited', 'Full']
+        ||['Evolution Support', 'Blocked', 'Enabled']
+        ||['Governance', 'Legacy', 'Current']
+  |migration_steps
+    |step_1_add_execution_mode_header
+  |execution_mode=KDE_RUNTIME
+  |authenticity_score=100%
+  |runtime_authority=Verified
+  |bootstrap_verified=YES
+  |note=The `AUTHENTICITY_SCORE` should be 100% if you're actually running with KDE_RUNTIME.
+  |step_2_remove_old_format
+    |--_kde_runtime_authenticity=GENERIC_AI_WITH_KDE_FORMAT -->
+    |step_3_run_bootstrap_verification
+      |pass_gate_1=Directory structure exists
+      |pass_gate_2=Runtime initialized
+      |pass_gate_3=ECU available
+      |pass_gate_4=Engine loaded
+      |pass_gate_5=Governance rules loaded
+      |pass_gate_6=Seed loaded
+      |step_4_run_pre-flight_check
+        |pass_bootstrap_gates=6/6 checks passed
+        |pass_runtime_state=initialized
+        |pass_ecu_enforcement=ECU check skipped
+        |step_5_validate_ecu_enforcement
+          |printfecu_status={ecu.state}")
+          |step_6_run_verification
+        |common_issues
+          |issue_missing_execution_mode
+            |cause=README.md doesn't have the header.
+            |fix=Add the YAML frontmatter as shown in Step 1.
+            |issue_invalid_execution_mode_value
+              |cause=EXECUTION_MODE has wrong value.
+              |fix=Use one of: `KDE_RUNTIME`, `GENERIC_AI`, `HYBRID`
+              |issue_missing_authenticity_score
+                |cause=Required for GENERIC_AI or HYBRID modes.
+                |fix=Add `AUTHENTICITY_SCORE: XX%` to header.
+                |issue_grandfathered_investigation
+                  |cause=Old format still detected.
+                  |fix=Remove the `<!-- KDE_RUNTIME_AUTHENTICITY: -->` comment entirely.
+              |validation_checklist
+                |table
+                  ||['Check', 'Command', 'Expected']
+                  ||['Bootstrap', '`python3 .kde/bootstrap/gates.py`', '6/6 PASS']
+                  ||['Pre-flight', '`python3 .kde/commands/check.py`', 'READY']
+                  ||['Verification', '`python3 .kde/verification/compliance.py`', '0 errors']
+                  ||['ECU', '`python3 -c "from runtime.ecu import create_ecu; print(\'OK\')"`', 'OK']
+              |rollback
+              |execution_mode=GENERIC_AI
+              |authenticity_score=50%
+            |items
+              ||Allow investigation to proceed
+              ||Mark it as partially authentic
+              ||Require gradual improvement
+          |support
+            |1_run_pre-flight_check=`python3 .kde/commands/check.py`
+            |2_check_verification=`python3 .kde/verification/compliance.py --strict`
+          |document_status=APPROVED
+          |human_review_required=No (automated migration)
+          |evidence=INV-081/REC-003

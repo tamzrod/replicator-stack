@@ -1,0 +1,212 @@
+#!/usr/bin/env python3
+"""
+kde-core Launcher
+Provides portable entry point for kde-core from any directory.
+Uses 'python3 -m' for proper package imports.
+"""
+
+import os
+import sys
+import subprocess
+import argparse
+from pathlib import Path
+
+# Determine kde-core base directory
+SCRIPT_DIR = Path(__file__).resolve().parent
+KDE_CORE_DIR = SCRIPT_DIR.parent
+RUNTIME_DIR = KDE_CORE_DIR / "runtime"
+
+# Set KDE_BASE for runtime configuration
+os.environ["KDE_BASE"] = str(KDE_CORE_DIR)
+
+def run_preflight():
+    """Run preflight check."""
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "runtime.preflight"],
+            cwd=str(KDE_CORE_DIR),
+            env={**os.environ, "PYTHONPATH": str(KDE_CORE_DIR)}
+        )
+        return result.returncode
+    except Exception as e:
+        print(f"Error running preflight: {e}")
+        return 1
+
+def run_sync(args):
+    """Run sync script."""
+    sync_script = SCRIPT_DIR / "sync.sh"
+    cmd = [str(sync_script)]
+    if args.dry_run:
+        cmd.append("--dry-run")
+    if args.auto_commit:
+        cmd.append("--auto-commit")
+    if args.force:
+        cmd.append("--force")
+    if args.remote:
+        cmd.extend(["--remote", args.remote])
+    if args.branch:
+        cmd.extend(["--branch", args.branch])
+    try:
+        result = subprocess.run(cmd, cwd=str(KDE_CORE_DIR.parent))
+        return result.returncode
+    except Exception as e:
+        print(f"Error running sync: {e}")
+        return 1
+
+def run_laboratory_help():
+    """Display laboratory operations with Scientific Learning Loop."""
+    print("""
+SCIENTIFIC LEARNING LOOP (SEED-001)
+===================================
+
+  Research ──creates──► Knowledge ──tests──► Laboratory
+      ▲                                       │
+      │                                       ▼
+      │            Governance ──directs──► Evidence
+      │              │
+      └───────informs
+
+INVESTIGATION PHASE (Research)
+------------------------------
+  1. Define Question       - Identify knowledge question
+  2. Conduct Investigation - Literature review, analysis
+  3. Propose Definition    - Create candidate knowledge
+
+EXPERIMENT PHASE (Laboratory)
+-----------------------------
+  4. Design Experiment     - Plan validation methodology
+  5. Execute Experiment   - Run tests, collect observations
+  6. Verify Expectations  - Compare results vs human expectations
+  7. Accumulate Evidence  - Document findings with citations
+
+GOVERNANCE PHASE
+-----------------
+  8. Review Evidence       - Evaluate findings
+  9. Approve/Reject      - Human decision on recommendations
+ 10. Direct Research      - Set priorities for next cycle
+
+SIX LABORATORY RULES
+--------------------
+  1. Authorization Required - Await human signal before action
+  2. No Self-Authority    - Cannot approve/promote own work
+  3. Evidence-Based       - [EVIDENCE] [INFERENCE] Hypothesis:
+  4. Boundaries           - AI writes restricted to allowed paths
+  5. Protection           - ABSOLUTE/HIGH artifacts immutable
+  6. Checkpoints          - Phase completions require human ack
+
+AVAILABLE ENGINES
+-----------------
+  Alpha  (KDE-ENGINE-001) - Historical
+  Beta   (KDE-ENGINE-002) - Active (Analysis & Synthesis)
+  Gamma  (KDE-ENGINE-003) - Active (Causal Discovery)
+  Delta  (KDE-ENGINE-004) - Active (Generation)
+
+EVIDENCE MARKUP
+---------------
+  [EVIDENCE: source]       - Verified source with citation
+  [INFERENCE: conclusion]   - Reasoning from evidence
+  Hypothesis:               - Explicitly labeled speculation
+
+ARTIFACT STATUS FLOW
+--------------------
+  DRAFT → REVIEW → VALIDATED → APPROVED → PROMOTED
+                    ↑               ↑
+               (Engine)         (Human)
+
+ENTRY POINT
+-----------
+  Run: kde preflight    - Initialize Runtime
+  Read: laboratory/BOOTSTRAP.md - Session entry point
+""")
+    return 0
+
+def main():
+    parser = argparse.ArgumentParser(
+        prog="kde",
+        description="kde-core Launcher - Knowledge Discovery Engine Runtime"
+    )
+    subparsers = parser.add_subparsers(dest="command", help="Commands")
+    
+    preflight_parser = subparsers.add_parser("preflight", help="Run pre-flight check")
+    doctor_parser = subparsers.add_parser("doctor", help="Alias for preflight")
+    lab_parser = subparsers.add_parser("laboratory", help="Show scientific learning loop")
+    lab_alias_parser = subparsers.add_parser("lab", help="Alias for laboratory")
+    rules_parser = subparsers.add_parser("rules", help="Show laboratory rules")
+    bootstrap_parser = subparsers.add_parser("bootstrap", help="Show bootstrap procedure")
+    
+    sync_parser = subparsers.add_parser("sync", help="Sync kde-core with main repository")
+    sync_parser.add_argument("--dry-run", "-d", action="store_true", help="Preview without applying")
+    sync_parser.add_argument("--auto-commit", "-a", action="store_true", help="Auto commit changes")
+    sync_parser.add_argument("--force", "-f", action="store_true", help="Force sync")
+    sync_parser.add_argument("--remote", "-r", default="origin", help="Remote name")
+    sync_parser.add_argument("--branch", "-b", default="main", help="Branch name")
+    
+    help_parser = subparsers.add_parser("help", help="Show this help")
+    
+    args = parser.parse_args(sys.argv[1:] if len(sys.argv) > 1 else ["help"])
+    
+    if args.command == "preflight" or args.command == "doctor":
+        return run_preflight()
+    elif args.command in ("laboratory", "lab", "rules"):
+        return run_laboratory_help()
+    elif args.command == "bootstrap":
+        print("""
+KDE BOOTSTRAP PROCEDURE
+======================
+
+STEP 1: Read BOOTSTRAP.md
+  Read: laboratory/BOOTSTRAP.md
+
+STEP 2: Acknowledge Laboratory Rules
+  Read: laboratory/LABORATORY-RULES.md
+  Acknowledge the 6 core rules before proceeding
+
+STEP 3: Initialize Runtime
+  Run: kde preflight
+  Verify: ECU HEALTHY, Mission READY FOR OPERATION
+
+STEP 4: Transfer Execution Authority
+  Authority transfers from AI substrate to KDE Runtime
+  Active Engine determines all subsequent actions
+
+STEP 5: Await Engine Directive
+  Wait for Active Engine directive for current session task
+
+PRE-INITIALIZATION RESTRICTIONS
+-------------------------------
+Before Runtime init, AI SHALL NOT:
+  Plan tasks | Explore repository | Analyze documents | Create tasks
+  Reason independently | Make assumptions
+""")
+        return 0
+    elif args.command == "sync":
+        return run_sync(args)
+    elif args.command == "help":
+        parser.print_help()
+        print("""
+KDE COMMANDS
+============
+
+RUNTIME COMMANDS:
+  kde preflight   - Run pre-flight health check
+  kde doctor      - Alias for preflight
+
+LABORATORY COMMANDS:
+  kde laboratory  - Show scientific learning loop workflow
+  kde lab        - Alias for laboratory
+  kde rules      - Show laboratory rules
+  kde bootstrap  - Show bootstrap procedure
+
+SYNC COMMANDS:
+  kde sync       - Sync kde-core with main repository
+  kde sync --dry-run - Preview sync without applying
+
+WORKFLOW: Investigation -> Experiment -> Verify -> Evidence
+""")
+        return 0
+    else:
+        parser.print_help()
+        return 0
+
+if __name__ == "__main__":
+    sys.exit(main())

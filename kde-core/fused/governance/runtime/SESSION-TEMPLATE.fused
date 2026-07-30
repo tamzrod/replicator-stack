@@ -1,0 +1,75 @@
+# FUSEDv1.0
+
+# name: SESSION-TEMPLATE
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.247196Z
+|session_template_with_engine_selection
+  |document_id=SESSION-TEMPLATE
+  |date=2026-07-24
+  |source=LAB-BOOTSTRAP-ENGINE-AUDIT-001 REC-002
+  |status=APPROVED
+|purpose
+|standard_session_header
+  |kde_session_configuration
+    |experiment_id=EXP-XXX
+    |title=Experiment Title
+    |created=2026-07-24T00:00:00Z
+    |problem_statement="Your experiment description here"
+|engine_selection_examples
+  |example_1_pattern_discovery_auto
+    |experiment_id=EXP-PATTERN-001
+    |title=Pattern Discovery in BTC Data
+    |created=2026-07-24T00:00:00Z
+    |problem_statement="Discover recurring patterns in BTCUSDT 1-minute data"
+    |example_2_causal_analysis_override
+      |experiment_id=EXP-CAUSAL-001
+      |title=Why Do Mechanisms Degrade?
+      |created=2026-07-24T00:00:00Z
+      |engine=KDE-ENGINE-003  # Gamma
+      |reason="Causal analysis required to understand mechanism degradation"
+      |problem_statement="Why do market mechanisms fail over time?"
+      |example_3_validation_override
+        |experiment_id=EXP-VALIDATE-001
+        |title=Validate Mechanisms on Holdout Data
+        |created=2026-07-24T00:00:00Z
+        |engine=KDE-ENGINE-004  # Delta
+        |reason="Bootstrap validation required for reproducibility"
+        |problem_statement="Validate previously discovered mechanisms on unseen historical data"
+        |example_4_multi-engine_collaboration
+          |experiment_id=EXP-COMPLEX-001
+          |title=Comprehensive Market Analysis
+          |created=2026-07-24T00:00:00Z
+          |problem_statement="Discover patterns, understand causes, and validate findings"
+          |enabled=true
+          |mode=collaborative
+          |-_kde-engine-002_beta=Pattern discovery
+          |-_kde-engine-003_gamma=Causal analysis
+          |synthesis=automatic
+      |engine_selection_quick_reference
+        |table
+          ||['Task', 'Recommended Engine', 'Keywords']
+          ||['Pattern discovery', 'Beta (auto)', 'pattern, discover, find']
+          ||['Statistical analysis', 'Beta (auto)', 'analyze, validate, check']
+          ||['Causal analysis', 'Gamma (override)', 'why, cause, mechanism']
+          ||['Root cause finding', 'Gamma (override)', 'root cause, resulted from']
+          ||['Bootstrap/Reproduce', 'Delta (override)', 'bootstrap, reproduce']
+          ||['Session validation', 'Delta (override)', 'validate, verify']
+          ||['Complex/multi-dimensional', 'Multi-engine', 'Multiple keyword types']
+      |session_override_authority
+        |human_authority=Any user may override automatic selection.
+        |override_syntax=
+        |engine=<ENGINE-ID>
+        |reason=<HUMAN-READABLE-JUSTIFICATION>
+        |required_fields=
+        |items
+          ||`engine`: Must be valid KDE-ENGINE-ID
+          ||`reason`: Must explain why override was necessary
+      |rec-002_implementation_status
+        |table
+          ||['Action', 'Status']
+          ||['Create template document', '✅ COMPLETE']
+          ||['Add to experiments template directory', '📋 PLANNED']
+          ||['Update laboratory template', '📋 PLANNED']
+      |status=APPROVED
+      |authority=Human Authority
+      |source=LAB-BOOTSTRAP-ENGINE-AUDIT-001 REC-002

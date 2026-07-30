@@ -1,0 +1,153 @@
+# FUSEDv1.0
+
+# name: LESSONS-LEARNED-SOP
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.242093Z
+|lessons_learned_standard_operating_procedure
+  |document_id=SOP-LESSONS
+  |title=Lessons Learned Capture and Registry
+  |version=1.0.0
+  |status=APPROVED (INV-EVOLUTION-001 REC-002)
+  |effective_date=2026-07-24
+  |authority=Human Authority (Governance)
+  |source=INV-EVOLUTION-001 Section 5.1
+|purpose
+|scope
+  |items
+    ||All experiments in `/laboratory/experiments/`
+    ||All investigations in `/laboratory/investigations/`
+    ||All new experiments and investigations created after 2026-07-24
+|mandatory_lessons-learned_requirements
+  |rec-002_section_1_experiment_requirements
+    |table
+      ||['Experiment Duration', 'Lessons-Learned Required', 'Timeline']
+      ||['<1 day', 'RECOMMENDED', 'Before closure']
+      ||['1-7 days', 'REQUIRED', 'Before closure']
+      ||['>7 days', 'REQUIRED + Mid-project', 'Ongoing + Before closure']
+    |rec-002_section_2_investigation_requirements
+      |table
+        ||['Investigation Duration', 'Lessons-Learned Required']
+        ||['≤1 day', 'OPTIONAL']
+        ||['>1 day', 'REQUIRED']
+  |lessons-learned_document_structure
+    |required_sections
+      |lessons_learned_lab-xxxinv-xxx
+        |id=[LAB-XXX|INV-XXX]
+        |duration=[X days]
+        |date=YYYY-MM-DD
+        |author=[Name]
+    |what_worked
+      |category_1_eg_methodology
+        |table
+          ||['Item', 'Evidence', 'Impact']
+          ||['[Description]', '[Link/Ref]', 'HIGH/MEDIUM/LOW']
+        |category_2_eg_process
+          |table
+            ||['Item', 'Evidence', 'Impact']
+            ||['[Description]', '[Link/Ref]', 'HIGH/MEDIUM/LOW']
+      |what_didnt_work
+        |category_1_eg_methodology
+          |table
+            ||['Item', 'Evidence', 'Impact', 'Mitigation']
+            ||['[Description]', '[Link/Ref]', 'HIGH/MEDIUM/LOW', '[Action taken]']
+          |category_2_eg_process
+            |table
+              ||['Item', 'Evidence', 'Impact', 'Mitigation']
+              ||['[Description]', '[Link/Ref]', 'HIGH/MEDIUM/LOW', '[Action taken]']
+        |future_improvements
+          |table
+            ||['Improvement', 'Priority', 'Owner', 'Timeline']
+            ||['[Description]', 'P0/P1/P2/P3', '[Role]', 'YYYY-MM-DD']
+        |unexpected_findings
+          |table
+            ||['Finding', 'Evidence', 'Value', 'Applied']
+            ||['[Description]', '[Link/Ref]', 'HIGH/MEDIUM/LOW', 'YES/NO']
+        |cross-reference_to_templates
+          |items
+            ||`/laboratory/templates/investigation-template.md`
+            ||`/laboratory/templates/experiment-template.md`
+        |lessons-learned_registry
+          |rec-002_section_3_registry_maintenance
+            |registry_location=`/laboratory/lessons-registry.md`
+            |registry_entry_format
+              |table
+                ||['ID', 'Duration', 'Date', 'What Worked', "What Didn't", 'Cross-Applied']
+                ||['LAB-XXX', '3 days', '2026-07-24', 'X items', 'Y items', 'Z items']
+              |registry_review_cadence
+                |table
+                  ||['Review', 'Frequency', 'Owner', 'Purpose']
+                  ||['Individual', 'Per closure', 'Investigator', 'Quality check']
+                  ||['Quarterly', 'Every 3 months', 'Governance', 'Pattern identification']
+                  ||['Annual', 'Yearly', 'Governance', 'System improvement']
+            |quality_standards
+              |lessons-learned_quality_criteria
+                |table
+                  ||['Criterion', 'Description', 'Required']
+                |anti-patterns_to_avoid
+                  |table
+                    ||['Anti-Pattern', 'Example', 'Avoid By']
+                    ||['Generic statements', '"Communication could be better"', 'Be specific']
+                    ||['No evidence', '"We learned X" without link', 'Cite artifacts']
+                    ||['No impact', '"X happened"', 'Assign HIGH/MEDIUM/LOW']
+                    ||['Vague recommendations', '"Improve things"', 'Be actionable']
+                    ||['Isolated learning', 'No cross-reference', 'Link to similar']
+              |enforcement_rules
+                |rule_1_closure_gate
+                  |rule_2_promotion_gate
+                    |exception=Duration ≤1 day with documented rationale.
+                    |rule_3_quality_review
+                      |table
+                        ||['Review Aspect', 'Criteria']
+                        ||['Specificity', '≥3 specific items per category']
+                        ||['Evidence', '100% items have links']
+                        ||['Impact', 'All items have impact level']
+                        ||['Actionability', 'All recommendations are specific']
+                  |pattern_identification
+                    |rec-002_section_4_cross-experiment_analysis
+                      |table
+                        ||['Pattern Type', 'Detection Method', 'Action']
+                        ||['Recurring success', 'Same lesson in 3+ experiments', 'Document as best practice']
+                        ||['Recurring failure', 'Same lesson in 3+ experiments', 'Create improvement SOP']
+                        ||['Cross-domain', 'Same lesson in different domains', 'Update templates']
+                        ||['System-level', 'Affects multiple experiments', 'Governance intervention']
+                      |pattern_documentation
+                        |pattern_pattern_name
+                          |identified=YYYY-MM-DD
+                          |frequency=X occurrences
+                          |evidence=[Links to lessons-learned]
+                          |pattern_description
+                            |recommended_action
+                              |status
+                                |table
+                                  ||['Status', 'Date', 'Notes']
+                                  ||['IDENTIFIED', 'YYYY-MM-DD', 'Initial discovery']
+                                  ||['REVIEWED', 'YYYY-MM-DD', 'Governance review']
+                                  ||['ACTIONED', 'YYYY-MM-DD', 'Implementation complete']
+                            |integration_with_other_sops
+                              |with_investigation-closure-sopmd
+                                |closure_checklist_from_investigation-closure-sopmd
+                                  |with_laboratory-sopmd
+                                |metrics
+                                  |rec-002_section_5_capture_rate_tracking
+                                    |table
+                                      ||['Metric', 'Target', 'Current', 'Trend']
+                                      ||['Experiment lessons capture rate', '100% (if >1 day)', '15%', 'Improving']
+                                      ||['Investigation lessons capture rate', '100% (if >1 day)', '15%', 'Improving']
+                                      ||['Cross-application rate', '50%', 'Unknown', 'TBD']
+                                      ||['Pattern identification rate', 'Quarterly', 'N/A', 'TBD']
+                                |related_documents
+                                  |table
+                                    ||['Document', 'Relationship']
+                                    ||['[INVESTIGATION-CLOSURE-SOP.md](./INVESTIGATION-CLOSURE-SOP.md)', 'Closure requirements']
+                                    ||['[LABORATORY-SOP.md](./LABORATORY-SOP.md)', 'Lifecycle procedures']
+                                    ||['[LABORATORY/registry.md](../laboratory/registry.md)', 'Experiment registry']
+                                    ||['[laboratory/templates/experiment-template.md](../laboratory/templates/experiment-template.md)', 'Experiment template']
+                                    ||['[laboratory/templates/investigation-template.md](../laboratory/templates/investigation-template.md)', 'Investigation template']
+                                |version_history
+                                  |table
+                                    ||['Version', 'Date', 'Author', 'Changes']
+                                    ||['1.0.0', '2026-07-24', 'INV-EVOLUTION-001', 'Initial SOP (REC-002 implementation)']
+                                |sop_status=APPROVED
+                                |authority=Human Authority
+                                |enforcement=MANDATORY (for >1 day)
+                                |source=INV-EVOLUTION-001 REC-002

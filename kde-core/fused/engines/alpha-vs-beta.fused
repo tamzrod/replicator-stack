@@ -1,0 +1,126 @@
+# FUSEDv1.0
+
+# name: alpha-vs-beta
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.210653Z
+|alpha_vs_beta_engine_comparison
+  |document_version=1.0
+  |date=2026-07-20
+|overview
+|quick_comparison
+  |table
+    ||['Aspect', 'Alpha', 'Beta']
+|discovery_philosophy
+  |alpha_pattern_discovery
+    |pattern=Center Control → Winning
+    |confidence=Observed in 70% of games
+    |context=Not documented
+    |boundary=Not documented
+    |beta_contextual_knowledge_discovery
+      |knowledge=Center Control → Winning (in classical openings)
+      |confidence=97% (statistical)
+      |context=Classical openings, rating > 1400, time control ≥ 60min
+      |boundary=Not valid for hypermodern, flank, or endgame
+  |pipeline_comparison
+    |alpha_pipeline_4_modules
+      |beta_pipeline_6_modules
+    |feature_comparison
+      |core_features
+        |table
+          ||['Feature', 'Alpha', 'Beta']
+          ||['Evidence Collection', '✅', '✅']
+          ||['Observation Extraction', '✅', '✅']
+          ||['Pattern Detection', '✅', '✅']
+          ||['Basic Validation', '✅', '✅']
+          ||['Statistical Validation', '❌', '✅']
+          ||['Context Detection', '❌', '✅']
+          ||['Boundary Detection', '❌', '✅']
+          ||['Knowledge Generation', '❌', '✅']
+        |statistical_capabilities
+          |table
+            ||['Statistic', 'Alpha', 'Beta']
+            ||['Sample Size', 'Count only', 'Full analysis']
+            ||['P-value', '❌', '✅']
+            ||['Correlation', 'Basic', 'Full']
+            ||['Confidence Interval', '❌', '✅']
+            ||['Chi-square', '❌', '✅']
+            ||['Effect Size', '❌', '✅']
+          |confidence_assessment
+            |table
+              ||['Aspect', 'Alpha', 'Beta']
+            |context_capabilities
+              |table
+                ||['Aspect', 'Alpha', 'Beta']
+                ||['Context Tracking', '❌', '✅']
+                ||['Dimension Search', '❌', '✅']
+                ||['Applicability Classification', '❌', '✅']
+                ||['Context Strength Quantification', '❌', '✅']
+              |boundary_capabilities
+                |table
+                  ||['Aspect', 'Alpha', 'Beta']
+                  ||['Boundary Tracking', '❌', '✅']
+                  ||['Contradiction Detection', '❌', '✅']
+                  ||['Exception Identification', '❌', '✅']
+                  ||['Edge Case Discovery', '❌', '✅']
+                  ||['Reverse Correlation Detection', '❌', '✅']
+            |knowledge_object_comparison
+              |alpha_pattern_object
+                |id=PAT-001
+                |relationship="Center Control → Winning"
+                |observation_count=70
+                |confidence=high
+                |notes="Observed correlation in games"
+                |beta_knowledge_object
+                  |id=KNOW-001
+                  |version="1.0"
+                  |statement=|
+                  |-_evidence_id=EV-002
+                  |description=Not valid for hypermodern or flank openings
+                  |total_count=52
+                  |sample_size=70
+                  |p_value=0.003
+                  |correlation=0.72
+                  |confidence_interval=[0.58, 0.82]
+                  |effect_size=0.89
+                  |value=97
+                  |level=high
+                  |basis=statistical
+                  |-_name=player_rating
+                  |values=[1400+]
+                  |confidence=medium
+                  |applicability=conditional
+                  |type=exception
+                  |severity=minor
+              |when_to_use_each_engine
+                |use_alpha_kde-engine-001_when
+                  |use_beta_kde-engine-002_when
+                |experiment_selection_matrix
+                  |table
+                    ||['Requirement', 'Alpha', 'Beta']
+                    ||['Pattern discovery only', '✅', '✅']
+                    ||['Context-aware results', '❌', '✅']
+                    ||['Statistical significance', '❌', '✅']
+                    ||['Explicit boundaries', '❌', '✅']
+                    ||['Historical comparison', '✅', '✅']
+                    ||['Simple/fast analysis', '✅', '❌']
+                    ||['Complete knowledge model', '❌', '✅']
+                    ||['Production use', '❌', '✅']
+                |migration_path
+                  |from_alpha_to_beta
+                |performance_comparison
+                  |table
+                    ||['Metric', 'Alpha', 'Beta']
+                    ||['Processing Time', 'Faster', 'More thorough']
+                    ||['Output Completeness', 'Basic', 'Comprehensive']
+                    ||['Statistical Rigor', 'Minimal', 'Full']
+                    ||['Knowledge Quality', 'Pattern', 'Contextual Knowledge']
+                |future_engines
+                  |table
+                    ||['Engine', 'Expected', 'Features']
+                    ||['Gamma', 'TBD', 'Causal inference']
+                    ||['Delta', 'TBD', 'Temporal tracking']
+                  |see=[Future Engine Extension Guide](./future-engines.md)
+                |summary
+                  |table
+                    ||['Engine', 'Best For', 'Key Innovation']
+                |document_status=APPROVED

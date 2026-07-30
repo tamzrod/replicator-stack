@@ -1,0 +1,164 @@
+# FUSEDv1.0
+
+# name: SESSION-OVERRIDE
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.248282Z
+|session_override_behavior
+  |document_id=SESSION-OVERRIDE
+  |version=1.0.0
+  |date=2026-07-20
+  |authority=Human Authority
+  |status=PRODUCTION
+|overview
+|purpose
+  |items
+    ||Testing an Engine before it becomes default
+    ||Comparing multiple Engines in the same context
+    ||Validating candidate Engines
+    ||Running experiments with specific configurations
+|override_syntax
+  |in_experiment_configuration
+    |id=EXP-XXX
+    |title=Experiment Title
+    |engine=KDE-ENGINE-004
+    |seed=SEED-001
+    |in_investigation_configuration
+      |id=INV-XXX
+      |title=Investigation Title
+      |engine=KDE-ENGINE-004
+      |seed=SEED-001
+  |override_options
+    |full_override
+      |engine=KDE-ENGINE-004
+      |seed=SEED-001
+      |effect=Use specified Engine and Seed for entire session
+  |partial_override_engine_only
+    |engine=KDE-ENGINE-004
+    |effect=Use specified Engine, use default Seed (SEED-001)
+  |partial_override_seed_only
+    |seed=SEED-002
+    |effect=Use default Engine (KDE-ENGINE-002), use specified Seed
+  |override_rules
+    |rule_1_explicit
+      |override_present_use_override
+        |engine=KDE-ENGINE-004
+        |override_absent_use_runtime_defaults
+          |default_behavior=If `session_override` is not present, Runtime uses defaults.
+      |rule_2_session-scoped
+        |during_session=
+        |items
+          ||Override Engine is active
+          ||Override Seed is active
+          ||Override is discarded
+          ||Runtime returns to defaults
+          ||Next session starts with defaults
+        |after_session=
+      |rule_3_non-persistent
+        |this_experiment_uses_delta
+          |engine=KDE-ENGINE-004
+          |but_runtime_defaultsyaml_still_says
+            |default_engine_kde-engine-002
+              |after_experiment=
+              |items
+                ||Delta is no longer active
+                ||Runtime defaults unchanged
+                ||Beta is again the default
+          |rule_4_human_authorized
+            |items
+              ||Override defaults automatically
+              ||Infer a better Engine
+              ||Promote itself to default
+          |override_scope
+            |what_override_affects
+              |table
+                ||['Scope', 'Affected by Override']
+                ||['Current session Engine', 'Yes']
+                ||['Current session Seed', 'Yes']
+                ||['Runtime default Engine', 'No']
+                ||['Runtime default Seed', 'No']
+                ||['Other sessions', 'No']
+                ||['Engine status', 'No']
+              |what_override_does_not_affect
+                |table
+                  ||['Scope', 'Affected by Override']
+                  ||['Runtime defaults.yaml', 'No']
+                  ||['Engine registry', 'No']
+                  ||['Engine status', 'No']
+                  ||['Seed registry', 'No']
+                  ||['Seed status', 'No']
+                  ||['Other sessions', 'No']
+            |override_lifecycle
+            |examples
+              |example_1_validating_candidate_engine
+                |context=VAL-001 wants to test Delta against Beta
+                |configuration=
+                |id=VAL-001
+                |title=Delta Validation
+                |engine=KDE-ENGINE-004
+                |behavior=
+                |2_override_applies=Delta is loaded
+            |example_2_no_override
+              |context=Regular experiment without override
+              |configuration=
+              |id=EXP-001
+              |title=Regular Experiment
+              |behavior=
+              |3_runtime_defaults_apply=Beta + SEED-001
+            |example_3_partial_override
+              |context=Test new Seed with current Engine
+              |configuration=
+              |id=EXP-002
+              |title=Seed Test
+              |seed=SEED-002
+              |behavior=
+              |2_partial_override=only Seed specified
+            |override_in_validation_context
+              |validation_run_1_baseline
+                |id=VAL-001
+                |engine=KDE-ENGINE-002  # Baseline (Beta)
+                |validation_run_2_candidate
+                  |id=VAL-001
+                  |engine=KDE-ENGINE-004  # Candidate (Delta)
+                  |note=Both runs explicitly specify Engine. Neither run changes Runtime defaults.
+              |override_in_investigation_context
+                |investigation_using_candidate_engine
+                  |id=INV-XXX
+                  |title=Investigation with Delta
+                  |engine=KDE-ENGINE-004
+                  |seed=SEED-001
+                  |investigation_using_default_engine
+                    |id=INV-YYY
+                    |title=Investigation with Beta
+                    |no_override_-_uses_defaults
+                  |error_cases
+                    |error_1_invalid_engine
+                      |engine=KDE-ENGINE-INVALID
+                      |result=STOP, report invalid Engine
+                  |error_2_invalid_seed
+                    |seed=SEED-INVALID
+                    |result=STOP, report invalid Seed
+                  |error_3_incompatible_pair
+                    |engine=KDE-ENGINE-003
+                    |seed=SEED-002
+                    |result=STOP if Engine and Seed are incompatible
+                  |best_practices
+                    |do
+                      |items
+                        ||Explicitly specify Engine and Seed in validation configurations
+                        ||Document why override is needed
+                        ||Return to defaults after testing
+                        ||Keep overrides session-scoped
+                      |dont
+                        |items
+                          ||Persist override beyond session
+                          ||Modify Runtime defaults for experiments
+                          ||Use override to bypass governance
+                          ||Infer "better" Engines without human direction
+                    |related_documents
+                      |table
+                        ||['Document', 'Purpose']
+                        ||['[defaults.yaml](./defaults.yaml)', 'Runtime default configuration']
+                        ||['[RUNTIME-STARTUP.md](./RUNTIME-STARTUP.md)', 'Runtime startup sequence']
+                        ||['[/laboratory/LABORATORY-RULES.md](/workspace/project/kde/laboratory/LABORATORY-RULES.md)', 'Laboratory Rules']
+                    |status=PRODUCTION
+                    |authority=Human Authority

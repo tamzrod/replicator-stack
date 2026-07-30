@@ -1,0 +1,107 @@
+# FUSEDv1.0
+
+# name: SOP-COMPLEXITY-BUDGET
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.232409Z
+|sop_governance_complexity_budget
+  |sop_id=SOP-COMPLEXITY-BUDGET
+  |version=1.0.0
+  |status=APPROVED
+  |authority=INV-AUDIT-REVIEW-001 (Priority 7)
+  |effective_date=2026-07-27
+  |source=Governance Complexity Prevention
+|purpose
+|the_problem
+  |table
+    ||['Metric', 'Value', 'Trend']
+    ||['LABORATORY-SOP.md size', '39KB+', 'Growing']
+    ||['Number of SOPs', '15+', 'Growing']
+    ||['Average SOP complexity', 'Increasing', 'Growing']
+  |risk=Eventually, governance becomes so complex that following it correctly is nearly impossible.
+|complexity_budget_definition
+  |budget_components
+    |table
+      ||['Component', 'Budget', 'Unit', 'Rationale']
+    |current_usage
+      |table
+        ||['Component', 'Current', 'Budget', 'Headroom']
+        ||['SOP Count', '15', '20', '5']
+        ||['Total Size', '~80KB', '200KB', '120KB']
+        ||['Average SOP Size', '~5KB', '20KB', '15KB']
+  |budget_rules
+    |rule_1_addition_requires_removal
+      |rule_2_size_limits
+        |table
+          ||['Size', 'Action Required']
+          ||['> 10KB', 'Consider splitting']
+          ||['> 15KB', 'Split recommended']
+          ||['> 20KB', 'Split required']
+        |rule_3_annual_simplification
+      |complexity_metrics
+        |how_to_measure
+          |count_sops
+            |measure_total_size
+              |measure_largest_sops
+                |count_cross-references
+                  |current_metrics
+                    |table
+                      ||['Metric', 'Value', 'Status']
+                      ||['SOP Count', '15', '✅ Under budget']
+                      ||['Total Size', '~80KB', '✅ Under budget']
+                      ||['Largest SOP', 'LABORATORY-SOP.md (~40KB)', '⚠️ Over individual limit']
+                      ||['Cross-References', '~20', '✅ Under budget']
+                |sop_review_checklist
+                  |items
+                    ||[ ] Is this SOP addressing an edge case or fundamental issue?
+                    ||[ ] Could existing SOPs be modified instead?
+                    ||[ ] What SOP will be removed to make room?
+                    ||[ ] Is this SOP likely to generate new edge cases?
+                    ||[ ] Have we measured current complexity budget?
+                |exception_process
+                  |when_to_exceed_budget
+                    |justification=Document why the exception is necessary
+                    |time_limit=Exception expires in 90 days
+                    |remediation_plan=Document how budget will be restored
+                    |approval=Human governance authority approval required
+                    |exception_template
+                      |complexity_budget_exception_request
+                        |date=YYYY-MM-DD
+                        |requested_by=[Name]
+                        |sop=[SOP name]
+                        |justification
+                          |remediation_plan
+                            |timeline
+                              |items
+                                ||Exception requested until: [Date + 90 days]
+                                ||Remediation deadline: [Date + 90 days]
+                              |approval
+                                |approver=[Name]
+                                |date=YYYY-MM-DD
+                            |enforcement
+                              |automated_checking
+                                |manual_review
+                                  |items
+                                    ||Is governance within budget?
+                                    ||Are exceptions justified?
+                                    ||Is simplification on track?
+                              |simplification_opportunities
+                                |current_candidates_for_removalmerge
+                                  |table
+                                    ||['SOP', 'Reason', 'Action']
+                                    ||['SOP-ARCHIVE', 'Never followed', 'Merge with LABORATORY-SOP']
+                                    ||['SOP-CLOSURE', 'Overlap with investigation template', 'Simplify']
+                                  |consolidation_plan
+                                |references
+                                  |table
+                                    ||['Document', 'Relationship']
+                                    ||['`governance/LABORATORY-SOP.md`', 'Main governance SOP']
+                                    ||['`governance/SOP-ARCHIVE.md`', 'Archive SOP (candidate for merge)']
+                                    ||['`.kde/scripts/archive-detector.py`', 'Archive detection script']
+                                |version_history
+                                  |table
+                                    ||['Version', 'Date', 'Changes', 'Authority']
+                                    ||['1.0.0', '2026-07-27', 'Initial complexity budget SOP', 'INV-AUDIT-REVIEW-001']
+                                |sop_status=APPROVED
+                                |authority=INV-AUDIT-REVIEW-001
+                                |compliance=MANDATORY
+                                |review_date=2026-10-27 (Quarterly review)

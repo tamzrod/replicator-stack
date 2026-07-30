@@ -1,0 +1,211 @@
+# FUSEDv1.0
+
+# name: WORKSPACE-RESOLVER
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.251790Z
+|patch-001_runtime_workspace_resolution
+  |patch_id=PATCH-001
+  |title=Add Workspace Resolution to Runtime Orchestrator
+  |type=Runtime Enhancement
+  |status=IMPLEMENTED (2026-07-21)
+  |date=2026-07-21
+  |author=KDE Runtime Team
+  |based_on=LAB-020 Validation Results
+|executive_summary
+  |problem=LAB-020 confirmed that the Runtime performs operation classification, but workspace resolution does not exist. This causes projects to be created in the current working directory instead of the appropriate workspace.
+  |solution=Add a Workspace Resolver component to the Runtime Orchestrator that maps classified task types to appropriate workspace locations.
+  |impact=Low - Non-breaking change that adds new capability without modifying existing behavior.
+|background
+  |lab-020_findings
+    |table
+      ||['Finding', 'Evidence']
+      ||['Operation Classification exists', '`TaskClassifier.classify()` in orchestrator']
+      ||['Skill Selection uses classification', '`TASK_SKILL_MAP` in orchestrator']
+      ||['Knowledge Retrieval uses classification', '`KnowledgeOnDemandRuntime` initialized']
+    |current_orchestration_flow
+      |step_1=TaskClassifier.classify()     ← CLASSIFICATION ✓
+      |step_2=SkillSelector.select()         ← SKILLS ✓
+      |step_3=KnowledgeOnDemandRuntime        ← KNOWLEDGE ✓
+      |step_4=Execute
+      |workspace=$PWD (current directory)    ← MISSING ✗
+  |architecture_impact_analysis
+    |components_affected
+      |table
+        ||['Component', 'Change', 'Risk']
+        ||['`orchestrator/__init__.py`', 'Add `WorkspaceResolver` class', 'Low']
+        ||['`RuntimeOrchestrator.orchestrate()`', 'Add Step 1.5', 'Low']
+        ||['`OrchestrationResult`', 'Add `workspace` field', 'Low']
+        ||['Existing behavior', 'Unchanged for GENERAL tasks', 'None']
+      |components_unaffected
+        |table
+          ||['Component', 'Reason']
+          ||['`TaskClassifier`', 'No changes needed']
+          ||['`SkillSelector`', 'No changes needed']
+          ||['`KnowledgeOnDemandRuntime`', 'No changes needed']
+          ||['Engine', 'No changes needed']
+    |proposed_architecture
+      |new_component_workspaceresolver
+        |task_workspace_map
+          |workspace_locations_for_each_task_type
+            |tasktypeinvestigation={
+            |base=None,  # Use current directory
+            |pattern=None,
+            |example=None
+            |tasktypeexperiment={
+            |tasktypevalidation={
+            |tasktypegovernance_review={
+            |tasktypeknowledge_creation={
+            |tasktypeskill_creation={
+            |tasktyperuntime_development={
+            |tasktypearchitecture_design={
+            |tasktypedocumentation={
+            |tasktypefrontend_development={
+            |tasktypebackend_development={
+            |tasktypetesting={
+            |tasktypegeneral={
+        |sequence_diagram
+          |current_flow
+            |proposed_flow
+          |source_code_modifications
+            |1_new_file_runtimeorchestratorworkspacepy
+              |base_path=Optional[str]
+              |resolved_path=str
+              |exists=bool
+              |task_type=The classified task type
+              |task_id=Optional task ID (INV-XXX, LAB-XXX, etc.)
+              |requires_id=False,
+              |investigation={
+              |base=None,  # Use current directory
+              |pattern=None,
+              |description="General tasks use current directory"
+              |experiment={
+              |validation={
+              |governance_review={
+              |knowledge_creation={
+              |knowledge_revision={
+              |skill_creation={
+              |runtime_development={
+              |architecture_design={
+              |documentation={
+              |frontend_development={
+              |backend_development={
+              |testing={
+              |general={
+              |def___init__self_workspace_root=str = "/workspace/project/kde"):
+              |filename=Optional filename for file-based tasks
+              |project_name=Optional project name for development tasks
+              |def_check_existsself_workspace_info=WorkspaceInfo) -> bool:
+              |2_modified_file_runtimeorchestrator__init__py
+                |add_to_imports_section
+                  |add_to_runtimeorchestrator__init__
+                    |request=str,
+                    |investigation_id=str = None
+                    |requestrequest=100] + "..." if len(request) > 100 else request,
+                    |3_new_file_runtimeorchestratortypespy
+                      |base_path=self.base_path,
+                      |resolved_path=self.resolved_path,
+                      |exists=self.exists,
+                      |task_type=self.skill_selection.task_type,
+                      |task_id=self.task_id,
+                      |requires_id=self.requires_id
+                      |confidence=self.classification.confidence,
+                      |matched_patterns=self.classification.matched_patterns,
+                      |keywords=self.classification.keywords,
+                      |classification_reason=str
+                      |skills=self.skill_selection.skills,
+                      |skills_with_dependencies=self.skill_selection.skills_with_dependencies
+                      |timestamp=self.timestamp,
+                      |request=self.request,
+                      |classification={
+                      |skill_selection={
+                      |workspace=self.workspace.to_dict(),  # NEW
+                      |loaded_skills_count=self.loaded_skills_count,
+                      |knowledge_retrieved_count=self.knowledge_retrieved_count,
+                      |context_size=self.context_size,
+                      |execution_ready=self.execution_ready
+                      |reason=self.classification.classification_reason
+                  |migration_notes
+                    |deployment_steps
+                      |rollback_procedure
+                        |configuration_changes
+                          |table
+                            ||['Item', 'Change', 'Default']
+                            ||['Workspace root', 'Added', '`/workspace/project/kde`']
+                            ||['TASK_WORKSPACE_MAP', 'Added', 'See above']
+                            ||['WorkspaceInfo', 'Added', 'N/A']
+                      |validation_plan
+                        |unit_tests
+                          |table
+                            ||['Test', 'Description', 'Expected Result']
+                            ||['test_resolve_investigation', 'Resolve workspace for INVESTIGATION', '`/laboratory/investigations/{id}/`']
+                            ||['test_resolve_experiment', 'Resolve workspace for EXPERIMENT', '`/laboratory/experiments/{id}/`']
+                            ||['test_resolve_general', 'Resolve workspace for GENERAL', '`current_directory`']
+                            ||['test_resolve_with_id', 'Resolve with explicit ID', 'Path contains ID']
+                            ||['test_resolve_no_id_needed', 'Resolve when ID not needed', 'Path without ID placeholder']
+                            ||['test_check_exists', 'Check workspace exists', 'Boolean result']
+                          |integration_tests
+                            |table
+                              ||['Test', 'Description', 'Expected Result']
+                              ||['test_orchestrate_with_workspace', 'Full orchestration', 'Workspace in result']
+                              ||['test_classification_to_workspace', 'Classification → workspace mapping', 'Correct task_type → path']
+                              ||['test_backward_compatibility', 'GENERAL task', 'Same as before']
+                            |manual_validation
+                              |test_1=Request "Conduct Investigation INV-999"
+                              |-_expected=Classification = GENERAL, Workspace = `current_directory`
+                              |test_2=Request "Create new skill"
+                              |test_3=Request "Fix bug in UI"
+                              |validation_commands
+                                |run_unit_tests
+                                  |run_integration_tests
+                                    |manual_validation
+                                      |test_investigation
+                                        |printfinvestigation_workspace={result.workspace.resolved_path}")
+                                        |test_general
+                                          |printfgeneral_workspace={result.workspace.resolved_path}")
+                                      |risk_assessment
+                                        |table
+                                          ||['Risk', 'Likelihood', 'Impact', 'Mitigation']
+                                          ||['Breaking existing code', 'Low', 'High', "Only adds new field, doesn't modify existing"]
+                                          ||['Incorrect path resolution', 'Medium', 'Medium', 'Unit tests + validation plan']
+                                          ||['Import errors', 'Low', 'Medium', 'Syntax check before deployment']
+                                          ||['Workspace not existing', 'Low', 'Low', 'check_exists() method available']
+                                      |compatibility_matrix
+                                        |table
+                                          ||['Component', 'Before', 'After', 'Compatible']
+                                          ||['TaskClassifier', '✓', '✓', 'Yes']
+                                          ||['SkillSelector', '✓', '✓', 'Yes']
+                                          ||['KnowledgeOnDemandRuntime', '✓', '✓', 'Yes']
+                                          ||['Engine', '✓', '✓', 'Yes']
+                                          ||['OrchestrationResult consumers', '?', '✓', 'Check needed']
+                                      |alternatives_considered
+                                        |alternative_1_hard-code_in_orchestrator
+                                          |pro=Simple, no new files
+                                          |con=Violates single responsibility, hard to maintain
+                                          |rejected=Not architecture-aligned
+                                          |alternative_2_external_config_file
+                                            |pro=No code changes, config-driven
+                                            |con=Runtime must read config, adds dependency
+                                            |rejected=Increases complexity without benefit
+                                            |alternative_3_knowledge-based_resolution
+                                              |pro=Flexible, uses existing knowledge system
+                                              |con=Over-engineering, adds latency
+                                              |rejected=Unnecessary complexity for static mapping
+                                          |recommendation
+                                            |rationale
+                                              |low_risk=Non-breaking change, adds new capability
+                                              |architecture-aligned=Follows existing patterns (TaskClassifier, SkillSelector)
+                                              |testable=Clear validation plan provided
+                                              |solves_the_problem=Addresses LAB-020 findings
+                                              |next_steps_if_approved
+                                                |1_create_branch=`patch/workspace-resolver`
+                                            |approval_required
+                                              |table
+                                                ||['Role', 'Required', 'Status']
+                                                ||['Governance', 'Yes', '✅ APPROVED']
+                                                ||['Architecture', 'Yes', '✅ APPROVED']
+                                                ||['Runtime Owner', 'Yes', '✅ APPROVED']
+                                              |implementation_complete
+                                                |items
+                                                  ||`runtime/orchestrator/workspace.py` (WorkspaceResolver)
+                                                  ||`runtime/orchestrator/types.py` (WorkspaceInfo)
+                                                  ||`runtime/orchestrator/__init__.py` (Modified)

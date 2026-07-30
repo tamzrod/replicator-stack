@@ -1,0 +1,38 @@
+# FUSEDv1.0
+
+# name: changes
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.220237Z
+|kde-engine-001_changes
+  |engine_id=KDE-ENGINE-001
+  |version=0.1.0
+  |codename=Alpha
+|version_history
+  |v010_2026-07-20_initial_release
+    |status=Active
+    |items
+      ||Initial documented engine
+      ||First official KDE Engine established
+      ||Baseline methodology captured from project inception through LAB-011
+|version_conventions
+  |version_number_format
+    |format=MAJOR.MINOR.PATCH
+    |table
+      ||['Component', 'Description', 'When It Changes']
+    |codename_conventions
+      |table
+        ||['Codename', 'Meaning']
+  |future_change_proposals
+    |what_changed=Specific methodology modifications
+    |why_it_changed=Rationale and evidence
+    |impact=Effect on future experiments
+    |migration=How to transition from previous version
+  |deprecation_policy
+  |archive
+    |table
+      ||['Version', 'Codename', 'Status', 'Superseded By', 'Date']
+      ||['(none)', '', '', '', '']
+  |status_update_2026-07-20
+    |table
+      ||['Field', 'Value']
+  |document_status=APPROVED (Historical)

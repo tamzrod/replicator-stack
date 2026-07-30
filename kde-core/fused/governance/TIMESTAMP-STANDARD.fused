@@ -1,0 +1,134 @@
+# FUSEDv1.0
+
+# name: TIMESTAMP-STANDARD
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.239868Z
+|kde_timestamp_standard
+  |document_id=TIMESTAMP-STANDARD
+  |version=1.0.0
+  |date=2026-07-24
+  |authority=Human Authority
+  |status=PRODUCTION
+  |source=INV-TEMPORAL-PROVENANCE (Human Approved)
+|purpose
+|canonical_timestamp_format
+  |standard_format
+    |table
+      ||['Format', 'Example']
+    |requirements
+      |timezone=UTC (Coordinated Universal Time)
+      |suffix=Z (indicates UTC)
+      |precision=Seconds (HH:MM:SS)
+      |separator=Hyphens (-) for date, colons (:) for time
+      |invalid_formats
+        |table
+          ||['Invalid', 'Reason']
+          ||['`2026-07-24`', 'Missing time component']
+          ||['`2026-07-24 12:00:00`', 'Missing Z suffix, space separator']
+          ||['`2026/07/24T12:00:00Z`', 'Slashes in date']
+          ||['`2026-07-24T12:00:00+00:00`', '+00:00 instead of Z']
+          ||['`1753368000`', 'Unix epoch (not human-readable)']
+    |timestamp_fields_by_artifact_type
+      |all_documents
+        |table
+          ||['Field', 'Required', 'Description']
+        |investigations
+          |table
+            ||['Field', 'Required', 'Description']
+            ||['`completed`', 'RECOMMENDED', 'Investigation finished']
+            ||['`approved`', 'FOR CONCLUSION', 'Human approval']
+          |experiments
+            |table
+              ||['Field', 'Required', 'Description']
+              ||['`started`', 'RECOMMENDED', 'First run executed']
+              ||['`completed`', 'RECOMMENDED', 'All runs finished']
+            |experiment_runs
+              |table
+                ||['Field', 'Required', 'Description']
+                ||['`duration_seconds`', 'RECOMMENDED', 'Execution duration']
+              |knowledge_promoted
+                |table
+                  ||['Field', 'Required', 'Description']
+                  ||['`validated`', 'RECOMMENDED', 'Last validation']
+                |governance_documents
+                  |table
+                    ||['Field', 'Required', 'Description']
+                    ||['`effective`', 'RECOMMENDED', 'When effective']
+                  |seeds
+                    |table
+                      ||['Field', 'Required', 'Description']
+                    |engine_specifications
+                      |table
+                        ||['Field', 'Required', 'Description']
+                        ||['`superseded`', 'FOR HISTORICAL', 'When engine was superseded']
+                  |document_header_format
+                    |document_title
+                      |document_id=[ID]
+                      |version=X.Y.Z
+                      |created=YYYY-MM-DDTHH:MM:SSZ
+                      |modified=YYYY-MM-DDTHH:MM:SSZ
+                      |authority=[Authority]
+                      |status=[STATUS]
+                      |source=[Source Investigation, if applicable]
+                  |required_header_fields
+                    |table
+                      ||['Field', 'Description']
+                      ||['`created`', 'ISO-8601 UTC timestamp of document creation']
+                      ||['`modified`', 'ISO-8601 UTC timestamp of last modification']
+                    |optional_header_fields
+                      |table
+                        ||['Field', 'Description']
+                        ||['`approved`', 'Human approval timestamp']
+                        ||['`effective`', 'When document became effective']
+                        ||['`completed`', 'When work was completed']
+                  |version_history_format
+                    |version_history
+                      |table
+                        ||['Version', 'Date', 'Changes', 'Authority']
+                        ||['1.0.0', '2026-07-24T12:00:00Z', 'Initial release', 'Human Authority']
+                        ||['1.1.0', '2026-07-25T12:00:00Z', 'Added section', 'INV-XXX']
+                      |version_history_requirements
+                        |table
+                          ||['Field', 'Format']
+                          ||['Version', 'X.Y.Z semantic versioning']
+                          ||['Date', 'ISO-8601 UTC (Z suffix)']
+                          ||['Changes', 'Brief description']
+                          ||['Authority', 'Who approved the change']
+                    |rationale
+                      |why_iso-8601_utc
+                        |table
+                          ||['Reason', 'Explanation']
+                        |why_seconds_precision
+                          |table
+                            ||['Reason', 'Explanation']
+                      |migration_guide
+                        |updating_existing_documents
+                          |example_migration
+                            |before=
+                            |date=2026-07-24
+                            |version=1.1.0
+                            |after=
+                            |created=2026-07-24T00:00:00Z
+                            |modified=2026-07-24T12:00:00Z
+                        |enforcement
+                          |template_compliance
+                            |items
+                              ||[x] Investigation template (v2.0.0)
+                              ||[x] Experiment template (v2.0.0)
+                              ||[x] Run template (v2.0.0)
+                            |new_documents
+                              |existing_documents
+                            |related_documents
+                              |table
+                                ||['Document', 'Relationship']
+                                ||['[laboratory/templates/investigation-template.md](../laboratory/templates/investigation-template.md)', 'Investigation template']
+                                ||['[laboratory/templates/experiment-template.md](../laboratory/templates/experiment-template.md)', 'Experiment template']
+                                ||['[laboratory/templates/run-template.md](../laboratory/templates/run-template.md)', 'Run template']
+                                ||['[INV-TEMPORAL-PROVENANCE](../laboratory/investigations/INV-TEMPORAL-PROVENANCE/)', 'Source investigation']
+                            |version_history
+                              |table
+                                ||['Version', 'Date', 'Changes', 'Authority']
+                                ||['1.0.0', '2026-07-24T12:00:00Z', 'Initial release', 'Human (INV-TEMPORAL-PROVENANCE approved)']
+                            |status=PRODUCTION
+                            |authority=Human Authority
+                            |review_date=Upon evidence of need

@@ -1,0 +1,132 @@
+# FUSEDv1.0
+
+# name: REC-001-APPROVAL
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.234295Z
+|rec-001_implementation_approved_recommendations
+  |document_id=REC-001-APPROVAL
+  |date=2026-07-24
+  |source=LAB-BOOTSTRAP-ENGINE-AUDIT-001
+  |status=APPROVED
+|executive_summary
+  |table
+    ||['Recommendation', 'Status', 'Evidence']
+    ||['REC-001: Capability-Based Selection', '✅ IMPLEMENTED', 'ENGINE-SELECTION.md v1.1.0']
+    ||['REC-002: Session Override Template', '✅ IMPLEMENTED', 'SESSION-TEMPLATE.md']
+    ||['REC-003: Selection Documentation', '✅ IMPLEMENTED', 'EXPERIMENT-TEMPLATE.md']
+    ||['REC-004: Future Guidelines', '✅ IMPLEMENTED', 'FUTURE-EXPERIMENT-GUIDELINES.md']
+|rec-001_capability-based_engine_selection
+  |approved_action
+    |implementation
+      |file=`/governance/runtime/ENGINE-SELECTION.md`
+      |version=1.1.0 (updated)
+      |changes_made=
+      |key_additions=
+      |items
+        ||Detect when multiple engines match task
+        ||Support sequential execution (Engine A → Engine B)
+        ||Support parallel execution (Engine A + Engine B simultaneously)
+        ||Support collaborative execution (engines work together)
+        ||Sequential: Causal → Reproducible
+        ||Parallel: Independent analyses
+        ||Collaborative: Engines work together
+      |evidence
+        |table
+          ||['File', 'Location', 'Status']
+          ||['ENGINE-SELECTION.md', '/governance/runtime/', '✅ UPDATED']
+    |rec-002_session_override_template
+      |approved_action
+        |implementation
+          |file=`/governance/runtime/SESSION-TEMPLATE.md`
+          |status=CREATED
+          |contents=
+          |example_usage
+            |engine=KDE-ENGINE-003  # Gamma for causal analysis
+            |reason="Causal analysis required for mechanism understanding"
+            |evidence
+              |table
+                ||['File', 'Location', 'Status']
+                ||['SESSION-TEMPLATE.md', '/governance/runtime/', '✅ CREATED']
+          |rec-003_selection_documentation
+            |approved_action
+              |implementation
+                |file=`/laboratory/templates/EXPERIMENT-TEMPLATE.md`
+                |version=2.0.0 (updated)
+                |changes_made=
+                |required_documentation
+                  |engine_selection
+                    |auto-selected_engine=[Engine]
+                    |selection_rationale=[Why this engine]
+                    |keywords_detected
+                      |table
+                        ||['Keyword', 'Engine Matched']
+                      |alternative_engines_considered
+                        |table
+                          ||['Engine', 'Score', 'Reason']
+                        |session_override
+                          |override_applied=[YES/NO]
+                          |evidence
+                            |table
+                              ||['File', 'Location', 'Status']
+                              ||['EXPERIMENT-TEMPLATE.md', '/laboratory/templates/', '✅ UPDATED']
+                        |rec-004_future_experiment_guidelines
+                          |approved_action
+                            |implementation
+                              |file=`/governance/FUTURE-EXPERIMENT-GUIDELINES.md`
+                              |status=CREATED
+                              |contents=
+                              |1_core_principle="Use the right engine for the task"
+                              |key_guidelines
+                                |table
+                                  ||['Task', 'Engine', 'Keywords']
+                                  ||['Pattern Discovery', 'Beta', 'pattern, discover, find']
+                                  ||['Causal Analysis', 'Gamma', 'why, cause, mechanism']
+                                  ||['Validation', 'Delta', 'validate, reproduce']
+                                |evidence
+                                  |table
+                                    ||['File', 'Location', 'Status']
+                                    ||['FUTURE-EXPERIMENT-GUIDELINES.md', '/governance/', '✅ CREATED']
+                              |summary_of_changes
+                                |new_files_created
+                                  |table
+                                    ||['File', 'Purpose']
+                                    ||['/governance/runtime/SESSION-TEMPLATE.md', 'Session override examples']
+                                    ||['/governance/FUTURE-EXPERIMENT-GUIDELINES.md', 'Experiment guidelines']
+                                    ||['/governance/REC-001-APPROVAL.md', 'This document']
+                                  |files_updated
+                                    |table
+                                      ||['File', 'Change']
+                                      ||['/governance/runtime/ENGINE-SELECTION.md', 'v1.0.0 → v1.1.0']
+                                      ||['/laboratory/templates/EXPERIMENT-TEMPLATE.md', 'v1.0.0 → v2.0.0']
+                                |verification
+                                  |bootstrap_integrity
+                                    |table
+                                      ||['Check', 'Result']
+                                      ||['Runtime initialization', '✅ Unchanged']
+                                      ||['Engine registration', '✅ All 4 engines registered']
+                                      ||['Knowledge isolation', '✅ Unchanged']
+                                      ||['Scheduler', '✅ Enhanced with multi-engine']
+                                    |engine_participation_target
+                                      |table
+                                        ||['Engine', 'Previous', 'Target', 'Action']
+                                        ||['Alpha', '0%', '0-10%', 'Legacy engine, optional']
+                                        ||['Beta', '100%', '40-60%', 'Reduced via capability matching']
+                                        ||['Gamma', '0%', '20-30%', 'Increased via causal tasks']
+                                        ||['Delta', '0%', '10-20%', 'Increased via validation tasks']
+                                  |impact_assessment
+                                    |expected_benefits
+                                      |improved_discovery=Causal analysis (Gamma) will explain "why" patterns exist
+                                      |better_validation=Bootstrap (Delta) will verify findings reproducibility
+                                      |more_complete_science=Multi-engine collaboration produces richer insights
+                                      |no_resource_waste=Engines used based on capability match
+                                      |risk_mitigation
+                                        |table
+                                          ||['Risk', 'Mitigation']
+                                          ||['Scheduler bias', 'Enhanced with capability matching']
+                                          ||['Engine underutilization', 'Guidelines + templates']
+                                          ||['Selection confusion', 'Documentation + examples']
+                                          ||['Performance degradation', 'Parallel execution optional']
+                                    |conclusion
+                                    |approval_authority=Human Authority
+                                    |approval_date=2026-07-24
+                                    |implementation_status=COMPLETE

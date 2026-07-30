@@ -1,0 +1,37 @@
+# FUSEDv1.0
+
+# name: VERSION
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.240451Z
+|version_history
+  |v10_2026-07-19
+    |status=APPROVED
+    |initial_release
+      |items
+        ||KDE Research Methodology v1.0 established
+        ||5 Core Principles for AI Behavior defined
+        ||Document State Machine defined
+        ||Research lifecycle stages defined
+        ||Research session format defined
+      |components
+        |table
+          ||['Document', 'Version', 'Description']
+          ||['RESEARCH-METHODOLOGY.md', 'v1.0', 'How research is conducted']
+          ||['STATE-MACHINE.md', 'v1.0', 'Document lifecycle states']
+          ||['PRINCIPLES.md', 'v1.0', 'Core principles for AI']
+          ||['VERSION.md', 'v1.0', 'This document']
+        |key_decisions
+      |version_format
+        |version_proposal_process
+          |changelog_format
+            |vmajorminor_proposedeffective-date
+              |status=PROPOSED | APPROVED
+              |changes
+                |items
+                  ||[Added/Removed/Changed]: Description
+                |justification
+                  |items
+                    ||Evidence for change
+                  |affected_documents
+                    |items
+                      ||List of documents changed

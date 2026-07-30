@@ -1,0 +1,184 @@
+# FUSEDv1.0
+
+# name: future-engines
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.209769Z
+|future_engine_extension_guide
+  |document_version=1.0
+  |date=2026-07-20
+|overview
+|engine_lineage
+  |current_engines
+    |table
+      ||['Engine ID', 'Version', 'Codename', 'Status', 'Purpose']
+      ||['KDE-ENGINE-001', '0.1.0', 'Alpha', 'Historical', 'Pattern discovery']
+      ||['KDE-ENGINE-002', '0.1.0', 'Beta', 'Active (Default)', 'Contextual knowledge']
+      ||['KDE-ENGINE-003', '0.1.0', 'Gamma', 'Active', 'Causal discovery']
+      ||['KDE-ENGINE-004', '0.1.0', 'Delta', 'Active', 'Bootstrap + Context']
+    |future_potential_engines
+      |table
+        ||['Engine ID', 'Codename', 'Expected Features', 'Status']
+        ||['KDE-ENGINE-005', 'Epsilon', 'Formal Verification', 'Gap Identified (P3)', '']
+  |engine_creation_checklist
+    |items
+      ||[ ] Create engine directory under `engine/[codename]/`
+      ||[ ] Create `specification.md`
+      ||[ ] Create `methodology.md`
+      ||[ ] Create `pipeline.md` (if pipeline differs)
+      ||[ ] Create `knowledge-model.md` (if model differs)
+      ||[ ] Create `changes.md`
+      ||[ ] Create `provenance.md`
+      ||[ ] Implement standard interface
+      ||[ ] Update `engine/current.md`
+      ||[ ] Update `engine/README.md`
+      ||[ ] Document Alpha vs new engine
+      ||[ ] Update this guide
+  |directory_structure
+  |required_documents
+    |1_specificationmd
+      |items
+        ||Engine identity (ID, version, codename, status)
+        ||Purpose statement
+        ||Scope definition
+        ||Relationship to previous engines
+        ||Engine lifecycle
+      |kde-engine-xxx_specification
+        |engine_id=KDE-ENGINE-XXX
+        |version=0.1.0
+        |codename=[Codename]
+        |status=[Active|Historical]
+        |effective_date=YYYY-MM-DD
+    |engine_identity
+      |purpose
+        |scope
+          |relationship_to_previous_engines
+            |engine_lifecycle
+              |2_methodologymd
+                |items
+                  ||Core principles
+                  ||Discovery question (what it asks)
+                  ||Pipeline stages
+                  ||Validation process
+                  ||Knowledge assessment
+                |kde-engine-xxx_methodology
+                  |core_principles
+                    |the_discovery_question
+                      |pipeline_processing
+                        |validation_process
+                          |knowledge_assessment
+                            |3_pipelinemd
+                              |items
+                                ||Pipeline overview diagram
+                                ||Module specifications
+                                ||Data transformations
+                                ||Error handling
+                              |kde-engine-xxx_pipeline
+                                |pipeline_overview
+                                  |module_specifications
+                                    |module_1_name
+                                      |4_knowledge-modelmd
+                                        |items
+                                          ||Knowledge object fields
+                                          ||Field specifications
+                                          ||Complete example
+                                          ||Validation checklist
+                                        |5_changesmd
+                                          |items
+                                            ||Version history
+                                            ||Changes from previous engine
+                                            ||Breaking changes
+                                            ||Migration guidance
+                                          |kde-engine-xxx_changes
+                                            |version_history
+                                              |v010_yyyy-mm-dd_initial_release
+                                                |6_provenancemd
+                                                  |items
+                                                    ||Engine lineage
+                                                    ||Relationship to other engines
+                                                    ||Evolution history
+                                                    ||Architecture decisions
+                                              |engine_interface_implementation
+                                                |initialize=# Setup engine
+                                                |analyzeevidence=# Process evidence
+                                                |validateknowledge=# Verify knowledge
+                                                |generateknowledge=# Create knowledge
+                                                |generatereport=# Format output
+                                                |capabilities=# Return capabilities
+                                                |version=# Return version
+                                                |metadata=# Return metadata
+                                                |see=[`interface.md](./interface.md)
+                                              |engine_metadata_requirements
+                                                |id=KDE-ENGINE-XXX
+                                                |name="[Full Name]"
+                                                |codename="[Codename]"
+                                                |version="X.Y.Z"
+                                                |status=[active|historical|deprecated]
+                                                |effective_date=YYYY-MM-DD
+                                                |specification=path
+                                                |methodology=path
+                                                |pipeline=path (if applicable)
+                                                |knowledge_model=path (if applicable)
+                                                |parent_engine=[parent ID or null]
+                                                |child_engine=[child ID or null]
+                                              |version_numbering
+                                                |semantic_versioning
+                                                  |table
+                                                    ||['Component', 'Description', 'When It Changes']
+                                                  |codename_conventions
+                                                    |table
+                                                      ||['Codename', 'Meaning']
+                                                    |engine_id_format
+                                                      |items
+                                                        ||KDE-ENGINE-001 = Alpha
+                                                        ||KDE-ENGINE-002 = Beta
+                                                        ||KDE-ENGINE-003 = Gamma
+                                                        ||etc.
+                                                  |status_transitions
+                                                  |documenting_a_new_engine
+                                                    |before_creating
+                                                      |during_creation
+                                                        |after_creation
+                                                      |planned_future_engines
+                                                        |kde-engine-005_epsilon_formal_verification
+                                                          |items
+                                                            ||Mathematical proof of correctness
+                                                            ||Invariant preservation verification
+                                                            ||Formal boundary validation
+                                                            ||Audit-ready verification
+                                                      |engine_selection_guide
+                                                        |table
+                                                          ||['Need', 'Engine']
+                                                          ||['Pattern discovery only', 'Alpha (Historical)']
+                                                          ||['Context-aware knowledge', 'Beta (Active, Default)']
+                                                          ||['Causal inference', 'Gamma (Active)']
+                                                          ||['Bootstrap enforcement', 'Delta (Active)']
+                                                          ||['Formal verification', 'Epsilon (Future, P3)']
+                                                      |common_patterns
+                                                        |pattern_1_extending_beta
+                                                          |pattern_2_replacing_beta
+                                                            |pattern_3_specialized_engine
+                                                          |validation_checklist
+                                                            |items
+                                                              ||[ ] All required documents created
+                                                              ||[ ] specification.md complete
+                                                              ||[ ] methodology.md complete
+                                                              ||[ ] pipeline.md complete (if applicable)
+                                                              ||[ ] knowledge-model.md complete (if applicable)
+                                                              ||[ ] changes.md documents evolution
+                                                              ||[ ] provenance.md documents lineage
+                                                              ||[ ] Interface implemented
+                                                              ||[ ] current.md updated
+                                                              ||[ ] README.md updated
+                                                              ||[ ] Engine comparison documented
+                                                              ||[ ] This guide updated
+                                                          |support_resources
+                                                            |items
+                                                              ||[Engine Framework README](./README.md)
+                                                              ||[Engine Interface](./interface.md)
+                                                              ||[Alpha vs Beta](./alpha-vs-beta.md)
+                                                              ||[Beta Specification](./beta/specification.md)
+                                                              ||[Beta Methodology](./beta/methodology.md)
+                                                              ||[Beta Pipeline](./beta/pipeline.md)
+                                                          |document_status=APPROVED
+                                                          |last_updated=2026-07-24 (INV-EVOLUTION-001 REC-007)
+                                                          |next_review=Upon evidence of need for KDE-ENGINE-005 (Epsilon)

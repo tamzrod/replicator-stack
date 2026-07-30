@@ -1,0 +1,88 @@
+# FUSEDv1.0
+
+# name: ENV-001
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.237779Z
+|kde_governance_environment_verification_policy
+  |document_id=ENV-001
+  |version=1.0.0
+  |date=2026-07-26
+  |status=APPROVED
+  |authority=KDE Governance (KDE-INV-052 REC-002)
+|purpose
+|policy_statement
+  |rule_1_pre-investigation_verification
+    |runtime_state=`.kde/runtime/state.json` shows "ready"
+    |required_tools=All project-specific toolchains are available
+    |project_dependencies=Required packages/dependencies are installed
+    |rule_2_environment-specific_verification
+      |items
+        ||[ ] `go` command is available (`which go` returns path)
+        ||[ ] Go version meets minimum requirement (check go.mod)
+        ||[ ] Dependencies available (`go mod download` or `go mod verify`)
+        ||[ ] `python3` command is available
+        ||[ ] Python version meets minimum requirement (3.10+)
+        ||[ ] Dependencies available (pip list or requirements.txt)
+        ||[ ] Primary language toolchain available
+        ||[ ] Package manager accessible
+        ||[ ] Project dependencies installed
+      |rule_3_promise_prohibition
+        |rule_4_failure_documentation
+      |verification_procedures
+        |pre-investigation_checklist
+          |environment_verification_checklist
+            |runtime_state
+              |items
+                ||[ ] .kde/runtime/state.json exists
+                ||[ ] status is "ready"
+                ||[ ] all modules are "loaded"
+              |toolchain_go_project
+                |items
+                  ||[ ] `which go` returns a path
+                  ||[ ] `go version` shows version >= 1.21
+                  ||[ ] `go env GOPATH` is set
+                |dependencies
+                  |items
+                    ||[ ] go.mod exists
+                    ||[ ] `go mod verify` passes
+                    ||[ ] No missing dependencies reported
+                  |result
+                    |items
+                      ||[ ] Environment VERIFIED - proceed with investigation
+                      ||[ ] Environment FAILED - document and report limitation
+                    |verification_commands
+                      |check_go_availability
+                        |check_go_module
+                          |check_build_capability
+                        |compliance_verification
+                          |check_pre-investigation_verification
+                            |items
+                              ||[ ] Investigation documents runtime state check
+                              ||[ ] Investigation documents toolchain verification
+                              ||[ ] Investigation documents dependency check
+                            |check_promise_prohibition
+                              |items
+                                ||[ ] No test execution promised without verification
+                                ||[ ] Any limitations are documented in investigation
+                                ||[ ] User is informed of environment limitations
+                          |violations
+                            |table
+                              ||['Violation', 'Severity', 'Example', 'Remediation']
+                              ||['Missing runtime state check', 'HIGH', "Didn't verify state.json", 'Add verification step']
+                              ||['Missing toolchain verification', 'HIGH', 'Promised tests without `which go`', 'Add check before promises']
+                              ||['Unfulfilled test promise', 'CRITICAL', 'Said "I\'ll run tests" but Go missing', 'Document limitation first']
+                              ||['Missing dependency check', 'MEDIUM', "Didn't run `go mod verify`", 'Add verification step']
+                          |enforcement
+                            |bootstrap_gate=Environment verification is part of Bootstrap Module 0
+                            |investigation_documentation=All investigations must document verification
+                            |meta-investigation=Violations trigger meta-investigation (per KDE-INV-051)
+                          |related_policies
+                            |items
+                              ||DEP-001: Runtime Dependencies Policy
+                              ||NAMING-CONVENTIONS.md: Artifact naming requirements
+                          |version_history
+                            |table
+                              ||['Version', 'Date', 'Change', 'Authority']
+                              ||['1.0.0', '2026-07-26', 'Initial policy', 'KDE-INV-052 REC-002']
+                          |status=ENFORCED
+                          |review_date=Upon any environment-related incident

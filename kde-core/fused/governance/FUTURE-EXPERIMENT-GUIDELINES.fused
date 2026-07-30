@@ -1,0 +1,111 @@
+# FUSEDv1.0
+
+# name: FUTURE-EXPERIMENT-GUIDELINES
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.241551Z
+|future_experiment_guidelines
+  |document_id=FUTURE-EXPERIMENT-GUIDELINES
+  |date=2026-07-24
+  |source=LAB-BOOTSTRAP-ENGINE-AUDIT-001 REC-004
+  |status=APPROVED
+|purpose
+|core_principle
+|engine_selection_guidelines
+  |when_to_use_beta_kde-engine-002
+    |table
+      ||['Task Type', 'Example', 'Why Beta']
+      ||['Pattern Discovery', '"Find patterns in price data"', 'Primary pattern capability']
+      ||['Statistical Analysis', '"Calculate return distribution"', 'Statistical analysis']
+      ||['Context Detection', '"When does X occur?"', 'Context analysis']
+      ||['Boundary Detection', '"What are the limits?"', 'Boundary detection']
+      ||['Validation', '"Check if X is valid"', 'Validation keywords']
+    |when_to_use_gamma_kde-engine-003
+      |table
+        ||['Task Type', 'Example', 'Why Gamma']
+        ||['Causal Analysis', '"Why does X happen?"', 'Causal discovery']
+        ||['Root Cause Analysis', '"What caused X?"', 'Root cause capability']
+        ||['Mechanism Understanding', '"How does X cause Y?"', 'Mechanism analysis']
+        ||['Intervention Prediction', '"What if we change X?"', 'Intervention prediction']
+      |when_to_use_delta_kde-engine-004
+        |table
+          ||['Task Type', 'Example', 'Why Delta']
+          ||['Bootstrap', '"Initialize new experiment"', 'Bootstrap capability']
+          ||['Reproducibility', '"Reproduce previous finding"', 'Reproducibility']
+          ||['Consistency Checking', '"Verify consistency"', 'Consistency checking']
+          ||['Session Validation', '"Validate session integrity"', 'Validation']
+        |when_to_use_multi-engine
+          |table
+            ||['Scenario', 'Engines', 'Why']
+            ||['Pattern + Causal', 'Beta → Gamma', 'Discover patterns, then explain causes']
+            ||['Causal + Validate', 'Gamma → Delta', 'Find causes, then verify']
+            ||['Bootstrap + Analyze', 'Delta → Beta', 'Initialize, then analyze']
+            ||['Complex Investigation', 'Beta + Gamma + Delta', 'Multi-dimensional analysis']
+      |experiment_design_checklist
+        |task_analysis
+          |items
+            ||[ ] I have clearly defined the task objective
+            ||[ ] I have identified the key question(s) to answer
+            ||[ ] I have determined if task requires pattern discovery, causal analysis, or validation
+          |engine_selection
+            |items
+              ||[ ] I have selected the appropriate engine based on task requirements
+              ||[ ] I have documented why this engine was selected
+              ||[ ] I have considered if multi-engine collaboration would improve results
+              ||[ ] If using override, I have documented the reason
+            |experiment_design
+              |items
+                ||[ ] Experiment is designed for the selected engine's capabilities
+                ||[ ] Methodology is appropriate for the engine
+                ||[ ] Expected outcomes align with engine's strengths
+          |common_mistakes_to_avoid
+            |mistake_1_default_to_beta_always
+              |problem=Beta was used exclusively in LAB-BOOTSTRAP-ENGINE-AUDIT-001, causing:
+              |items
+                ||Causal analysis not performed
+                ||Bootstrap validation not used
+                ||Underutilization of available capabilities
+              |solution=Evaluate task requirements and select appropriate engine.
+              |mistake_2_ignoring_gammadelta_capabilities
+                |problem=Gamma and Delta were registered but never invoked.
+                |solution=When task involves "why", "how does", or "cause", explicitly select Gamma.
+                |mistake_3_not_documenting_selection
+                  |problem=Engine selection rationale not documented, making review difficult.
+                  |solution=Always document:
+                  |items
+                    ||Selected engine
+                    ||Keywords detected
+                    ||Scores for all engines
+                    ||Reason for selection or override
+              |session_override_examples
+                |example_1_causal_investigation
+                  |engine=KDE-ENGINE-003  # Gamma
+                  |reason="Task explicitly asks 'why' - causal analysis required"
+                  |example_2_validation_requirement
+                    |engine=KDE-ENGINE-004  # Delta
+                    |reason="Findings must be reproducible on holdout data"
+                    |example_3_multi-engine_collaboration
+                      |enabled=true
+                      |mode=collaborative
+                      |-_kde-engine-002_beta=Pattern discovery
+                      |-_kde-engine-003_gamma=Causal analysis
+                      |synthesis=automatic
+                      |reason="Task requires both pattern discovery and causal understanding"
+                  |success_criteria_for_future_experiments
+                  |resource_requirements_by_engine
+                    |table
+                      ||['Engine', 'Compute', 'Memory', 'Time']
+                      ||['Beta', 'Medium', 'Medium', 'Standard']
+                      ||['Gamma', 'High', 'High', 'Extended']
+                      ||['Delta', 'Medium', 'Medium', 'Standard']
+                      ||['Multi-Engine', 'High', 'High', 'Extended']
+                  |approval_and_implementation
+                    |rec-004_status=APPROVED
+                    |authority=Human Authority
+                    |source=LAB-BOOTSTRAP-ENGINE-AUDIT-001
+                    |implementation=
+                    |items
+                      ||These guidelines are effective immediately
+                      ||All new experiments should follow these guidelines
+                      ||Existing experiments should be retroactively annotated where possible
+                  |status=APPROVED
+                  |date=2026-07-24

@@ -1,0 +1,58 @@
+# FUSEDv1.0
+
+# name: DEP-001
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.241150Z
+|kde_governance_runtime_dependencies_policy
+  |document_id=DEP-001
+  |version=1.0.0
+  |date=2026-07-26
+  |status=APPROVED
+  |authority=KDE Governance (KDE-INV-052 REC-001)
+|purpose
+|policy_statement
+  |rule_1_dependency_documentation
+    |rule_2_required_fields
+      |table
+        ||['Field', 'Required', 'Description']
+        ||['module_name', 'Yes', 'Name of the Python module (pip install name)']
+        ||['minimum_version', 'Yes', 'Minimum required version']
+        ||['import_statement', 'Yes', 'How the module is imported in code']
+        ||['description', 'Yes', 'Purpose of the dependency']
+      |rule_3_dependency_installation
+        |rule_4_standard_library
+      |current_dependencies
+        |table
+          ||['Module', 'Version', 'Purpose']
+          ||['yaml (PyYAML)', '>= 5.0', 'YAML parsing for configuration files']
+        |standard_library_modules
+          |items
+            ||json, os, sys, time, datetime, pathlib, typing, dataclasses, enum
+      |compliance_verification
+        |check_dependency_documentation
+          |items
+            ||[ ] `python_dependencies.required` exists in requirements.json
+            ||[ ] All external dependencies are listed with required fields
+            ||[ ] Standard library modules are documented
+            ||[ ] `python_dependencies_installed` is in system_checks
+          |check_runtime_load
+        |violations
+          |table
+            ||['Violation', 'Severity', 'Remediation']
+            ||['Missing dependency documentation', 'HIGH', 'Add to requirements.json']
+            ||['Missing dependency causes load failure', 'CRITICAL', 'Document and install dependency']
+            ||['Standard library not documented', 'MEDIUM', 'Add to standard_library list']
+        |enforcement
+          |bootstrap_verification=Runtime bootstrap checks dependencies
+          |pre-load_verification=Any code loading KDE Runtime must verify dependencies
+          |documentation_requirements=PRs adding dependencies must update requirements.json
+        |related_policies
+          |items
+            ||ENV-001: Environment Verification Policy
+            ||NAMING-CONVENTIONS.md: Artifact naming requirements
+        |version_history
+          |table
+            ||['Version', 'Date', 'Change', 'Authority']
+            ||['1.0.0', '2026-07-26', 'Initial policy', 'KDE-INV-052 REC-001']
+        |status=ENFORCED
+        |review_date=Upon any dependency-related incident

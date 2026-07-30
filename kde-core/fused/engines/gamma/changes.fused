@@ -1,0 +1,71 @@
+# FUSEDv1.0
+
+# name: changes
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.213825Z
+|kde-engine-003_gamma_changes
+  |engine_id=KDE-ENGINE-003
+  |version=0.1.0
+  |codename=Gamma
+|version_history
+  |v010_2026-07-20_initial_release
+    |table
+      ||['Category', 'Change', 'Description']
+|detailed_changes
+  |pipeline_changes
+    |table
+      ||['Module', 'Purpose']
+    |methodology_changes
+      |table
+        ||['Engine', 'Question', 'Focus']
+        ||['Alpha', '"Does X correlate with Y?"', 'Correlation']
+        ||['Beta', '"Under what conditions does X correlate with Y?"', 'Context']
+        ||['Gamma', '"How does X causally lead to Y?"', 'Causation']
+      |knowledge_model_changes
+        |table
+          ||['Field Category', 'New Fields']
+        |confidence_assessment_changes
+          |value=<0-100>
+          |level=[high|medium|low]
+          |basis=[statistical|causal_theory|mixed]
+          |-_factor=<string>
+          |contribution=[positive|negative|neutral]
+          |magnitude=[high|medium|low]
+      |breaking_changes
+        |knowledge_object_structure
+          |table
+            ||['Aspect', 'Beta', 'Gamma']
+            ||['ID prefix', 'KNOW-XXX', 'CAUSAL-XXX']
+            ||['Required fields', 'Knowledge fields', 'Causal fields']
+            ||['Confidence basis', 'statistical/expert/heuristic', 'statistical/causal_theory/mixed']
+          |migration
+        |experimental_status
+          |validation_requirements
+            |table
+              ||['Requirement', 'Status']
+              ||['Laboratory experiments conducted', 'Pending']
+              ||['Empirical validation complete', 'Pending']
+              ||['Methodology peer reviewed', 'Pending']
+              ||['Production readiness assessed', 'Pending']
+        |compatibility_matrix
+          |table
+            ||['Aspect', 'Alpha', 'Beta', 'Gamma']
+        |migration_guide
+          |from_beta_to_gamma
+            |id=KDE-ENGINE-003
+            |version=0.1.0
+            |codename=Gamma
+            |when_not_to_migrate
+              |items
+                ||[ ] You need strict compatibility with Beta
+                ||[ ] Your analysis does not benefit from causal inference
+                ||[ ] Causal assumptions cannot be justified
+                ||[ ] You need to compare with historical Beta experiments
+          |related_documents
+            |items
+              ||[specification.md](./specification.md) — Engine identity
+              ||[methodology.md](./methodology.md) — Full methodology
+              ||[pipeline.md](./pipeline.md) — Pipeline details
+              ||[knowledge-model.md](./knowledge-model.md) — Knowledge structure
+              ||[provenance.md](./provenance.md) — Engine lineage
+          |document_status=EXPERIMENTAL

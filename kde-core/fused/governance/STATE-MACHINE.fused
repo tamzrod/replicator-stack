@@ -1,0 +1,25 @@
+# FUSEDv1.0
+
+# name: STATE-MACHINE
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.246818Z
+|document_state_machine
+  |states
+    |table
+      ||['State', 'Description']
+    |state_diagram
+      |state_transitions
+        |table
+          ||['From', 'To', 'Trigger']
+          ||['DRAFT', 'REVIEW', 'Submit for review']
+          ||['REVIEW', 'APPROVED', 'Human approves']
+          ||['REVIEW', 'REVISION_REQUIRED', 'Human requests changes']
+          ||['REVISION_REQUIRED', 'REVIEW', 'AI resubmits']
+          ||['APPROVED', 'VALIDATED', 'Validation tests pass']
+          ||['VALIDATED', 'PROMOTED', 'Human approves promotion']
+        |rejection_path
+          |key_principles
+            |implementation
+              |state=DRAFT
+              |validation_before_promotion
+                |exception_handling

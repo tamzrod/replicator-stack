@@ -1,0 +1,128 @@
+# FUSEDv1.0
+
+# name: ENGINE-VERSIONING
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.236423Z
+|kde_engine_versioning
+  |document_version=1.0
+  |effective=2026-07-20
+  |engine_version=0.1.0
+|overview
+|purpose
+  |provenance=Documents which methodology version produced each experiment
+  |traceability=Enables understanding of methodology evolution
+  |immutability=Preserves historical experiments in their original context
+|scope
+  |what_this_covers
+    |items
+      ||Laboratory rules and procedures
+      ||Evidence collection requirements
+      ||Validation processes
+      ||Governance rules
+      ||Reproducibility requirements
+      ||Documentation standards
+    |what_this_does_not_cover
+      |items
+        ||Software implementation changes
+        ||Documentation edits and typo fixes
+        ||New experiments using existing methodology
+        ||New knowledge definitions
+        ||Tool or infrastructure changes
+  |versioning_philosophy
+    |semantic_versioning_for_methodology
+      |table
+        ||['Component', 'Description', 'When It Changes']
+      |principles
+        |immutability=Historical experiments never change their Engine Version
+        |traceability=Every experiment links to its producing methodology
+        |minimal_disruption=Version changes are infrequent and well-documented
+        |backward_compatibility=New versions don't invalidate old experiments
+    |version_changes
+      |what_triggers_a_version_change
+        |table
+          ||['Change Type', 'Version Increment', 'Examples']
+          ||['Fundamental process change', 'MAJOR', 'New validation gates, removed steps']
+          ||['New methodology requirements', 'MINOR', 'New evidence types, reproducibility standards']
+          ||['Documentation clarification', 'PATCH', 'Clarified rules, fixed ambiguities']
+        |what_does_not_trigger_a_version_change
+          |table
+            ||['Change Type', 'Reason']
+            ||['New experiments', 'Using existing methodology']
+            ||['New knowledge definitions', 'Content, not process']
+            ||['Documentation edits', 'No methodology change']
+            ||['Typo fixes', 'No methodology change']
+            ||['Software implementation', 'Separate from methodology']
+            ||['Tool changes', 'Infrastructure, not process']
+      |current_engine_version
+        |version_010_initial_knowledge_discovery_engine
+          |status=ACTIVE
+          |effective_date=2026-07-20
+          |baseline=This represents the original KDE methodology from the beginning through LAB-011
+          |characteristics=
+          |items
+            ||Research methodology v1.0
+            ||Laboratory v2.0 architecture
+            ||5 Core Principles for AI behavior
+            ||Document state machine (DRAFT → REVIEW → APPROVED → VALIDATED → PROMOTED)
+            ||Scientific learning loop (Research → Knowledge → Laboratory → Evidence → Governance)
+            ||Reproducibility requirements
+            ||Evidence-derived confidence
+      |historical_policy
+        |experiments_are_immutable_historical_records
+          |table
+            ||['Policy', 'Rationale']
+            ||['No retroactive changes', 'Historical experiments are evidence of past methodology']
+            ||["New versions don't affect old experiments", 'Methodology evolution is forward-looking only']
+            ||['Conclusions remain valid', 'Results reflect the methodology used at the time']
+          |version_comparison_rules
+        |experiment_metadata_requirements
+          |required_fields
+            |version=0.1.0
+            |name=Initial Knowledge Discovery Engine
+            |placement
+              |example
+                |metadata
+                  |table
+                    ||['Field', 'Value']
+                    ||['Experiment ID', 'LAB-001']
+                    ||['Created', '2026-07-19']
+                    ||['Engine Version', '0.1.0']
+                    ||['Engine Name', 'Initial Knowledge Discovery Engine']
+              |migration
+                |scope
+                  |process
+                    |constraints
+                      |items
+                        ||Do NOT modify evidence
+                        ||Do NOT alter run history
+                        ||Do NOT change conclusions
+                        ||Do NOT modify timestamps
+                        ||Only add provenance metadata
+                  |version_lifecycle
+                    |version_states
+                      |table
+                        ||['State', 'Description']
+                      |version_transitions
+                    |governance
+                      |version_change_authority
+                        |change_documentation
+                      |version_history
+                        |v010_2026-07-20_initial_knowledge_discovery_engine
+                          |status=ACTIVE
+                          |items
+                            ||Original KDE methodology established
+                            ||Research methodology v1.0
+                            ||Laboratory v2.0 architecture
+                            ||5 Core Principles for AI behavior
+                            ||Document state machine
+                            ||Scientific learning loop
+                            ||Reproducibility requirements
+                      |compliance
+                      |references
+                        |items
+                          ||[RESEARCH-METHODOLOGY.md](./RESEARCH-METHODOLOGY.md)
+                          ||[PRINCIPLES.md](./PRINCIPLES.md)
+                          ||[STATE-MACHINE.md](./STATE-MACHINE.md)
+                          ||[LABORATORY/README.md](../laboratory/README.md)
+                      |document_status=APPROVED
+                      |review_date=Upon methodology change proposal

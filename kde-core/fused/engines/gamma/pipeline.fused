@@ -1,0 +1,239 @@
+# FUSEDv1.0
+
+# name: pipeline
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.217874Z
+|kde-engine-003_gamma_pipeline
+  |engine_id=KDE-ENGINE-003
+  |version=0.1.0
+  |codename=Gamma
+|pipeline_overview
+|stage_1_evidence_ingestion
+  |purpose
+    |module
+      |input
+        |items
+          ||Raw evidence artifacts (logs, measurements, documents)
+        |output
+          |items
+            ||Evidence objects with provenance
+          |process
+            |evidence_object_format
+              |id=EV-XXX
+              |type=[file|api|database|manual]
+              |content=<original content>
+              |location=<source identifier>
+              |timestamp=<collection time>
+              |collected=<ingestion timestamp>
+              |collector=<identifier>
+              |environment=<context>
+              |quality=[high|medium|low]
+          |stage_2_observation_extraction
+            |purpose
+              |module
+                |input
+                  |items
+                    ||Evidence objects with provenance
+                  |output
+                    |items
+                      ||Observable facts with measurements
+                    |process
+                      |observation_object_format
+                        |id=OBS-XXX
+                        |type=[measurement|fact|event|behavior]
+                        |value=<measurable value>
+                        |unit=<unit if applicable>
+                        |temporal=<time dimension>
+                        |environmental=<environment dimension>
+                        |operational=<operation dimension>
+                        |evidence_id=EV-XXX
+                        |extraction_method=<method used>
+                        |flagged=[true|false]
+                        |marker=<uncertainty reason if any>
+                    |stage_3_pattern_detection
+                      |purpose
+                        |module
+                          |input
+                            |items
+                              ||Observation objects
+                            |output
+                              |items
+                                ||Candidate patterns
+                              |process
+                                |candidate_pattern_format
+                                  |id=CP-XXX
+                                  |type=[correlation|sequence|conditional]
+                                  |x=<variable X>
+                                  |y=<variable Y>
+                                  |operator=[→|+|→|if]
+                                  |condition=<condition if applicable>
+                                  |frequency=<occurrence rate>
+                                  |consistency=[high|medium|low]
+                                  |status=candidate
+                              |stage_4_statistical_validation
+                                |purpose
+                                  |module
+                                    |input
+                                      |items
+                                        ||Candidate patterns
+                                      |output
+                                        |items
+                                          ||Validated patterns with statistics
+                                        |process
+                                          |validated_pattern_format
+                                            |id=VP-XXX
+                                            |candidate_pattern_id=CP-XXX
+                                            |relationship=<relationship description>
+                                            |sample_size=<n>
+                                            |p_value=<p>
+                                            |correlation=<r>
+                                            |confidence_interval=[lower, upper]
+                                            |chi_square=<χ²>
+                                            |effect_size=<d>
+                                            |validation_result=[validated|rejected|pending]
+                                            |confidence=[high|medium|low]
+                                        |stage_5_context_detection
+                                          |purpose
+                                            |module
+                                              |input
+                                                |items
+                                                  ||Validated patterns
+                                                |output
+                                                  |items
+                                                    ||Patterns with contexts
+                                                  |process
+                                                    |context_object_format
+                                                      |id=CTX-XXX
+                                                      |pattern_id=VP-XXX
+                                                      |-_name=<dimension>
+                                                      |values=[applicable values]
+                                                      |evidence_count=<n>
+                                                      |statistical_support=<value>
+                                                      |applicability=[universal|conditional|limited]
+                                                  |stage_6_boundary_detection
+                                                    |purpose
+                                                      |module
+                                                        |input
+                                                          |items
+                                                            ||Validated patterns with contexts
+                                                          |output
+                                                            |items
+                                                              ||Patterns with boundaries
+                                                            |process
+                                                              |boundary_object_format
+                                                                |id=BND-XXX
+                                                                |pattern_id=VP-XXX
+                                                                |type=[contradiction|exception|edge_case|reverse|diminishing]
+                                                                |condition=<failure condition>
+                                                                |-_observation_id=OBS-XXX
+                                                                |description=<evidence>
+                                                                |severity=[critical|major|minor]
+                                                                |occurrence_rate=<rate>
+                                                            |stage_7_causal_discovery_new
+                                                              |purpose
+                                                                |module
+                                                                  |input
+                                                                    |items
+                                                                      ||Validated patterns with contexts and boundaries
+                                                                    |output
+                                                                      |items
+                                                                        ||Causal hypotheses with evidence
+                                                                      |process
+                                                                        |causal_hypothesis_format
+                                                                          |id=CH-XXX
+                                                                          |hypothesis=<X causes Y>
+                                                                          |cause=<X>
+                                                                          |effect=<Y>
+                                                                          |temporal_precedence=[strong|moderate|weak|none]
+                                                                          |rationale=<reasoning>
+                                                                          |-_name=<confounder>
+                                                                          |effect_on_cause=<description>
+                                                                          |effect_on_effect=<description>
+                                                                          |adjustment_method=<method used>
+                                                                          |adjusted=[yes|partial|no]
+                                                                          |identified=[yes|partial|no]
+                                                                          |-_step=2
+                                                                          |from=<node>
+                                                                          |to=<node>
+                                                                          |description=<step description>
+                                                                          |mechanism_identified=[yes|partial|no]
+                                                                          |confounder_adjusted=[yes|partial|no]
+                                                                          |intervention_studied=[yes|no]
+                                                                          |causal_strength=[strong|moderate|weak]
+                                                                          |causal_confidence=<0-100>
+                                                                          |status=[hypothesis|supported|validated|rejected]
+                                                                      |stage_8_causal_knowledge_generation_new
+                                                                        |purpose
+                                                                          |module
+                                                                            |input
+                                                                              |items
+                                                                                ||Causal hypotheses with evidence
+                                                                                ||Pattern statistics
+                                                                                ||Context and boundary information
+                                                                              |output
+                                                                                |items
+                                                                                  ||Complete causal knowledge objects
+                                                                                |process
+                                                                                  |causal_knowledge_format
+                                                                                    |id=CAUSAL-XXX
+                                                                                    |version="1.0"
+                                                                                    |statement=<X causes Y via mechanism M>
+                                                                                    |description=<step 2>
+                                                                                    |-_step=2
+                                                                                    |confidence=<confidence value>
+                                                                                    |type=<type>
+                                                                                    |value=<0-100>
+                                                                                    |unit=<unit>
+                                                                                    |confidence_interval=[lower, upper]
+                                                                                    |-_name=<name>
+                                                                                    |adjusted=[true|false]
+                                                                                    |method=<method>
+                                                                                    |residual_effect=<description>
+                                                                                    |do_operation=<do(X=x)>
+                                                                                    |-_effect=<description>
+                                                                                    |probability=<value>
+                                                                                    |-_evidence_id=<ID>
+                                                                                    |total_count=<n>
+                                                                                    |sample_size=<n>
+                                                                                    |p_value=<p>
+                                                                                    |effect_size=<d>
+                                                                                    |level=[high|medium|low]
+                                                                                    |basis=[statistical|causal_theory|mixed]
+                                                                                    |dimensions=<applicable dimensions>
+                                                                                    |conditions=<conditions>
+                                                                                    |applicability=[universal|conditional|limited]
+                                                                                    |severity=<severity>
+                                                                                    |verified=[true|false]
+                                                                                    |replications=<n>
+                                                                                    |engine_id=KDE-ENGINE-003
+                                                                                    |engine_version=0.1.0
+                                                                                    |created=<timestamp>
+                                                                                    |status=[draft|validated|approved|published]
+                                                                                |data_flow_summary
+                                                                                  |input=Raw Evidence
+                                                                                  |stage_1=Evidence → Evidence Objects with Provenance
+                                                                                  |stage_2=Evidence Objects → Observations with Dimensions
+                                                                                  |stage_3=Observations → Candidate Patterns
+                                                                                  |stage_4=Candidate Patterns → Validated Patterns + Statistics
+                                                                                  |stage_5=Validated Patterns → Patterns with Context
+                                                                                  |stage_6=Patterns with Context → Patterns with Boundaries
+                                                                                  |stage_7=Patterns → Causal Hypotheses + Mechanism + Confounders
+                                                                                  |stage_8=Causal Hypotheses → Causal Knowledge Objects
+                                                                                  |output=Causal Knowledge
+                                                                                |error_handling
+                                                                                  |stage-specific_errors
+                                                                                    |table
+                                                                                      ||['Stage', 'Error', 'Recovery']
+                                                                                      ||['1', 'Evidence not found', 'Skip or retry']
+                                                                                      ||['2', 'No observations extracted', 'Adjust extraction']
+                                                                                      ||['3', 'No patterns detected', 'Continue observation']
+                                                                                      ||['4', 'Statistical validation fails', 'Reject pattern']
+                                                                                      ||['5', 'No context found', 'Flag as context-free']
+                                                                                      ||['6', 'No boundaries detected', 'Document as untested']
+                                                                                      ||['7', 'No causal evidence', 'Mark as correlation']
+                                                                                      ||['8', 'Incomplete knowledge', 'Return for completion']
+                                                                                |related_documents
+                                                                                  |items
+                                                                                    ||[methodology.md](./methodology.md) — Full methodology
+                                                                                    ||[knowledge-model.md](./knowledge-model.md) — Knowledge structure
+                                                                                |document_status=EXPERIMENTAL

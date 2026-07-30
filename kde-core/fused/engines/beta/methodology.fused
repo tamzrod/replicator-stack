@@ -1,0 +1,143 @@
+# FUSEDv1.0
+
+# name: methodology
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.223288Z
+|kde-engine-002_beta_methodology
+  |engine_id=KDE-ENGINE-002
+  |version=0.1.0
+  |codename=Beta
+  |name=Contextual Knowledge Discovery Engine
+|overview
+|core_principles
+  |base_principles_from_alpha
+    |beta-specific_principles
+  |the_beta_discovery_question
+    |alpha_question
+      |beta_question
+        |items
+          ||Yes, when [context conditions]
+          ||No, except when [exceptions]
+          ||Confidence: [statistical measure]
+    |pipeline_processing
+      |stage_1_evidence_ingestion
+        |input=Raw evidence artifacts
+        |output=Evidence objects with provenance
+        |items
+          ||Preserve original evidence unchanged
+          ||Attach metadata (source, timestamp, collector)
+          ||Verify evidence integrity
+        |stage_2_observation_extraction
+          |input=Evidence objects
+          |output=Observable facts with measurements
+          |id=OBS-XXX
+          |type=[measurement|fact|event|behavior]
+          |value=<measurable>
+          |unit=<if applicable>
+          |provenance=[evidence links]
+          |confidence=<initial assessment>
+          |dimensions=[context tags]
+          |stage_3_pattern_detection
+            |input=Observation objects
+            |output=Candidate patterns
+            |stage_4_statistical_validation
+              |input=Candidate patterns
+              |output=Validated patterns with statistics
+              |table
+                ||['Measure', 'Purpose', 'Threshold']
+                ||['Sample Size', 'Sufficient evidence', 'n ≥ 30']
+                ||['P-value', 'Statistical significance', 'p < 0.05']
+                ||['Confidence Interval', 'Precision', 'Based on domain']
+                ||['Correlation Coefficient', 'Strength of relationship', 'r > 0.3']
+                ||['Chi-square', 'Independence test', 'p < 0.05']
+                ||['Variance', 'Consistency', 'Domain-dependent']
+              |id=VP-XXX
+              |candidate_pattern_id=CP-XXX
+              |relationship=[A → B | A + B → C | etc.]
+              |sample_size=n
+              |p_value=p
+              |correlation=r
+              |confidence_interval=[lower, upper]
+              |chi_square=χ²
+              |confidence=[high|medium|low]
+              |status=[validated|rejected|pending]
+              |stage_5_context_detection
+                |input=Validated patterns
+                |output=Patterns with applicable contexts
+                |table
+                  ||['Category', 'Dimensions']
+                |pattern_id=VP-XXX
+                |-_name=[dimension name]
+                |values=[applicable values]
+                |evidence_count=n
+                |confidence=[high|medium|low]
+                |applicability=[universal|conditional|limited]
+                |stage_6_boundary_detection
+                  |input=Validated patterns with contexts
+                  |output=Patterns with applicability boundaries
+                  |table
+                    ||['Type', 'Description', 'Detection Method']
+                  |pattern_id=VP-XXX
+                  |type=[contradiction|exception|edge_case|reverse|diminishing]
+                  |condition=[description]
+                  |evidence=[evidence links]
+                  |severity=[critical|major|minor]
+                  |reversible=[true|false]
+                  |stage_7_knowledge_generation
+                    |input=Pattern + Context + Boundary
+                    |output=Scientific knowledge object
+                    |id=KNOW-XXX
+                    |version=1.0
+                    |statement=[precise, testable claim]
+                    |-_evidence_id=[link]
+                    |contribution=[support|refute]
+                    |sample_size=n
+                    |p_value=p
+                    |correlation=r
+                    |confidence_interval=[lower, upper]
+                    |chi_square=χ²
+                    |value=[0-100]%
+                    |basis=[statistical|expert|heuristic]
+                    |factors=[contributing factors]
+                    |dimensions=[applicable dimensions]
+                    |conditions=[failure conditions]
+                    |applicability=[universal|conditional|limited]
+                    |type=[boundary type]
+                    |severity=[critical|major|minor]
+                    |verified=[true|false]
+                    |replications=n
+                    |engine_id=KDE-ENGINE-002
+                    |engine_version=0.1.0
+                    |created=[timestamp]
+                    |created_by=[actor]
+                    |status=[draft|validated|approved|published]
+                    |review_date=[date]
+                |knowledge_assessment
+                  |assessment_levels
+                    |table
+                      ||['Level', 'Description', 'Confidence']
+                    |assessment_criteria
+                      |table
+                        ||['Criterion', 'Description']
+                  |validation_process
+                    |stage_gate_model
+                      |gate_requirements
+                        |table
+                          ||['Gate', 'Requirement', 'Failure Action']
+                          ||['Gate 1', 'Evidence exists', 'Stop, require evidence']
+                          ||['Gate 2', 'Observations extractable', 'Adjust extraction']
+                          ||['Gate 3', 'Pattern candidate identified', 'Continue observation']
+                          ||['Gate 4', 'Statistical validation passes', 'Reject or modify pattern']
+                          ||['Gate 5', 'At least one context found', 'Flag as context-free']
+                          ||['Gate 6', 'Boundaries tested', 'Document as untested']
+                          ||['Gate 7', 'All fields complete', 'Return for completion']
+                    |scientific_learning_loop
+                    |engine_interface
+                    |related_documents
+                      |items
+                        ||[specification.md](./specification.md) — Engine identity and scope
+                        ||[pipeline.md](./pipeline.md) — Detailed pipeline documentation
+                        ||[knowledge-model.md](./knowledge-model.md) — Knowledge object specification
+                        ||[provenance.md](./provenance.md) — Engine history
+                        ||[changes.md](./changes.md) — Version history
+                    |document_status=APPROVED

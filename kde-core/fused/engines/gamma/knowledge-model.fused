@@ -1,0 +1,260 @@
+# FUSEDv1.0
+
+# name: knowledge-model
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.216641Z
+|kde-engine-003_gamma_knowledge_model
+  |engine_id=KDE-ENGINE-003
+  |version=0.1.0
+  |codename=Gamma
+|overview
+|knowledge_object_structure
+  |complete_causal_knowledge_object
+    |id=CAUSAL-XXX
+    |version="1.0"
+    |statement=<string>
+    |description=<string>
+    |identified=[yes|partial|no]
+    |-_step=<integer>
+    |from=<string>
+    |to=<string>
+    |confidence=<0-100>
+    |cause=<string>
+    |effect=<string>
+    |temporal_precedence=[strong|moderate|weak|none]
+    |rationale=<string>
+    |type=[temporal|confounding|mechanism|measurement]
+    |value=<0-100>
+    |unit=<string>
+    |confidence_interval=[lower, upper]
+    |magnitude=[high|medium|low]
+    |-_name=<string>
+    |effect_on_cause=<string>
+    |effect_on_effect=<string>
+    |adjustment_method=[none|stratification|regression|instrumental_variable|matching]
+    |adjusted=[yes|partial|no]
+    |residual_confounding=<string>
+    |proportion_mediated=<0-1>
+    |effect_modification=[strengthens|weakens|reverses|no_effect]
+    |conditions=<string>
+    |do_operation=<string>
+    |interrupted=[yes|no|partial]
+    |-_effect=<string>
+    |probability=<0-1>
+    |severity=[critical|major|minor]
+    |-_evidence_id=<string>
+    |strength=[strong|moderate|weak]
+    |total_count=<integer>
+    |sample_size=<integer>
+    |p_value=<number>
+    |effect_size=<number>
+    |correlation=<number>
+    |chi_square=<number>
+    |degrees_of_freedom=<integer>
+    |level=[high|medium|low]
+    |basis=[statistical|causal_theory|mixed]
+    |-_factor=<string>
+    |contribution=[positive|negative|neutral]
+    |values=[<value1>, <value2>]
+    |-_condition=<string>
+    |required=[true|false]
+    |applicability=[universal|conditional|limited]
+    |occurrence_rate=<0-1>
+    |-_observation_id=<string>
+    |-_assumption=<string>
+    |testable=[true|false]
+    |tested=[true|false]
+    |violation_consequence=<string>
+    |verified=[true|false]
+    |verification_count=<integer>
+    |-_replication_id=<string>
+    |result=[supported|contradicted]
+    |engine_id=KDE-ENGINE-003
+    |engine_version=0.1.0
+    |created=<ISO8601 timestamp>
+    |created_by=<string>
+    |modified=<ISO8601 timestamp>
+    |modified_by=<string>
+    |-_reviewer=<string>
+    |date=<ISO8601>
+    |decision=<string>
+    |comments=<string>
+    |status=[draft|validated|approved|published]
+    |review_date=<ISO8601 date>
+    |expiration_date=<ISO8601 date or null>
+|field_specifications
+  |identity_fields
+    |table
+      ||['Field', 'Type', 'Required', 'Description']
+      ||['id', 'String', 'Yes', 'Unique knowledge identifier']
+      ||['version', 'String', 'Yes', 'Schema version']
+    |statement_fields
+      |table
+        ||['Field', 'Type', 'Required', 'Description']
+        ||['statement', 'String', 'Yes', 'Precise causal claim']
+      |causal_mechanism_fields
+        |table
+          ||['Field', 'Type', 'Required', 'Description']
+          ||['mechanism.description', 'String', 'Yes', 'Mechanism description']
+          ||['mechanism.identified', 'Enum', 'Yes', 'Has mechanism been identified?']
+          ||['mechanism.steps', 'Array', 'No', 'Mechanism step breakdown']
+          ||['mechanism.confidence', 'Number', 'Yes', 'Confidence in mechanism']
+        |causal_direction_fields
+          |table
+            ||['Field', 'Type', 'Required', 'Description']
+            ||['causal_direction.cause', 'String', 'Yes', 'Causal variable']
+            ||['causal_direction.effect', 'String', 'Yes', 'Effect variable']
+            ||['causal_direction.temporal_precedence', 'Enum', 'Yes', 'Cause precedes effect?']
+            ||['causal_direction.rationale', 'String', 'No', 'Reasoning for direction']
+          |effect_fields
+            |table
+              ||['Field', 'Type', 'Required', 'Description']
+              ||['effect.type', 'Enum', 'Yes', 'Effect type (ATE/ITE/LATE)']
+              ||['effect.value', 'Number', 'Yes', 'Effect size value']
+              ||['effect.unit', 'String', 'No', 'Effect unit']
+              ||['effect.confidence_interval', 'Array', 'No', '95% CI']
+              ||['effect.confidence', 'Number', 'Yes', 'Effect confidence']
+              ||['effect.magnitude', 'Enum', 'No', 'Effect magnitude']
+            |confounder_fields
+              |table
+                ||['Field', 'Type', 'Required', 'Description']
+                ||['confounders[].name', 'String', 'Yes', 'Confounder name']
+                ||['confounders[].adjusted', 'Boolean', 'Yes', 'Has been adjusted?']
+                ||['confounders[].adjustment_method', 'Enum', 'No', 'Method used']
+                ||['confounders[].residual_confounding', 'String', 'No', 'Residual effect']
+              |intervention_fields
+                |table
+                  ||['Field', 'Type', 'Required', 'Description']
+                  ||['intervention.do_operation', 'String', 'Yes', 'do(X) specification']
+                  ||['intervention.predicted_outcome', 'Object', 'Yes', 'Predicted result']
+                  ||['intervention.side_effects', 'Array', 'No', 'Known side effects']
+                |evidence_fields
+                  |table
+                    ||['Field', 'Type', 'Required', 'Description']
+                    ||['evidence.supporting', 'Array', 'Yes', 'Supporting evidence']
+                    ||['evidence.contradicting', 'Array', 'No', 'Contradicting evidence']
+                    ||['evidence.total_count', 'Number', 'Yes', 'Total evidence items']
+                  |statistics_fields
+                    |table
+                      ||['Field', 'Type', 'Required', 'Description']
+                      ||['statistics.sample_size', 'Number', 'Yes', 'Total observations']
+                      ||['statistics.p_value', 'Number', 'No', 'Statistical significance']
+                      ||['statistics.effect_size', 'Number', 'No', "Cohen's d or similar"]
+                      ||['statistics.confidence_interval', 'Array', 'No', '95% CI']
+                      ||['statistics.correlation', 'Number', 'No', 'Correlation coefficient']
+                    |confidence_fields
+                      |table
+                        ||['Field', 'Type', 'Required', 'Description']
+                        ||['confidence.value', 'Number', 'Yes', '0-100 scale']
+                        ||['confidence.level', 'Enum', 'Yes', 'High/Medium/Low']
+                        ||['confidence.basis', 'Enum', 'Yes', 'Statistical/Causal/Mixed']
+                        ||['confidence.factors', 'Array', 'No', 'Contributing factors']
+                      |context_fields
+                        |table
+                          ||['Field', 'Type', 'Required', 'Description']
+                          ||['context.dimensions', 'Array', 'No', 'Applicable dimensions']
+                          ||['context.conditions', 'Array', 'No', 'Required conditions']
+                          ||['context.applicability', 'Enum', 'Yes', 'Universal/Conditional/Limited']
+                        |boundary_fields
+                          |table
+                            ||['Field', 'Type', 'Required', 'Description']
+                            ||['boundary.type', 'Enum', 'No', 'Boundary type']
+                            ||['boundary.description', 'String', 'No', 'Boundary description']
+                            ||['boundary.severity', 'Enum', 'No', 'Critical/Major/Minor']
+                          |provenance_fields
+                            |table
+                              ||['Field', 'Type', 'Required', 'Description']
+                              ||['provenance.engine_id', 'String', 'Yes', 'KDE-ENGINE-003']
+                              ||['provenance.engine_version', 'String', 'Yes', '0.1.0']
+                              ||['provenance.created', 'Timestamp', 'Yes', 'Creation time']
+                        |complete_example
+                          |id=CAUSAL-001
+                          |version="1.0"
+                          |statement=|
+                          |description=No significant boundaries identified
+                          |identified=yes
+                          |-_step=2
+                          |from=Antibody Production
+                          |to=Disease Resistance
+                          |confidence=90
+                          |cause=Vaccination
+                          |effect=Weakened immune response
+                          |temporal_precedence=strong
+                          |rationale=Vaccination precedes disease exposure chronologically
+                          |type=temporal
+                          |value=94
+                          |unit=proportion
+                          |confidence_interval=[0.68, 0.76]
+                          |magnitude=medium
+                          |-_name=vaccine_type
+                          |effect_on_cause=Higher access increases vaccination likelihood
+                          |effect_on_effect=Higher access reduces disease severity
+                          |adjustment_method=stratification
+                          |adjusted=yes
+                          |residual_confounding=Minimal
+                          |do_operation=do(vaccination = true)
+                          |interrupted=partial
+                          |-_effect=Mild fever
+                          |probability=0.15
+                          |severity=none
+                          |-_evidence_id=EV-003
+                          |strength=moderate
+                          |contradicting=[]
+                          |total_count=12
+                          |sample_size=10000
+                          |p_value=0.0001
+                          |effect_size=0.83
+                          |correlation=0.72
+                          |level=high
+                          |basis=mixed
+                          |-_factor=Mechanism identified
+                          |contribution=positive
+                          |values=[approved vaccines]
+                          |-_condition=Standard dosage followed
+                          |required=true
+                          |applicability=conditional
+                          |occurrence_rate=0
+                          |-_assumption=Correct temporal ordering
+                          |testable=true
+                          |tested=true
+                          |violation_consequence=Causal direction would be reversed
+                          |verified=true
+                          |verification_count=5
+                          |-_replication_id=REP-001
+                          |result=supported
+                          |engine_id=KDE-ENGINE-003
+                          |engine_version=0.1.0
+                          |created="2026-07-20T12:00:00Z"
+                          |created_by=OpenHands Agent
+                          |status=validated
+                          |review_date="2026-08-20"
+                        |validation_checklist
+                          |required_fields
+                            |items
+                              ||[ ] id: Unique identifier
+                              ||[ ] version: Schema version
+                              ||[ ] statement: Causal claim
+                              ||[ ] mechanism: Mechanism details
+                              ||[ ] causal_direction: Cause and effect
+                              ||[ ] effect: Effect size
+                              ||[ ] evidence: Supporting evidence
+                              ||[ ] statistics: Statistical support
+                              ||[ ] confidence: Confidence assessment
+                              ||[ ] context: Applicability
+                              ||[ ] provenance: Engine information
+                              ||[ ] status: Knowledge status
+                            |recommended_fields
+                              |items
+                                ||[ ] confounders: Confounder analysis
+                                ||[ ] mediators: Mechanism mediators
+                                ||[ ] moderators: Effect moderators
+                                ||[ ] intervention: Intervention predictions
+                                ||[ ] boundary: Known limitations
+                                ||[ ] assumptions: Explicit assumptions
+                                ||[ ] reproducibility: Replication information
+                              |validation_rules
+                            |related_documents
+                              |items
+                                ||[methodology.md](./methodology.md) — Full methodology
+                                ||[pipeline.md](./pipeline.md) — Pipeline processing
+                            |document_status=EXPERIMENTAL

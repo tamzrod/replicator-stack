@@ -1,0 +1,50 @@
+# FUSEDv1.0
+
+# name: changes
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.227612Z
+|kde-engine-004_delta_changes
+  |engine_id=KDE-ENGINE-004
+  |version=0.1.0
+  |codename=Delta
+|version_history
+  |version_010
+    |date=2026-07-20
+    |status=CANDIDATE
+    |source=INV-012 (Autonomous Engine Synthesis)
+    |table
+      ||['Category', 'Change', 'Description']
+      ||['Aspect', 'Before (Beta)', 'After (Delta)']
+      ||['Session start', 'Undefined', 'Canonical bootstrap']
+      ||['Entry point', 'Repository-based', 'Enforced via BOOTSTRAP.md']
+      ||['Initialization', 'Undefined', 'Deterministic procedure']
+      ||['Authority', 'Implicit', 'Explicit transfer']
+      ||['Pre-work restrictions', 'Not documented', 'Enforced']
+      ||['Aspect', 'Compatible']
+      ||['SEED-001', '✅ Yes']
+      ||['Architecture C', '✅ Yes']
+      ||['Beta methodology', '✅ Preserved']
+      ||['Beta artifacts', '✅ Unchanged']
+|future_changes
+  |potential_version_020
+    |table
+      ||['Change', 'Description']
+      ||['Bootstrap optimization', 'Reduce initialization overhead']
+      ||['Alternative entry points', 'Support multiple valid paths']
+      ||['Bootstrap metrics', 'Add success rate tracking']
+    |potential_version_100
+      |table
+        ||['Change', 'Description']
+        ||['Status: Active', 'Change from Candidate']
+        ||['Documentation', 'Update all references']
+        ||['Registry update', 'Mark as available']
+  |validation_milestones
+    |table
+      ||['Milestone', 'Description', 'Target']
+      ||['VM-1', 'Bootstrap validation experiment', 'TBD']
+      ||['VM-2', 'Authority transfer experiment', 'TBD']
+      ||['VM-3', 'Pre-restriction compliance', 'TBD']
+      ||['VM-4', 'Comparative benchmark', 'TBD']
+  |migration_path
+  |document_status=CANDIDATE (Research Artifact)
+  |version_status=INITIAL

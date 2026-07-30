@@ -1,0 +1,162 @@
+# FUSEDv1.0
+
+# name: KDE-GOVERNANCE-DEPENDENCY-TRACKING
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.237040Z
+|kde_dependency_tracking_system
+  |document_id=KDE-GOVERNANCE-DEP-001
+  |version=1.0.0
+  |status=APPROVED
+  |authority=INV-AUDIT-REVIEW-001 (Priority 8)
+  |effective_date=2026-07-27
+  |source=Dependency Tracking Implementation
+|purpose
+  |items
+    ||Impact analysis for proposed changes
+    ||Understanding which artifacts depend on others
+    ||Identifying critical paths and single points of failure
+    ||Planning changes with full awareness of consequences
+|dependency_types
+  |type_1_engine_seed_dependency
+    |definition=An engine requires a specific seed for operation.
+    |items
+      ||Beta (KDE-ENGINE-002) → SEED-001 (Genesis)
+      ||Gamma (KDE-ENGINE-003) → SEED-001 (Genesis)
+      ||Delta (KDE-ENGINE-004) → SEED-001 (Genesis)
+    |impact=Changing a seed affects all engines that depend on it.
+    |type_2_investigation_knowledge_dependency
+      |definition=An investigation produces or references knowledge.
+      |items
+        ||INV-AUDIT-001 → Knowledge Provenance
+        ||INV-AUDIT-REVIEW-001 → Investigation Versioning
+      |impact=Deprecating knowledge may invalidate investigations.
+      |type_3_knowledge_knowledge_dependency
+        |definition=A knowledge document builds on other knowledge.
+        |items
+          ||KDE-001 (What is Knowledge) → KDE-002 (What is Evidence)
+          ||KDE-001 → KDE-003 (What is Ambiguity)
+        |impact=Changing foundational knowledge affects dependent knowledge.
+        |type_4_governance_component_dependency
+          |definition=Governance rules apply to specific components.
+          |items
+            ||LABORATORY-SOP.md → All investigations
+            ||SOP-COMPLEXITY-BUDGET.md → All SOPs
+          |impact=Changing governance affects all governed components.
+          |type_5_template_schema_dependency
+            |definition=Templates enforce specific schemas.
+            |items
+              ||investigation-template.md → investigation.md
+              ||knowledge-template.md → knowledge documents
+            |impact=Template changes affect all documents created from them.
+        |dependency_registry
+          |engine_dependencies
+            |table
+              ||['Engine', 'Version', 'Depends On', 'Type']
+              ||['KDE-ENGINE-002 (Beta)', '0.1.0', 'SEED-001 v1.0.0', 'Engine→Seed']
+              ||['KDE-ENGINE-003 (Gamma)', '0.1.0', 'SEED-001 v1.0.0', 'Engine→Seed']
+              ||['KDE-ENGINE-004 (Delta)', '0.1.0', 'SEED-001 v1.0.0', 'Engine→Seed']
+            |knowledge_dependencies
+              |table
+                ||['Knowledge', 'Version', 'Dependencies']
+                ||['KDE-001', '1.0.0', 'None (foundational)']
+                ||['KDE-002', '1.0.0', 'KDE-001']
+                ||['KDE-003', '1.0.0', 'KDE-001']
+                ||['KDE-KNOWLEDGE-LIFECYCLE', '1.0.0', 'KDE-001, KDE-002']
+                ||['KDE-KNOWLEDGE-TEMPLATES', '2.0.0', 'KDE-KNOWLEDGE-LIFECYCLE']
+              |governance_dependencies
+                |table
+                  ||['Governance', 'Governs']
+                  ||['LABORATORY-SOP.md', 'All investigations, experiments']
+                  ||['SOP-COMPLEXITY-BUDGET.md', 'All SOPs']
+                  ||['KDE-GOVERNANCE-STATE-VOCABULARY.md', 'All documents with Status field']
+                  ||['ARTIFACT-PROTECTION.md', 'All protected artifacts']
+            |impact_analysis
+              |before_making_changes
+                |impact_analysis_change_description
+                  |change_target
+                    |items
+                      ||Artifact: [Name]
+                      ||Current Version: [X.Y.Z]
+                      ||Proposed Change: [Description]
+                    |dependencies_identified
+                      |table
+                        ||['Artifact', 'Dependency Type', 'Impact']
+                        ||['[Name]', '[Type]', '[Impact description]']
+                      |impact_assessment
+                        |breaking_changes=[Yes/No]
+                        |affected_artifacts=[Count]
+                        |rollback_complexity=[Low/Medium/High]
+                        |mitigation_plan
+                          |approval_required
+                            |items
+                              ||[ ] Breaking changes require human approval
+                              ||[ ] Non-breaking changes require governance review
+                        |dependency_detection
+                          |automated_detection
+                            |detect_all_dependencies
+                              |check_specific_artifact
+                                |export_dependency_graph
+                                  |manual_detection_checklist
+                                    |items
+                                      ||[ ] Search for references to artifact ID in all documents
+                                      ||[ ] Check knowledge dependencies section
+                                      ||[ ] Check governance applicability
+                                      ||[ ] Check template usage
+                                      ||[ ] Review git history for related changes
+                                |critical_path_analysis
+                                  |what_is_a_critical_path
+                                    |kde_critical_paths
+                                      |risk=SEED-001 is a single point of failure. Changes would cascade.
+                                      |mitigation
+                                        |no_direct_seed-001_changes=SEED-001 is immutable
+                                        |version_stamping=Track which version was used
+                                        |progressive_rollout=Test changes on non-critical paths first
+                                    |dependency_update_process
+                                      |when_dependencies_change
+                                        |identify=Use dependency detector to find all dependencies
+                                        |assess=Evaluate impact of change
+                                        |notify=Inform all dependent artifact owners
+                                        |update=Update dependent artifacts
+                                        |verify=Confirm all dependencies are satisfied
+                                        |document=Record dependency update in change log
+                                        |dependency_update_checklist
+                                          |items
+                                            ||[ ] Identified all dependencies
+                                            ||[ ] Assessed impact
+                                            ||[ ] Notified affected parties
+                                            ||[ ] Updated dependent artifacts
+                                            ||[ ] Verified all dependencies satisfied
+                                            ||[ ] Documented in change log
+                                      |version_compatibility_matrix
+                                        |engine_seed_compatibility
+                                          |table
+                                            ||['Engine', 'SEED-001 v1.0.0', 'SEED-002 v1.0.0', 'SEED-003 v1.0.0']
+                                            ||['KDE-ENGINE-002 v0.1.0', '✅ Compatible', '⚠️ Partial', '⚠️ Partial']
+                                            ||['KDE-ENGINE-003 v0.1.0', '✅ Compatible', '⚠️ Partial', '⚠️ Partial']
+                                            ||['KDE-ENGINE-004 v0.1.0', '✅ Compatible', '⚠️ Partial', '⚠️ Partial']
+                                          |knowledge_knowledge_compatibility
+                                            |table
+                                              ||['Knowledge', 'Dependencies', 'Status']
+                                              ||['KDE-KNOWLEDGE-LIFECYCLE', 'None', '✅ Stable']
+                                              ||['KDE-KNOWLEDGE-TEMPLATES v2.0.0', 'KDE-KNOWLEDGE-LIFECYCLE', '✅ Compatible']
+                                        |dependency_graph_visualization
+                                          |kde_dependency_map
+                                        |enforcement
+                                          |when_creating_new_artifacts
+                                            |dependencies=
+                                            |-_kde-xxx=Description]
+                                            |-_inv-xxx=Description]
+                                            |when_modifying_existing_artifacts
+                                          |references
+                                            |table
+                                              ||['Document', 'Relationship']
+                                              ||['`.kde/scripts/dependency-detector.py`', 'Dependency detection script']
+                                              ||['`governance/KDE-GOVERNANCE-STATE-VOCABULARY.md`', 'Related governance']
+                                              ||['`laboratory/templates/investigation-template.md`', 'Investigation dependencies']
+                                          |version_history
+                                            |table
+                                              ||['Version', 'Date', 'Changes', 'Authority']
+                                              ||['1.0.0', '2026-07-27', 'Initial dependency tracking', 'INV-AUDIT-REVIEW-001']
+                                          |document_status=APPROVED
+                                          |authority=INV-AUDIT-REVIEW-001
+                                          |compliance=RECOMMENDED

@@ -1,0 +1,39 @@
+# FUSEDv1.0
+
+# name: README
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.250180Z
+|runtime_configuration
+  |directory=`/governance/runtime/`
+  |purpose=Browser-style Runtime default management
+  |authority=Human Authority
+|overview
+|key_principle
+  |engine_status=Scientific validation level (Experimental, Candidate, Active, Historical)
+  |runtime_default=Human-configured operational setting (YES/NO)
+|documents
+  |table
+    ||['Document', 'Purpose']
+    ||['[defaults.yaml](./defaults.yaml)', 'Runtime default configuration (single source of truth)']
+    ||['[RUNTIME-STARTUP.md](./RUNTIME-STARTUP.md)', 'Runtime initialization sequence']
+    ||['[SESSION-OVERRIDE.md](./SESSION-OVERRIDE.md)', 'Session override behavior']
+    ||['[MIGRATION-NOTES.md](./MIGRATION-NOTES.md)', 'Migration to browser-style model']
+|current_configuration
+  |table
+    ||['Field', 'Value']
+    ||['Default Engine', 'KDE-ENGINE-002 (Beta)']
+    ||['Default Seed', 'SEED-001 (Genesis)']
+    ||['Default Status', 'YES']
+|browser-style_default_model
+  |table
+    ||['Browser', 'KDE Runtime']
+    ||['User sets home page', 'Human sets default Engine']
+    ||['Extensions can override temporarily', 'Sessions can override temporarily']
+    ||['User always has final authority', 'Human always has final authority']
+|related_documents
+  |table
+    ||['Document', 'Purpose']
+    ||['[/engines/current.md](/workspace/project/kde/engines/current.md)', 'Engine registry (shows Status vs Default)']
+    ||['[/laboratory/LABORATORY-RULES.md](/workspace/project/kde/laboratory/LABORATORY-RULES.md)', 'Laboratory Rules (includes Human Authority directive)']
+|authority=Human Authority
+|immutable_by_kde=YES

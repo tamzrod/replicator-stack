@@ -1,0 +1,129 @@
+# FUSEDv1.0
+
+# name: INVESTIGATION-CLOSURE-SOP
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.233649Z
+|investigation_closure_standard_operating_procedure
+  |document_id=SOP-INV-CLOSURE
+  |title=Investigation Closure and Enforcement
+  |version=1.0.0
+  |status=APPROVED (INV-EVOLUTION-001 REC-001)
+  |effective_date=2026-07-24
+  |authority=Human Authority (Governance)
+  |source=INV-EVOLUTION-001 Section 5.1
+|purpose
+|scope
+  |items
+    ||All investigations in `/laboratory/investigations/`
+    ||All new investigations created after 2026-07-24
+    ||Investigation promotions to knowledge or research recommendations
+|mandatory_closure_requirements
+  |rec-001_section_1_required_documents
+    |table
+      ||['Document', 'Required', 'Rationale']
+      ||['`investigation.md`', 'YES', 'Research question and scope']
+      ||['`conclusion.md`', 'YES', 'Final findings and recommendations']
+      ||['`lessons-learned.md`', 'YES (>1 day)', 'Captured learning']
+    |rec-001_section_2_investigation_status_progression
+  |enforcement_rules
+    |rule_1_closure_gate
+      |1_investigationmd_with_status=ACTIVE → COMPLETE
+      |rule_2_promotion_gate
+        |items
+          ||Knowledge promotion (to `/knowledge/`)
+          ||Research recommendation (to Governance)
+          ||Pattern documentation (to repository)
+        |rule_3_closure_review
+          |table
+            ||['Review Type', 'Required For', 'Authority']
+            ||['Standard Review', 'All investigations', 'Human Authority']
+            ||['Enhanced Review', 'P0/P1 recommendations', 'Governance Board']
+      |closure_document_template
+        |required_conclusionmd
+          |conclusion_inv-xxx
+            |investigation=INV-XXX
+            |date=YYYY-MM-DD
+            |status=COMPLETE
+            |confidence=HIGH|MEDIUM|LOW
+            |human_reviewer=[Name]
+            |review_date=YYYY-MM-DD
+        |final_conclusion
+          |evidence_summary
+            |table
+              ||['Evidence', 'Source', 'Support Level']
+              ||['[Evidence 1]', '[Source]', 'HIGH']
+              ||['[Evidence 2]', '[Source]', 'MEDIUM']
+            |recommendations
+              |table
+                ||['ID', 'Recommendation', 'Priority', 'Owner']
+                ||['REC-XXX', '[Text]', 'P0/P1/P2/P3', '[Role]']
+              |signatures
+                |table
+                  ||['Role', 'Name', 'Date']
+                  ||['Investigator', '[Name]', 'YYYY-MM-DD']
+                  ||['Human Reviewer', '[Name]', 'YYYY-MM-DD']
+            |closure_status=APPROVED
+            |investigation_status=COMPLETE
+            |required_if_1_day_lessons-learnedmd
+              |lessons_learned_inv-xxx
+                |investigation=INV-XXX
+                |duration=[X days]
+                |date=YYYY-MM-DD
+            |what_worked
+              |what_didnt_work
+                |future_improvements
+                  |unexpected_findings
+                    |applied_to_repository
+                      |table
+                        ||['Lesson', 'Applied Where', 'Evidence']
+                        ||['[Lesson]', '[Location]', '[Evidence]']
+                  |lessons_captured=YES
+                  |applied=[YES/PENDING/NO]
+                |closure_checklist
+                  |table
+                    ||['Check', 'Item', 'Verified']
+                    ||['1', '`investigation.md` has status: ACTIVE', '☐']
+                    ||['2', 'Research question answered', '☐']
+                    ||['3', 'All planned experiments executed', '☐']
+                    ||['4', '`conclusion.md` present', '☐']
+                    ||['5', '`lessons-learned.md` present (if >1 day)', '☐']
+                    ||['6', 'Evidence documented', '☐']
+                    ||['7', 'Human Review obtained', '☐']
+                    ||['8', 'Signatures complete', '☐']
+                |legacy_investigation_audit
+                  |rec-001_section_3_incomplete_investigations
+                    |table
+                      ||['Status', 'Count', 'Action']
+                      ||['Question-only (no investigation.md)', '~30', 'Archive or complete']
+                      ||['Missing conclusion.md', '~46', 'Add or archive']
+                      ||['Missing lessons-learned', '~45', 'Add (if >1 day) or document']
+                    |recommended_actions_for_legacy_investigations
+                      |complete=Add required documents within 30 days
+                      |archive=Move to `/laboratory/investigations/archive/` if no longer relevant
+                      |deprecate=Mark as DEPRECATED if superseded
+                  |archive_criteria
+                    |table
+                      ||['Criterion', 'Description']
+                    |archive_process
+                      |1_mark_investigationmd_status=COMPLETE
+                  |enforcement_metrics
+                    |table
+                      ||['Metric', 'Target', 'Current']
+                      ||['Investigation completion rate', '100%', '10%']
+                      ||['Lessons-learned capture rate', '100% (if >1 day)', '15%']
+                      ||['Average time to closure', '<14 days', 'N/A']
+                  |related_documents
+                    |table
+                      ||['Document', 'Relationship']
+                      ||['[LABORATORY-SOP.md](./LABORATORY-SOP.md)', 'Investigation lifecycle']
+                      ||['[ARTIFACT-PROTECTION.md](./ARTIFACT-PROTECTION.md)', 'Artifact protection levels']
+                      ||['[LABORATORY/registry.md](../laboratory/registry.md)', 'Investigation registry']
+                      ||['[/laboratory/investigations/](../laboratory/investigations/)', 'Investigation directory']
+                  |version_history
+                    |table
+                      ||['Version', 'Date', 'Author', 'Changes']
+                      ||['1.0.0', '2026-07-24', 'INV-EVOLUTION-001', 'Initial SOP (REC-001 implementation)']
+                  |sop_status=APPROVED
+                  |authority=Human Authority
+                  |enforcement=MANDATORY
+                  |source=INV-EVOLUTION-001 REC-001

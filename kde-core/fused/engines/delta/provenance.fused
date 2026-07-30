@@ -1,0 +1,139 @@
+# FUSEDv1.0
+
+# name: provenance
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.230890Z
+|kde-engine-004_delta_provenance
+  |engine_id=KDE-ENGINE-004
+  |version=0.1.0
+  |codename=Delta
+|overview
+|engine_lineage
+  |table
+    ||['Engine', 'Version', 'Codename', 'Status', 'Parent']
+    ||['KDE-ENGINE-001', '0.1.0', 'Alpha', 'Historical', 'None']
+    ||['KDE-ENGINE-002', '0.1.0', 'Beta', 'Active', 'KDE-ENGINE-001']
+    ||['KDE-ENGINE-003', '0.1.0', 'Gamma', 'Experimental', 'KDE-ENGINE-002']
+    ||['KDE-ENGINE-004', '0.1.0', 'Delta', 'Candidate', 'KDE-ENGINE-002']
+|source_investigation
+  |inv-012_findings
+    |table
+      ||['Finding', 'Contribution to Delta']
+      ||['Bootstrap gap is CRITICAL', 'Bootstrap Module']
+      ||['Entry point undefined', 'Canonical entry point']
+      ||['Fresh session failures', 'Pre-restrictions']
+      ||['AI bypass prevention', 'Authority transfer']
+    |inv-012_evidence
+      |table
+        ||['Evidence Type', 'Source', 'Confidence']
+        ||['89 experimental runs', 'LAB-001 to LAB-011', 'HIGH']
+        ||['Meta-analysis findings', 'INV-011', 'HIGH']
+        ||['Lessons learned', 'INV-004', 'HIGH']
+  |relationship_to_beta_kde-engine-002
+    |inheritance
+      |table
+        ||['Aspect', 'Inherited From Beta', 'Preserved', 'Enhanced']
+        ||['Bootstrap Module', '❌ (NEW)', '—', 'Canonical bootstrap']
+        ||['Observation Engine', '✅', 'All functionality', '—']
+        ||['Pattern Detector', '✅', 'All functionality', '—']
+        ||['Statistical Validator', '✅', 'All functionality', '—']
+        ||['Context Detector', '✅', 'All functionality', '—']
+        ||['Boundary Detector', '✅', 'All functionality', '—']
+        ||['Knowledge Generator', '✅', 'All functionality', '—']
+      |differences_from_beta
+        |table
+          ||['Aspect', 'Beta', 'Delta']
+          ||['Bootstrap', 'Not addressed', 'Canonical']
+          ||['Entry Point', 'Repository-based', 'Enforced via BOOTSTRAP.md']
+          ||['Initialization', 'Undefined', 'Deterministic procedure']
+          ||['Authority Transfer', 'Implicit', 'Explicit']
+          ||['Pre-restrictions', 'Not documented', 'Enforced']
+          ||['Pipeline Modules', '6', '7 (Bootstrap + 6)']
+    |design_decisions
+      |decision_1_canonical_bootstrap_module
+        |decision=Add Bootstrap Module at pipeline start.
+        |rationale=
+        |items
+          ||Fresh session failures are critical gap
+          ||Deterministic initialization required for reproducibility
+          ||Entry point must be enforced
+          ||Adds initialization overhead
+          ||May restrict flexibility
+          ||Requires documentation
+        |trade-offs=
+        |decision_2_preserve_beta_pipeline_unchanged
+          |decision=Do not modify Beta's six modules.
+          |rationale=
+          |items
+            ||Beta's methodology is proven effective
+            ||Changes would complicate validation
+            ||Separates bootstrap from discovery concerns
+            ||Two concerns in one engine
+            ||More complex than pure bootstrap
+            ||Clearer separation possible
+          |trade-offs=
+          |decision_3_bootstrap_as_enforced_not_optional
+            |decision=Bootstrap is mandatory, not optional.
+            |rationale=
+            |items
+              ||Gap is critical, not optional
+              ||Ensures consistency across sessions
+              ||Prevents bypass
+              ||Less flexibility
+              ||May slow initial sessions
+              ||Validation simpler
+            |trade-offs=
+            |decision_4_bootstrap_artifacts_external
+              |decision=Bootstrap artifacts are Laboratory artifacts, not Engine artifacts.
+              |rationale=
+              |items
+                ||Separates concerns (Engine vs. Laboratory)
+                ||Artifacts already created (BOOTSTRAP.md, LABORATORY-RULES.md)
+                ||Engine references Laboratory artifacts
+                ||Tight coupling to Laboratory
+                ||Two systems to maintain
+                ||Clearer separation
+              |trade-offs=
+          |experiments_expected
+            |table
+              ||['Experiment', 'Expected Purpose', 'Validation Focus']
+              ||['Bootstrap validation', 'Deterministic init', '100% success rate']
+              ||['Authority transfer test', 'Explicit transfer', 'Timing verification']
+              ||['Pre-restriction test', 'Enforce restrictions', 'Compliance verification']
+              ||['Comparative benchmark', 'Compare to Beta', '+0.6 score improvement']
+          |verification
+            |beta_preservation
+              |table
+                ||['Check', 'Status']
+                ||['Beta files unchanged', '☐ (Engine separate)']
+                ||['Beta experiments still reference Beta', '☐ (Engine separate)']
+                ||['Beta can be executed independently', '✅']
+              |delta_functionality
+                |table
+                  ||['Check', 'Status']
+                  ||['Bootstrap Module implemented', '✅ (in methodology)']
+                  ||['Entry point defined', '✅ (BOOTSTRAP.md)']
+                  ||['Authority transfer defined', '✅ (LABORATORY-RULES.md)']
+                  ||['Pre-restrictions documented', '✅ (methodology)']
+                  ||['Beta modules inherited', '✅']
+            |statistics
+              |table
+                ||['Metric', 'Value']
+                ||['Modules Added', '1 (Bootstrap)']
+                ||['Modules Inherited', '6 (from Beta)']
+                ||['Fields Added', '4 (Bootstrap-related)']
+                ||['Breaking Changes', '0']
+                ||['Validation Experiments Required', '4']
+                ||['Expected Score Improvement', '+0.6 over Beta']
+            |future_plans
+              |potential_enhancements
+            |related_documents
+              |table
+                ||['Document', 'Purpose']
+                ||['INV-012 investigation', 'Source investigation']
+                ||['[specification.md](./specification.md)', 'Engine identity']
+                ||['[methodology.md](./methodology.md)', 'Methodology']
+                ||['[provenance.md](./provenance.md)', 'This document']
+            |document_status=CANDIDATE (Research Artifact)
+            |source_investigation=INV-012
+            |validation_required=YES

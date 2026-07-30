@@ -1,0 +1,123 @@
+# FUSEDv1.0
+
+# name: ARTIFACT-PROTECTION
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.233000Z
+|artifact_protection_matrix
+  |document_id=ARTIFACT-PROTECTION
+  |version=1.0.0
+  |date=2026-07-23
+  |status=PRODUCTION
+  |authority=Governance
+  |source=LAB-039 Revision, LAB-040 Implementation
+|purpose
+  |items
+    ||A single source of truth for artifact protection
+    ||Clear guidance on what actions are permitted
+    ||Maintenance procedures to keep the matrix current
+|protection_levels
+  |level_definitions
+    |table
+      ||['Level', 'Description', 'Enforcement', 'Override Allowed']
+    |level_behaviors
+      |table
+        ||['Level', 'CREATE', 'MODIFY', 'DELETE', 'RENAME', 'MOVE']
+        ||['ABSOLUTE', 'BLOCKED', 'BLOCKED', 'BLOCKED', 'BLOCKED', 'BLOCKED']
+        ||['HIGH', 'WARN + ACK', 'WARN + ACK', 'WARN + ACK', 'WARN + ACK', 'WARN + ACK']
+        ||['MEDIUM', 'WARN', 'WARN', 'WARN', 'WARN', 'WARN']
+        ||['LOW', 'ALLOW', 'ALLOW', 'ALLOW', 'ALLOW', 'ALLOW']
+  |artifact_protection_table
+    |protected_artifacts
+      |table
+        ||['Artifact Type', 'Pattern', 'Protection Level', 'Rules']
+        ||['Seeds', '`seeds/seed-*`', 'ABSOLUTE', 'NEVER-MODIFY.md']
+        ||['Historical Experiments', '`laboratory/experiments/LAB-[0-9]{3}` (XXX < current)', 'HIGH', 'This document']
+        ||['Bootstrap', '`laboratory/BOOTSTRAP.md`', 'HIGH', 'Human Authority']
+        ||['Laboratory Rules', '`laboratory/LABORATORY-RULES.md`', 'HIGH', 'Human Authority']
+      |mutable_artifacts
+        |table
+          ||['Artifact Type', 'Pattern', 'Protection Level', 'Rationale']
+          ||['Current Experiments', '`laboratory/experiments/LAB-[0-9]{3}` (current)', 'MEDIUM', 'Active work']
+    |default_protection
+      |unknown_artifacts
+        |table
+          ||['Setting', 'Value', 'Rationale']
+        |rule=All artifacts receive at least MEDIUM protection unless explicitly set to LOW by governance.
+    |pattern_matching
+      |matching_algorithm
+        |priority_order
+          |table
+            ||['Rank', 'Level', 'Priority Value']
+            ||['1', 'ABSOLUTE', '100']
+            ||['2', 'HIGH', '75']
+            ||['3', 'MEDIUM', '50']
+            ||['4', 'LOW', '25']
+          |conflict_resolution
+            |table
+              ||['Scenario', 'Resolution']
+              ||['Specific vs General', 'More specific pattern wins']
+              ||['Explicit vs Wildcard', 'Explicit pattern wins']
+              ||['Recursive vs Single', 'Recursive pattern wins']
+            |pattern_priority_matrix
+              |table
+                ||['Pattern A Level', 'Pattern B Level', 'Result']
+                ||['ABSOLUTE', 'ANY', 'ABSOLUTE']
+                ||['HIGH', 'MEDIUM', 'HIGH']
+                ||['HIGH', 'LOW', 'HIGH']
+                ||['MEDIUM', 'LOW', 'MEDIUM']
+                ||['LOW', 'LOW', 'LOW']
+          |prohibited_actions_by_level
+            |absolute_prohibited
+              |create=Not applicable (already exists)
+              |modify=Any change to content
+              |delete=Any removal
+              |rename=Any identifier change
+              |move=Any location change
+              |high_prohibited_without_approval
+                |modify=Requires acknowledgment
+                |delete=Requires acknowledgment
+                |rename=Requires acknowledgment
+                |move=Requires acknowledgment
+                |medium_guidelines
+                  |items
+                    ||Follow SOP for all operations
+                    ||Document changes
+                    ||Obtain review as needed
+                  |low_permitted
+                    |items
+                      ||Standard file operations
+                      ||No restrictions
+                |maintenance
+                  |review_schedule
+                    |table
+                      ||['Activity', 'Frequency', 'Responsible', 'Evidence']
+                      ||['Full protection review', 'Quarterly', 'Governance', 'Review log']
+                      ||['New artifact pattern review', 'As needed', 'AI triggers', 'Trigger record']
+                      ||['Pattern validation', 'On load', 'Runtime', 'Validation log']
+                      ||['Compliance audit', 'Semi-annually', 'Governance', 'Audit report']
+                    |review_triggers
+                      |new_artifact_discovery=When AI creates or discovers artifact type not in matrix
+                      |protection_violation=When protection check is bypassed or fails
+                      |architecture_change=When KDE directory structure changes
+                      |governance_directive=When human requests review
+                      |scheduled=Quarterly scheduled review
+                      |review_process
+                        |maintenance_log
+                          |table
+                            ||['Date', 'Activity', 'Responsible', 'Changes', 'Approved By']
+                            ||['2026-07-23', 'Initial creation', 'LAB-040', 'Initial matrix', 'Human Review']
+                      |related_documents
+                        |table
+                          ||['Document', 'Purpose']
+                          ||['[LABORATORY/BOOTSTRAP.md](../laboratory/BOOTSTRAP.md)', 'Entry point with protection reference']
+                          ||['[LABORATORY/LABORATORY-RULES.md](../laboratory/LABORATORY-RULES.md)', 'AI behavioral rules']
+                          ||['[LABORATORY/EVIDENCE.md](../laboratory/EVIDENCE.md)', 'Evidence protection rules']
+                          ||['[governance/runtime/protection.yaml](./runtime/protection.yaml)', 'Runtime protection configuration']
+                          ||['[governance/runtime/RUNTIME-STARTUP.md](./runtime/RUNTIME-STARTUP.md)', 'Runtime initialization']
+                      |version_history
+                        |table
+                          ||['Version', 'Date', 'Changes', 'Authority']
+                          ||['1.0.0', '2026-07-23', 'Initial release', 'Human Review']
+                      |authority=Governance
+                      |status=PRODUCTION
+                      |review_date=2026-10-23 (Quarterly)

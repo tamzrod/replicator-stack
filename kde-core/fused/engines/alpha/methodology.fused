@@ -1,0 +1,100 @@
+# FUSEDv1.0
+
+# name: methodology
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.221138Z
+|kde-engine-001_methodology
+  |engine_id=KDE-ENGINE-001
+  |version=0.1.0
+  |codename=Alpha
+|overview
+|core_principles
+  |1_evidence_over_intuition
+    |2_experiment_before_deployment
+      |3_preserve_ambiguity
+        |4_traceability_always
+          |5_reproducibility_required
+        |scientific_learning_loop
+          |stage_1_research
+            |items
+              ||Discover existing knowledge
+              ||Identify knowledge gaps
+              ||Form research questions
+              ||Review external sources
+            |stage_2_knowledge
+              |items
+                ||Define knowledge boundaries
+                ||Document constraints
+                ||Identify ambiguities
+                ||Create knowledge records
+              |stage_3_laboratory
+                |items
+                  ||Design experiments
+                  ||Execute experimental runs
+                  ||Collect evidence
+                  ||Record observations
+                |stage_4_evidence
+                  |items
+                    ||Analyze evidence quality
+                    ||Extract patterns
+                    ||Identify contradictions
+                    ||Assess confidence
+                  |stage_5_governance
+                    |items
+                      ||Review patterns
+                      ||Promote validated knowledge
+                      ||Update governance documents
+                      ||Archive findings
+                |document_state_machine
+                  |state_definitions
+                    |table
+                      ||['State', 'Description', 'Entry Criteria']
+                |laboratory_process
+                  |experiment_structure
+                    |run_execution
+                      |pre-conditions=Verify required state
+                      |execution=Perform experimental procedure
+                      |observation=Record results without interpretation
+                      |evidence=Document evidence artifacts
+                      |post-conditions=Verify expected state
+                      |evidence_collection
+                        |table
+                          ||['Evidence Type', 'Description', 'Requirements']
+                        |reproducibility_requirements
+                          |environment=OS, network, services
+                          |software=Versions, dependencies
+                          |hardware=CPU, memory, storage
+                          |configuration=All settings
+                          |assets=Files, datasets, models
+                          |procedure=Step-by-step execution
+                      |validation_process
+                        |validation_stages
+                          |table
+                            ||['Stage', 'Purpose', 'Output']
+                          |validation_criteria
+                            |table
+                              ||['Criterion', 'Description']
+                        |knowledge_promotion
+                          |promotion_criteria
+                            |promotion_process
+                          |experiment_metadata
+                            |id=KDE-ENGINE-001
+                            |created=YYYY-MM-DD
+                            |version=0.1.0
+                            |codename=Alpha
+                            |methodology_version=X.X
+                            |domain=[Domain]
+                            |status=[PLANNED|ACTIVE|COMPLETE|SUSPENDED]
+                          |methodology_versioning
+                            |table
+                              ||['Version', 'Description']
+                              ||['v1.0', 'Initial research methodology']
+                              ||['v2.0', 'Tier 1 framework']
+                              ||['v2.1', 'Trigger, observation, evidence additions']
+                              ||['v2.2', 'Traceability validation']
+                          |related_documents
+                            |items
+                              ||[specification.md](./specification.md) — Engine identity and scope
+                              ||[provenance.md](./provenance.md) — Experiments produced
+                              ||[changes.md](./changes.md) — Version history
+                          |document_status=APPROVED

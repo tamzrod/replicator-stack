@@ -1,0 +1,119 @@
+# FUSEDv1.0
+
+# name: provenance
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.226432Z
+|kde-engine-002_beta_provenance
+  |engine_id=KDE-ENGINE-002
+  |version=0.1.0
+  |codename=Beta
+|overview
+|engine_lineage
+  |table
+    ||['Engine', 'Version', 'Codename', 'Status', 'Parent']
+    ||['KDE-ENGINE-001', '0.1.0', 'Alpha', 'Historical', 'None']
+    ||['KDE-ENGINE-002', '0.1.0', 'Beta', 'Active', 'KDE-ENGINE-001']
+|relationship_to_alpha_kde-engine-001
+  |inheritance
+    |table
+      ||['Aspect', 'Inherited From Alpha', 'Enhanced']
+      ||['Core Principles', '✅', 'Extended']
+      ||['Evidence Requirements', '✅', 'Enhanced']
+      ||['Observation Extraction', '✅', 'Formalized']
+      ||['Pattern Detection', '✅', 'Statistical']
+      ||['Validation', '✅', '✅ (now mandatory)']
+      ||['Context Detection', '❌ (NEW)', '—']
+      ||['Boundary Detection', '❌ (NEW)', '—']
+      ||['Knowledge Model', '✅', 'Extended']
+    |differences_from_alpha
+      |table
+        ||['Aspect', 'Alpha', 'Beta']
+        ||['Discovery Question', '"Does X?"', '"When does X?"']
+        ||['Pipeline Modules', '4', '6']
+        ||['Confidence Basis', 'Implicit', 'Statistical']
+        ||['Context Tracked', 'No', 'Yes']
+        ||['Boundaries Tracked', 'No', 'Yes']
+        ||['Knowledge Format', 'Simple', 'Comprehensive']
+  |evolution_history
+    |creation_2026-07-20
+      |motivation
+        |design_decisions
+      |experiments_produced
+        |experiments_expected
+          |table
+            ||['Experiment ID', 'Expected Domain', 'Expected Use']
+            ||['LAB-012', 'Chess Strategy', 'Beta Context Detection']
+            ||['LAB-013', 'Grid Control', 'Beta Boundary Detection']
+            ||['LAB-014', 'Multi-Domain', 'Beta Validation']
+      |architecture_decisions
+        |decision_1_preserve_alpha_unchanged
+          |decision=Keep Alpha (KDE-ENGINE-001) unchanged.
+          |rationale=
+          |items
+            ||Historical experiments must remain valid
+            ||Comparison baseline required
+            ||No risk to existing work
+            ||Duplication of core components
+            ||Maintenance overhead for two engines
+          |trade-offs=
+          |decision_2_separate_engine_directories
+            |decision=Use separate directories for each engine.
+            |structure=
+            |rationale=
+            |items
+              ||Clear separation of concerns
+              ||Easy comparison
+              ||Simple versioning
+            |decision_3_common_engine_interface
+              |decision=All engines implement common interface.
+              |interface=
+              |items
+                ||`Initialize()` — Setup engine
+                ||`Analyze()` — Process evidence
+                ||`Validate()` — Verify knowledge
+                ||`GenerateKnowledge()` — Create knowledge
+                ||`GenerateReport()` — Format output
+                ||`Capabilities()` — Return metadata
+                ||`Version()` — Return version
+                ||`Metadata()` — Return engine info
+                ||Laboratory becomes engine-agnostic
+                ||Easy to add new engines
+                ||No laboratory changes for new engines
+              |rationale=
+          |verification
+            |alpha_preservation
+              |table
+                ||['Check', 'Status']
+                ||['Alpha files unchanged', '✅ VERIFIED']
+                ||['Alpha experiments still reference Alpha', '✅ VERIFIED']
+                ||['Alpha can be executed independently', '✅ VERIFIED']
+              |beta_functionality
+                |table
+                  ||['Check', 'Status']
+                  ||['Context Detector implemented', '✅ IMPLEMENTED']
+                  ||['Boundary Detector implemented', '✅ IMPLEMENTED']
+                  ||['Statistical Validator enhanced', '✅ IMPLEMENTED']
+                  ||['Knowledge Model extended', '✅ IMPLEMENTED']
+                  ||['Common interface defined', '✅ DEFINED']
+            |statistics
+              |table
+                ||['Metric', 'Value']
+                ||['Modules Added', '2 (Context, Boundary)']
+                ||['Fields Added to Knowledge', '8']
+                ||['Statistical Requirements', '6 new']
+                ||['Breaking Changes', '0']
+                ||['Experiments Under Beta', '0 (new engine)']
+            |future_plans
+              |kde-engine-003_gamma
+                |items
+                  ||Causal inference module
+                  ||Temporal pattern tracking
+                  ||Cross-domain knowledge transfer
+                  ||Automated hypothesis generation
+                |timeline
+                  |table
+                    ||['Engine', 'Expected', 'Status']
+                    ||['KDE-ENGINE-001 (Alpha)', '2026-07-19', 'Historical']
+                    ||['KDE-ENGINE-002 (Beta)', '2026-07-20', 'Active']
+                    ||['KDE-ENGINE-003 (Gamma)', 'TBD', 'Planned']
+              |document_status=APPROVED

@@ -1,0 +1,248 @@
+# FUSEDv1.0
+
+# name: interface
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.211870Z
+|kde_engine_interface_specification
+  |version=1.0
+  |effective=2026-07-20
+|overview
+|design_principle
+|interface_definition
+  |required_methods
+    |name=KDEEngineInterface
+    |version="1.0"
+    |description=Return engine metadata
+    |parameters=[]
+    |returns=EngineMetadata
+    |-_name=knowledge
+    |type=Knowledge
+|method_specifications
+  |1_initialize
+    |purpose=Set up the engine for operation.
+    |description=Current state of the engine
+    |parameters=[]
+    |type=EngineState
+    |state_transitions=
+    |2_analyzeevidence
+      |purpose=Process evidence through the engine pipeline.
+      |description=Complete analysis output
+      |-_name=evidence
+      |type=AnalysisResult
+      |required=true
+      |analysisresult_structure=
+      |id=RESULT-XXX
+      |engine_id=KDE-ENGINE-XXX
+      |engine_version="X.X.X"
+      |timestamp=ISO8601
+      |processing_time=duration
+      |evidence_count=integer
+      |observation_count=integer
+      |pattern_count=integer
+      |knowledge_count=integer
+      |3_validateknowledge
+        |purpose=Validate a knowledge object for completeness and correctness.
+        |description=Validation outcome with any issues found
+        |-_name=knowledge
+        |type=ValidationResult
+        |required=true
+        |validationresult_structure=
+        |valid=boolean
+        |-_type=[missing_field|invalid_value|incomplete|warning]
+        |field=field_name
+        |message=description
+        |severity=[error|warning|info]
+        |4_generateknowledgepipeline_output
+          |purpose=Create a knowledge object from pipeline output.
+          |description=Complete knowledge object
+          |-_name=pipeline_output
+          |type=Knowledge
+          |required=true
+          |5_generatereportknowledge
+            |purpose=Format knowledge for human consumption.
+            |description=Formatted report
+            |-_name=knowledge
+            |type=Report
+            |required=true
+            |report_structure=
+            |id=REPORT-XXX
+            |knowledge_id=KNOW-XXX
+            |format=[markdown|html|pdf|json]
+            |-_title="Boundaries"
+            |content=formatted_boundaries
+            |generated=timestamp
+            |engine_id=engine_id
+            |version=version
+            |6_capabilities
+              |purpose=Return what the engine can do.
+              |description=Engine capabilities
+              |parameters=[]
+              |type=Capabilities
+              |capabilities_structure=
+              |engine_id=KDE-ENGINE-XXX
+              |version="X.X.X"
+              |temporal=[list]
+              |environmental=[list]
+              |operational=[list]
+              |domain_specific=[list]
+              |maximum_sample_size=integer
+              |minimum_sample_size=integer
+              |context_detection=boolean
+              |boundary_detection=boolean
+              |causal_inference=boolean
+              |temporal_tracking=boolean
+              |7_version
+                |purpose=Return engine version information.
+                |description=Version information
+                |parameters=[]
+                |type=Version
+                |version_structure=
+                |major=integer
+                |minor=integer
+                |patch=integer
+                |codename=string
+                |full="X.Y.Z"
+                |8_metadata
+                  |purpose=Return engine identity and status.
+                  |description=Engine metadata
+                  |parameters=[]
+                  |type=EngineMetadata
+                  |enginemetadata_structure=
+                  |id=KDE-ENGINE-XXX
+                  |name="Engine Name"
+                  |codename="codename"
+                  |version="X.Y.Z"
+                  |status=[active|historical|deprecated]
+                  |effective_date=ISO8601
+                  |specification=path
+                  |methodology=path
+                  |pipeline=path
+                  |knowledge_model=path
+                  |parent_engine=engine_id_or_null
+                  |child_engine=engine_id_or_null
+                  |laboratory_version_required=version
+              |data_types
+                |evidence
+                  |id=EV-XXX
+                  |type=[log|screenshot|measurement|document|event|telemetry]
+                  |content=any
+                  |source=string
+                  |timestamp=ISO8601
+                  |metadata=object
+                  |observation
+                    |id=OBS-XXX
+                    |type=[measurement|fact|event|behavior]
+                    |value=any
+                    |unit=string_or_null
+                    |dimensions=object
+                    |evidence_id=EV-XXX
+                    |extraction_method=string
+                    |flagged=boolean
+                    |marker=string_or_null
+                    |candidatepattern
+                      |id=CP-XXX
+                      |type=[correlation|sequence|conditional|behavioral|comparative]
+                      |antecedent=any
+                      |consequent=any
+                      |condition=any
+                      |supporting_observations=[OBS-XXX]
+                      |frequency=number
+                      |consistency=[high|medium|low]
+                      |status=candidate
+                      |validatedpattern
+                        |id=VP-XXX
+                        |candidate_pattern_id=CP-XXX
+                        |sample_size=integer
+                        |p_value=float
+                        |correlation=float
+                        |confidence_interval=[float, float]
+                        |chi_square=float
+                        |effect_size=float
+                        |result=[validated|rejected|pending_review]
+                        |confidence=[high|medium|low]
+                        |context
+                          |id=CTX-XXX
+                          |pattern_id=VP-XXX
+                          |name=string
+                          |values=[any]
+                          |evidence_count=integer
+                          |statistical_support=float
+                          |applicability=[universal|conditional|limited]
+                          |boundary
+                            |id=BND-XXX
+                            |pattern_id=VP-XXX
+                            |type=[contradiction|exception|edge_case|reverse|diminishing]
+                            |condition=string
+                            |-_observation_id=OBS-XXX
+                            |description=string
+                            |severity=[critical|major|minor]
+                            |occurrence_rate=float
+                            |knowledge
+                              |id=KNOW-XXX
+                              |version="X.Y"
+                              |statement=string
+                              |supporting=[EvidenceRef]
+                              |contradicting=[EvidenceRef]
+                              |total_count=integer
+                              |statistics=Statistics
+                              |value=integer
+                              |level=[high|medium|low]
+                              |basis=[statistical|expert|heuristic]
+                              |factors=[string]
+                              |context=Context
+                              |boundary=Boundary_or_null
+                              |assumptions=[Assumption]
+                              |verified=boolean
+                              |verification_count=integer
+                              |engine_id=string
+                              |engine_version=string
+                              |created=ISO8601
+                              |status=[draft|validated|approved|published]
+                          |error_handling
+                            |standard_errors
+                              |table
+                                ||['Error', 'Description', 'Handling']
+                                ||['`InitializationError`', 'Engine failed to initialize', 'Retry or abort']
+                                ||['`ConfigurationError`', 'Invalid configuration', 'Fix config']
+                                ||['`PrerequisiteError`', 'Prerequisites not met', 'Install deps']
+                                ||['`ValidationError`', 'Evidence invalid', 'Skip invalid']
+                                ||['`ProcessingError`', 'Pipeline failed', 'Log and retry']
+                                ||['`ResourceError`', 'Insufficient resources', 'Reduce scope']
+                              |error_response_format
+                                |code=ERROR_CODE
+                                |message=human_readable_message
+                                |details=object
+                                |recoverable=boolean
+                                |retry_after=duration_or_null
+                            |implementation_requirements
+                              |language_independence
+                                |items
+                                  ||Struct/mapping data types
+                                  ||Arrays/lists
+                                  ||Type definitions
+                                  ||Error handling
+                                |serialization
+                                  |items
+                                    ||Input parameters
+                                    ||Return values
+                                    ||Error responses
+                                  |thread_safety
+                                    |resource_management
+                                      |items
+                                        ||Clean up resources on shutdown
+                                        ||Report resource usage
+                                        ||Support resource limits
+                                  |versioning
+                                    |interface_versioning
+                                      |items
+                                        ||MAJOR: Breaking changes
+                                        ||MINOR: Additive changes
+                                        ||PATCH: Bug fixes
+                                      |engine_versioning
+                                    |related_documents
+                                      |items
+                                        ||[engine/README.md](./README.md) — Engine framework overview
+                                        ||[alpha/methodology.md](./alpha/methodology.md) — Alpha methodology
+                                        ||[beta/methodology.md](./beta/methodology.md) — Beta methodology
+                                        ||[beta/pipeline.md](./beta/pipeline.md) — Pipeline documentation
+                                    |document_status=APPROVED

@@ -1,0 +1,91 @@
+# FUSEDv1.0
+
+# name: specification
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.214352Z
+|kde-engine-003_gamma_specification
+  |engine_id=KDE-ENGINE-003
+  |version=0.1.0
+  |codename=Gamma
+  |status=Active
+  |effective_date=2026-07-20
+  |promotion_date=2026-07-23 (to Candidate)
+  |activation_date=2026-07-24 (INV-EVOLUTION-001 REC-003)
+  |promotion_evidence=LAB-017, LAB-044, LAB-045, LAB-046
+|engine_identity
+  |table
+    ||['Field', 'Value']
+|purpose
+|scope
+  |what_gamma_does
+    |causal_discovery=Identifies potential causal relationships from observational and experimental data
+    |causal_modeling=Constructs causal diagrams representing mechanisms
+    |intervention_prediction=Predicts outcomes of hypothetical interventions
+    |confounding_analysis=Identifies and accounts for confounding variables
+    |causal_strength_estimation=Quantifies the magnitude of causal effects
+    |what_gamma_does_not_do
+      |does_not_prove_causation_from_correlation_alone=Requires additional evidence or assumptions
+      |does_not_guarantee_correct_causal_models=Models are hypotheses requiring validation
+      |does_not_replace_randomized_controlled_trials=Provides guidance for experimental design
+      |does_not_handle_all_types_of_causal_complexity=Limited to specified causal structures
+      |relationship_to_previous_engines
+        |table
+          ||['Engine', 'Discovery Type', 'Question']
+    |core_innovation
+      |the_causal_discovery_gap
+        |items
+          ||Output: Correlation detected
+          ||Output: Correlation with context
+          ||Output: Causal mechanism with intervention prediction
+        |why_causal_discovery_matters
+          |table
+            ||['Question Type', 'Use Case']
+            ||['Correlation', '"Is X associated with Y?"']
+            ||['Prediction', '"Given X, what is Y?"']
+            ||['Explanation', '"Why does X affect Y?"']
+            ||['Intervention', '"How can we change Y by changing X?"']
+          |gamma_enables_the_last_two=explanation and intervention.
+      |engine_lifecycle
+        |status_definitions
+          |table
+            ||['Status', 'Description']
+          |current_status
+            |promotion_evidence
+              |table
+                ||['Evidence', 'Description', 'Date']
+                ||['LAB-017', 'Initial engine comparison demonstrating causal capabilities', '2026-07-20']
+                ||['LAB-044', 'Gamma vs Delta comparison', '2026-07-23']
+                ||['LAB-045', 'Feasibility study with promotion readiness 87.5%', '2026-07-23']
+                ||['LAB-046', 'Repeatability validation: 100% hypothesis agreement', '2026-07-23']
+          |engine_hierarchy
+          |documentation
+            |table
+              ||['Document', 'Purpose']
+              ||['specification.md', 'Engine identity and scope']
+              ||['methodology.md', 'Causal discovery methodology']
+              ||['pipeline.md', 'Processing pipeline']
+              ||['knowledge-model.md', 'Knowledge object structure']
+              ||['changes.md', 'Version history']
+              ||['provenance.md', 'Engine lineage']
+              ||['README.md', 'Overview and quick reference']
+          |compatibility
+            |table
+              ||['Aspect', 'Status']
+          |maturity_assessment
+            |table
+              ||['Dimension', 'Level', 'Evidence']
+              ||['Theoretical Foundation', 'High', 'Causal inference methodology documented']
+              ||['Methodology Validation', 'COMPLETE', 'LAB-045 (87.5% readiness)']
+              ||['Empirical Testing', 'COMPLETE', 'LAB-046 (100% repeatability)']
+              ||['Production Readiness', 'CONFIRMED', 'INV-EVOLUTION-001 REC-003']
+            |status=Gamma has completed validation and is now ACTIVE per INV-EVOLUTION-001 REC-003.
+          |related_documents
+            |items
+              ||[Engine Framework](../README.md) — Framework overview
+              ||[Engine Interface](../interface.md) — Standard interface
+              ||[Alpha Specification](../alpha/specification.md) — Alpha engine
+              ||[Beta Specification](../beta/specification.md) — Beta engine
+              ||[Future Engines](../future-engines.md) — Engine roadmap
+          |document_status=ACTIVE
+          |activation_date=2026-07-24
+          |activation_authority=INV-EVOLUTION-001 REC-003 (Human Approved)

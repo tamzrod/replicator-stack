@@ -1,0 +1,181 @@
+# FUSEDv1.0
+
+# name: methodology
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.214892Z
+|kde-engine-003_gamma_methodology
+  |engine_id=KDE-ENGINE-003
+  |version=0.1.0
+  |codename=Gamma
+  |name=Causal Knowledge Discovery Engine
+|overview
+|core_principles
+  |base_principles_from_alphabeta
+    |beta-extended_principles
+      |gamma-specific_principles
+    |the_gamma_discovery_question
+      |alpha_question
+        |beta_question
+          |gamma_question
+            |items
+              ||Mechanism: [causal pathway]
+              ||Effect Size: [magnitude]
+              ||Confounders: [identified confounders]
+              ||Intervention: [predicted outcome]
+              ||Confidence: [statistical measure]
+        |causal_discovery_vs_correlation_discovery
+          |correlation_discovery_alphabeta
+            |items
+              ||Is X associated with Y?
+              ||Under what conditions is X associated with Y?
+              ||Correlation coefficients
+              ||Context conditions
+              ||Confidence intervals
+              ||Does not identify causal direction
+              ||Does not account for confounding
+              ||Cannot predict intervention effects
+            |causal_discovery_gamma
+              |items
+                ||What causes what?
+                ||How does X causally lead to Y?
+                ||What would happen if we changed X?
+                ||Causal diagrams
+                ||Effect sizes (average treatment effect)
+                ||Confounder adjustments
+                ||Intervention predictions
+                ||Identifies causal direction
+                ||Accounts for confounding
+                ||Predicts intervention effects
+          |causal_concepts
+            |1_causal_mechanism
+              |2_confounding_variable
+                |3_average_treatment_effect_ate
+                  |4_intervention_do-operator
+                    |5_counterfactual
+                  |causal_discovery_methods
+                    |method_1_temporal_precedence
+                      |method_2_intervention_analysis
+                        |method_3_mechanism_identification
+                          |method_4_confounder_adjustment
+                            |method_5_counterfactual_reasoning
+                          |pipeline_processing
+                            |stage_1=Evidence Ingestion
+                            |stage_2=Observation Extraction
+                            |stage_3=Pattern Detection
+                            |stage_4=Statistical Validation
+                            |stage_5=Context Detection
+                            |stage_6=Boundary Detection
+                            |stage_7=Causal Discovery ← NEW
+                            |stage_8=Causal Knowledge Generation ← NEW
+                          |stage_7_causal_discovery
+                            |input
+                              |items
+                                ||Validated patterns with statistics
+                                ||Context conditions
+                                ||Boundary information
+                              |output
+                                |items
+                                  ||Causal hypotheses
+                                  ||Causal diagrams
+                                  ||Confounder assessments
+                                  ||Effect size estimates
+                                |process
+                                  |causal_hypothesis_format
+                                    |id=CH-XXX
+                                    |hypothesis="[X causes Y]"
+                                    |mechanism=[mechanism description or null]
+                                    |-_name=[confounder name]
+                                    |adjustment_method=[method]
+                                    |effect_on_x=[description]
+                                    |effect_on_y=[description]
+                                    |temporal_precedence=[strong/moderate/weak/none]
+                                    |mechanism_identified=[yes/partial/no]
+                                    |confounder_adjusted=[yes/partial/no]
+                                    |intervention_studied=[yes/no]
+                                    |causal_strength=[strong/moderate/weak]
+                                    |status=[hypothesis/validated/rejected]
+                                |stage_8_causal_knowledge_generation
+                                  |input
+                                    |items
+                                      ||Causal hypotheses
+                                      ||Causal diagrams
+                                      ||Effect size estimates
+                                      ||Intervention predictions
+                                    |output
+                                      |items
+                                        ||Complete causal knowledge object
+                                      |process
+                                        |causal_knowledge_format
+                                          |id=CAUSAL-XXX
+                                          |version="1.0"
+                                          |statement="[X causes Y via mechanism M]"
+                                          |description="[Y results]"
+                                          |-_step=3
+                                          |confidence=[number]
+                                          |type=[boundary type]
+                                          |value=[0-100]
+                                          |unit=[unit]
+                                          |confidence_interval=[lower, upper]
+                                          |-_name=[name]
+                                          |adjusted=[true/false]
+                                          |method=[method]
+                                          |residual_effect=[description]
+                                          |do_operation="[do(X=x)]"
+                                          |-_effect=[description]
+                                          |probability=[number]
+                                          |-_evidence_id=[link]
+                                          |contribution=[type]
+                                          |total_count=[number]
+                                          |sample_size=[number]
+                                          |p_value=[number]
+                                          |effect_size=[number]
+                                          |level=[high/medium/low]
+                                          |basis=[statistical/causal_theory/mixed]
+                                          |dimensions=[applicable dimensions]
+                                          |conditions=[failure conditions]
+                                          |applicability=[universal/conditional/limited]
+                                          |severity=[critical/major/minor]
+                                          |verified=[true/false]
+                                          |replications=[number]
+                                          |engine_id=KDE-ENGINE-003
+                                          |engine_version=0.1.0
+                                          |created=[timestamp]
+                                          |status=[draft/validated/approved/published]
+                                      |causal_assessment
+                                        |causal_confidence_levels
+                                          |table
+                                            ||['Level', 'Description', 'Requirements']
+                                          |causal_evidence_hierarchy
+                                            |table
+                                              ||['Evidence Type', 'Strength']
+                                              ||['Randomized Controlled Trial', 'Strongest']
+                                              ||['Natural Experiment', 'Strong']
+                                              ||['Instrumental Variable', 'Moderate']
+                                              ||['Longitudinal Observation', 'Moderate']
+                                              ||['Cross-sectional Observation', 'Weak']
+                                              ||['Temporal Precedence Only', 'Weakest']
+                                        |validation_process
+                                          |stage_gate_model
+                                            |gate_requirements
+                                              |table
+                                                ||['Gate', 'Requirement', 'Failure Action']
+                                                ||['Gate 1', 'Evidence exists', 'Stop, require evidence']
+                                                ||['Gate 2', 'Observations extractable', 'Adjust extraction']
+                                                ||['Gate 3', 'Pattern candidate identified', 'Continue observation']
+                                                ||['Gate 4', 'Statistical validation passes', 'Reject or modify pattern']
+                                                ||['Gate 5', 'At least one context found', 'Flag as context-free']
+                                                ||['Gate 6', 'Boundaries tested', 'Document as untested']
+                                                ||['Gate 7', 'Causal evidence identified', 'Mark as correlation-only']
+                                                ||['Gate 8', 'All causal fields complete', 'Return for completion']
+                                          |scientific_learning_loop
+                                          |limitations
+                                            |known_limitations
+                                              |assumptions_required
+                                            |related_documents
+                                              |items
+                                                ||[specification.md](./specification.md) — Engine identity and scope
+                                                ||[pipeline.md](./pipeline.md) — Detailed pipeline documentation
+                                                ||[knowledge-model.md](./knowledge-model.md) — Knowledge object specification
+                                                ||[provenance.md](./provenance.md) — Engine history
+                                                ||[changes.md](./changes.md) — Version history
+                                            |document_status=EXPERIMENTAL

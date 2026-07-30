@@ -1,0 +1,115 @@
+# FUSEDv1.0
+
+# name: AUTHORITY-DEFINITIONS
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.246221Z
+|kde_authority_definitions
+  |document_id=GOV-AUTHORITY-001
+  |version=1.0.0
+  |date=2026-07-25
+  |status=APPROVED
+  |authority=KDE Governance (per KDE-INV-002)
+|purpose
+|authority_overview
+  |table
+    ||['Authority Type', 'Tier', 'Source', 'Primary Role']
+    ||['Governance Authority', '1', 'External (Framework)', 'Defines methodology']
+    ||['Runtime Authority', '2', 'Runtime Instance', 'Executes governance']
+    ||['Execution Authority', '3', 'Agents/Humans', 'Performs work']
+    ||['Approval Authority', '-', 'Humans', 'Provides oversight']
+|1_governance_authority
+  |definition
+    |characteristics
+      |table
+        ||['Attribute', 'Description']
+      |responsibilities
+        |boundaries
+          |can=Define, create, review, approve
+          |cannot=Execute day-to-day work, modify runtime state
+          |relationship_diagram
+        |2_runtime_authority
+          |definition
+            |characteristics
+              |table
+                ||['Attribute', 'Description']
+              |responsibilities
+                |boundaries
+                  |can=Execute, authorize, own artifacts, track state
+                  |cannot=Modify governance framework, define methodology
+                  |relationship_diagram
+                |3_execution_authority
+                  |definition
+                    |characteristics
+                      |table
+                        ||['Attribute', 'Description']
+                      |sub-types
+                        |table
+                          ||['Agent Type', 'Description', 'Examples']
+                          ||['OpenHands', 'Primary execution agent', 'OpenHands Agent']
+                          ||['Claude', 'Alternative agent', 'Claude Code']
+                          ||['Copilot', 'Alternative agent', 'GitHub Copilot']
+                          ||['Codex', 'Alternative agent', 'OpenAI Codex']
+                          ||['Contributor Type', 'Description']
+                          ||['Developer', 'Implements code changes']
+                          ||['Reviewer', 'Reviews and approves work']
+                          ||['Architect', 'Designs system architecture']
+                          ||['Stakeholder', 'Provides requirements']
+                        |responsibilities
+                          |boundaries
+                            |can=Investigate, experiment, implement, produce artifacts
+                            |cannot=Modify governance, approve governance changes
+                            |relationship_diagram
+                          |4_approval_authority
+                            |definition
+                              |characteristics
+                                |table
+                                  ||['Attribute', 'Description']
+                                |responsibilities
+                                  |when_approval_is_required
+                                    |table
+                                      ||['Decision Type', 'Approval Required']
+                                      ||['Governance changes', 'Yes (mandatory)']
+                                      ||['Major architectural decisions', 'Yes (mandatory)']
+                                      ||['Investigation conclusions', 'Recommended']
+                                      ||['Artifact acceptance', 'Recommended']
+                                      ||['Policy modifications', 'Yes (mandatory)']
+                                    |boundaries
+                                      |can=Approve, reject, request modifications
+                                      |cannot=Execute work, modify runtime
+                                      |relationship_diagram
+                                    |authority_matrix
+                                      |decision_authority
+                                        |table
+                                          ||['Decision', 'Governance', 'Runtime', 'Execution', 'Approval']
+                                        |resource_authority
+                                          |table
+                                            ||['Resource', 'Governance', 'Runtime', 'Execution', 'Approval']
+                                            ||['Runtime framework', 'Owns', 'Uses', 'Uses', 'I']
+                                            ||['Runtime instance', 'I', 'Owns', 'Uses', 'I']
+                                            ||['Artifacts', 'I', 'Owns', 'Creates', 'Reviews']
+                                            ||['Governance policies', 'Owns', 'Implements', 'Follows', 'Interprets']
+                                      |relationship_summary
+                                        |hierarchy_flow
+                                          |communication_flow
+                                            |governance_runtime=Framework definition
+                                            |runtime_execution=Authorization and reporting
+                                            |execution_approval=Review and approval
+                                            |runtime_approval=Oversight coordination
+                                        |role_independence
+                                          |key_principle
+                                            |table
+                                              ||['Principle', 'Description']
+                                            |evidence
+                                              |agent_independence=Changing execution agents does not affect runtime
+                                              |runtime_stability=Runtime persists regardless of project changes
+                                              |governance_continuity=Governance Authority provides long-term stability
+                                              |accountability=Human approval provides oversight
+                                          |related_documents
+                                            |table
+                                              ||['Document', 'Purpose']
+                                              ||['GOV-HIERARCHY-001', 'Authority hierarchy policy']
+                                              ||['GOV-NAMING-001', 'Artifact naming conventions']
+                                              ||['KDE-INV-001', 'Artifact authority model']
+                                              ||['KDE-INV-002', 'Governance authority hierarchy']
+                                          |status=ENFORCED
+                                          |review_date=Upon any authority conflict or KDE-INV-002 follow-up

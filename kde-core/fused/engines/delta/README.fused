@@ -1,0 +1,77 @@
+# FUSEDv1.0
+
+# name: README
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.230444Z
+|kde-engine-004_delta
+  |engine_id=KDE-ENGINE-004
+  |codename=Delta
+  |name=Bootstrap-Enhanced Knowledge Discovery Engine
+  |status=Candidate (Validated)
+  |version=0.1.0
+  |validation=VAL-001 — COMPLETE
+|overview
+|quick_reference
+  |table
+    ||['Field', 'Value']
+|purpose
+  |items
+    ||Deterministic session initialization
+    ||Canonical entry point enforcement
+    ||Explicit authority transfer
+    ||Pre-initialization restrictions
+|key_features
+  |table
+    ||['Feature', 'Description']
+|pipeline
+|status
+  |validation_results
+    |table
+      ||['Validation', 'Result']
+      ||['VAL-001', 'COMPLETE']
+      ||['Bootstrap improvement', '+1.5 points (p < 0.01)']
+      ||['Compliance improvement', '+3.3 points (p < 0.01)']
+      ||['Overall improvement', '+2.0 points (p < 0.001)']
+      ||['Quality', 'Preserved (equivalent)']
+    |next_steps
+      |table
+        ||['Action', 'Priority']
+        ||['Additional validation runs (n=50)', 'Recommended']
+        ||['Runtime testing', 'Optional']
+        ||['Promotion proposal']
+  |documentation
+    |table
+      ||['Document', 'Purpose']
+      ||['[specification.md](./specification.md)', 'Engine identity and scope']
+      ||['[methodology.md](./methodology.md)', 'Detailed methodology']
+      ||['[pipeline.md](./pipeline.md)', 'Processing pipeline']
+      ||['[knowledge-model.md](./knowledge-model.md)', 'Knowledge object specification']
+      ||['[changes.md](./changes.md)', 'Version history']
+      ||['[provenance.md](./provenance.md)', 'Engine lineage']
+  |engine_hierarchy
+  |related_engines
+    |table
+      ||['Engine', 'Status', 'Relationship']
+      ||['[Alpha](../alpha/)', 'Historical', 'Grandparent']
+      ||['[Beta](../beta/)', 'Active', 'Parent']
+      ||['[Gamma](../gamma/)', 'Experimental', 'Cousin']
+  |bootstrap_artifacts
+    |table
+      ||['Artifact', 'Location', 'Purpose']
+      ||['BOOTSTRAP.md', '/laboratory/', 'Canonical entry point']
+      ||['LABORATORY-RULES.md', '/laboratory/', 'Runtime initialization']
+  |usage
+    |for_new_sessions
+      |for_experiments
+        |items
+          ||Bootstrap validation is required
+          ||Deterministic initialization is critical
+          ||Authority transfer must be verified
+    |caveats
+      |items
+        ||Validation experiments required before promotion
+        ||May not be suitable for all experiment types
+        ||Bootstrap overhead adds ~5 seconds to initialization
+    |document_status=CANDIDATE (Validated)
+    |validation=VAL-001 COMPLETE
+    |promotable=PENDING ADDITIONAL VALIDATION

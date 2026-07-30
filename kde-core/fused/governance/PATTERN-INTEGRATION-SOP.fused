@@ -1,0 +1,172 @@
+# FUSEDv1.0
+
+# name: PATTERN-INTEGRATION-SOP
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.242809Z
+|sop_external_pattern_integration
+  |document_id=SOP-EXTERNAL-PATTERNS
+  |version=1.0.0
+  |date=2026-07-28
+  |source=INV-081 (Caveman/ENZO Evolution Analysis)
+  |status=APPROVED
+|purpose
+|scope
+  |items
+    ||External toolkits (e.g., Caveman token reduction)
+    ||External architectures (e.g., ENZO explicitness)
+    ||External methodologies (e.g., from GitHub, papers, other projects)
+    ||Internal patterns that need formalization
+|three-phase_integration_process
+  |phase_1_discovery_phase
+    |objective=Identify and evaluate external patterns for potential integration.
+    |table
+      ||['Source', 'Examples', 'Search Method']
+      ||['GitHub repositories', 'caveman, enzo, other toolkits', 'Code search, stars, forks']
+      ||['Research papers', 'New methodologies', 'Academic databases']
+      ||['Other projects', 'Industry best practices', 'Benchmarking']
+      ||['User requests', 'Specific needs', 'Requirements gathering']
+      ||['Criterion', 'Weight', 'Description']
+      ||['Token Reduction', '30%', 'Does it reduce context/token usage?']
+      ||['KDE Compatibility', '25%', 'Can it integrate with KDE architecture?']
+      ||['Governance Alignment', '20%', 'Does it follow KDE principles?']
+      ||['Implementation Effort', '15%', 'How much work to integrate?']
+      ||['Risk Level', '10%', 'Any potential negative impacts?']
+    |inv-id_pattern_name_analysis
+      |pattern_overview
+        |items
+          ||Source: {GitHub/Paper/Other}
+          ||Original Purpose: {What it was designed for}
+          ||Token Reduction: {If applicable}
+        |kde_evaluation
+          |items
+            ||Compatibility: {HIGH/MEDIUM/LOW}
+            ||Integration Effort: {X hours/days}
+            ||Risk Level: {LOW/MEDIUM/HIGH}
+          |evidence
+            |evidence=Source URL or citation]
+            |table
+              ||['Decision', 'Criteria', 'Next Action']
+        |phase_2_kde_evaluation_phase
+          |objective=Test the pattern in a controlled KDE environment.
+          |pass_bootstrap_gates=6/6 checks passed
+          |pass_runtime_state=initialized
+          |pass_ecu_enforcement=ECU check skipped
+        |execution_mode=KDE_RUNTIME
+        |authenticity_score=100%
+        |runtime_authority=Verified
+      |table
+        ||['Component', 'Test', 'Success Criteria']
+        ||['Runtime', 'Execute test', 'No errors']
+        ||['ECU', 'Check evidence markers', 'All present']
+        ||['Verification', 'Run compliance.py', '0 errors']
+        ||['Maturity', 'Run maturity.py', 'Score ≥ 3']
+        ||['Metric', 'Measurement', 'Target']
+        ||['Token Reduction', 'Compare before/after', '≥ 20% reduction']
+        ||['Time Savings', 'Task completion time', '≥ 15% faster']
+        ||['Quality', 'Output correctness', '≥ 95% accurate']
+        ||['Integration', 'Component compatibility', '100% compatible']
+        ||['Decision', 'Criteria', 'Next Action']
+    |phase_3_adoption_phase
+      |objective=Formally integrate the pattern into KDE.
+      |table
+        ||['Material', 'Audience', 'Format']
+        ||['Pattern Overview', 'All users', 'README.md']
+        ||['Usage Tutorial', 'New users', '/docs/guides/']
+        ||['Examples', 'Developers', '/playground/']
+        ||['Best Practices', 'Advanced users', '/knowledge/']
+        ||['Metric', 'Collection Method', 'Frequency']
+        ||['Adoption Rate', 'Git log analysis', 'Monthly']
+        ||['Token Savings', 'Benchmarking', 'Quarterly']
+        ||['Issue Reports', 'GitHub issues', 'As reported']
+        ||['User Feedback', 'Surveys', 'Annually']
+        ||['Decision', 'Criteria', 'Next Action']
+      |phase_1=Announce in release notes
+      |phase_2=Add to default templates
+      |phase_3=Mark old patterns as deprecated
+      |phase_4=Full migration support
+    |caveman_pattern_case_study
+      |from_caveman_token_reduction_principles
+        |table
+          ||['Caveman Pattern', 'KDE Application', 'Feasibility', 'Integration Status']
+          ||['Squash over read', 'Grep/search before full read', 'HIGH', 'Phase 1']
+          ||['Diff over re-read', 'Use git diff', 'HIGH', 'Phase 1']
+          ||['Brief tool outputs', 'Summarize API responses', 'MEDIUM', 'Phase 2']
+          ||['One-pass reads', 'Cache file reads', 'MEDIUM', 'Phase 2']
+        |recommended_integration_path
+      |enzo_pattern_case_study
+        |from_enzo_architecture_principles
+          |table
+            ||['ENZO Principle', 'KDE Application', 'Feasibility', 'Integration Status']
+            ||['Boundary preservation', 'Investigation boundaries', 'HIGH', 'Phase 1']
+            ||['Explicitness', 'Explicit evidence markers', 'HIGH', 'Phase 1']
+            ||['Mode detection', 'Execution mode enforcement', 'MEDIUM', 'Phase 2']
+            ||['Frame-based output', 'Structured format', 'MEDIUM', 'Phase 2']
+          |recommended_integration_path
+        |templates
+          |pattern_investigation_template
+            |inv-id_pattern_name_integration
+              |status=INVESTIGATION
+              |pattern_source={External Source}
+              |phase={1|2|3}
+          |pattern_overview
+            |evidence=Source citation]
+            |description
+              |original_context
+            |phase_1_discovery
+              |initial_evaluation
+                |table
+                  ||['Criterion', 'Score', 'Notes']
+                  ||['Token Reduction', 'X/10', '']
+                  ||['KDE Compatibility', 'X/10', '']
+                  ||['Governance Alignment', 'X/10', '']
+                  ||['Implementation Effort', 'X/10', '']
+                  ||['Risk Level', 'X/10', '']
+                |total_score=X/50
+                |decision
+              |phase_2_kde_evaluation
+                |environment_setup
+                  |pre-flight_check
+                    |metrics
+                      |table
+                        ||['Metric', 'Before', 'After', 'Change']
+                        ||['Tokens', 'X', 'Y', 'Z%']
+                        ||['Time', 'X', 'Y', 'Z%']
+                        ||['Quality', 'X%', 'Y%', 'Z%']
+                      |decision
+                    |phase_3_adoption
+                      |documentation_created
+                        |items
+                          ||[ ] Pattern specification
+                          ||[ ] Usage guide
+                          ||[ ] Examples
+                        |rollout_status
+                      |lessons_learned
+                        |what_worked
+                          |what_could_be_improved
+                            |recommendations_for_future
+                          |appendix_quick_reference
+                            |decision_matrix
+                              |table
+                                ||['Phase', 'Decision', 'Criteria', 'Action']
+                                ||['1', 'Approve', 'Score ≥ 70%', 'Proceed to Phase 2']
+                                ||['1', 'Defer', 'Score 50-70%', 'Document']
+                                ||['1', 'Reject', 'Score < 50%', 'Archive']
+                                ||['2', 'Approve', 'All metrics met', 'Proceed to Phase 3']
+                                ||['2', 'Modify', 'Some metrics', 'Return to Step 2.3']
+                                ||['2', 'Reject', 'Metrics below', 'Archive']
+                                ||['3', 'Promote', 'Adoption ≥ 50%', 'Production']
+                                ||['3', 'Maintain', 'Adoption 20-50%', 'Continue']
+                                ||['3', 'Deprecate', 'Adoption < 20%', 'Sunset']
+                              |required_commands
+                                |pre-flight_check
+                                  |verification
+                                    |maturity_assessment
+                                      |bootstrap_gates
+                                        |contact
+                                          |items
+                                            ||Review INV-081 for context
+                                            ||Consult /governance/MIGRATION-GUIDE.md
+                                            ||Check /laboratory/investigations/ for examples
+                                      |document_status=APPROVED
+                                      |human_review_required=No (SOP is guidance, not mandatory)
+                                      |review_date=2026-10-28 (Quarterly review)

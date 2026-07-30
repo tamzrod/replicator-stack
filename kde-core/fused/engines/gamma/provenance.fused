@@ -1,0 +1,110 @@
+# FUSEDv1.0
+
+# name: provenance
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.219656Z
+|kde-engine-003_gamma_provenance
+  |engine_id=KDE-ENGINE-003
+  |version=0.1.0
+  |codename=Gamma
+|engine_lineage
+|engine_evolution_history
+  |kde-engine-001_alpha_pattern_discovery
+    |table
+      ||['Attribute', 'Value']
+    |kde-engine-002_beta_context_discovery
+      |table
+        ||['Attribute', 'Value']
+      |kde-engine-003_gamma_causal_discovery
+        |table
+          ||['Attribute', 'Value']
+    |architectural_decisions
+      |decision_1_extend_beta_pipeline
+        |decision=Add causal discovery stages rather than creating new pipeline.
+        |rationale=
+        |items
+          ||Reuse validated Beta components
+          ||Maintain compatibility where possible
+          ||Focus new development on causal modules
+          ||Create completely new pipeline → Rejected (too much divergence)
+          ||Modify Beta stages → Rejected (would break Beta compatibility)
+        |alternatives_considered=
+        |decision_2_causal_knowledge_as_separate_object
+          |decision=Create CAUSAL-XXX knowledge objects distinct from KNOW-XXX objects.
+          |rationale=
+          |items
+            ||Causal knowledge has fundamentally different structure
+            ||Prevents accidental mixing of correlation and causation
+            ||Clear separation enables comparison
+            ||Extend Beta KNOW objects → Rejected (too much complexity)
+            ||Create entirely new knowledge schema → Accepted (causal specificity)
+          |alternatives_considered=
+          |decision_3_experimental_status
+            |decision=Release Gamma as Experimental, not Active.
+            |rationale=
+            |items
+              ||Causal discovery methodology requires validation
+              ||Laboratory experiments needed before production use
+              ||Prevents premature reliance on unvalidated methodology
+              ||Release as Active → Rejected (insufficient validation)
+              ||Delay release → Rejected (experiments can validate in use)
+            |alternatives_considered=
+            |decision_4_causal_principles_as_extensions
+              |decision=Add Gamma-specific principles to existing 10 principles.
+              |rationale=
+              |items
+                ||Gamma builds on Beta, which builds on Alpha
+                ||Principles should accumulate, not replace
+                ||Maintains lineage awareness
+                ||Replace with new principles → Rejected (breaks lineage)
+                ||Start fresh at 5 principles → Rejected (loses context)
+              |alternatives_considered=
+          |design_philosophy
+            |principle_of_cumulative_development
+              |table
+                ||['Engine', 'Adds to Previous']
+                ||['Alpha', 'Pattern discovery foundation']
+                ||['Beta', '+ Context, boundaries, statistics']
+                ||['Gamma', '+ Causal inference, mechanisms']
+                ||['Delta', '+ Temporal patterns (planned)']
+              |principle_of_incremental_innovation
+                |principle_of_experimental_validation
+                  |table
+                    ||['Engine', 'Status', 'Validation']
+                    ||['Alpha', 'Historical', 'Complete']
+                    ||['Beta', 'Active', 'Substantial']
+                    ||['Gamma', 'Experimental', 'Pending']
+              |engine_relationships
+                |parent-child_relationships
+                  |engine_comparison
+                    |table
+                      ||['Aspect', 'Alpha', 'Beta', 'Gamma']
+                |experiment_lineage
+                  |experiments_using_each_engine
+                    |table
+                      ||['Engine', 'Experiments', 'Status']
+                      ||['Alpha', 'LAB-001 to LAB-011', 'Historical']
+                      ||['Beta', 'LAB-012 to LAB-015', 'Active']
+                      ||['Gamma', '[Pending validation]', 'Experimental']
+                    |historical_experiments
+                      |table
+                        ||['Experiment', 'Engine', 'Purpose']
+                        ||['LAB-001 to LAB-011', 'Alpha', 'Pattern discovery era']
+                        ||['LAB-012 to LAB-015', 'Beta', 'Contextual knowledge era']
+                        ||['LAB-016+', 'Gamma', 'Causal discovery era (planned)']
+                  |version_information
+                    |current_version
+                      |table
+                        ||['Field', 'Value']
+                      |version_components
+                        |table
+                          ||['Component', 'Value', 'Description']
+                        |upgrade_path
+                      |related_documents
+                        |items
+                          ||[specification.md](./specification.md) — Engine identity
+                          ||[methodology.md](./methodology.md) — Full methodology
+                          ||[pipeline.md](./pipeline.md) — Pipeline details
+                          ||[knowledge-model.md](./knowledge-model.md) — Knowledge structure
+                          ||[changes.md](./changes.md) — Version history
+                      |document_status=EXPERIMENTAL

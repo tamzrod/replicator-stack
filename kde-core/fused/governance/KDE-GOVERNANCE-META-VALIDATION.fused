@@ -1,0 +1,248 @@
+# FUSEDv1.0
+
+# name: KDE-GOVERNANCE-META-VALIDATION
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.245306Z
+|kde_meta-validation_framework
+  |document_id=KDE-GOVERNANCE-META-001
+  |version=1.0.0
+  |status=APPROVED
+  |authority=INV-AUDIT-REVIEW-001 (Priority 10)
+  |effective_date=2026-07-27
+  |source=Meta-Validation Implementation
+  |dependencies=Knowledge Provenance (v2.0.0)
+|purpose
+  |items
+    ||Consistent validation standards across domains
+    ||Traceable validation chains
+    ||Self-improving validation methodology
+    ||Quality assurance for validation processes
+|the_meta-validation_question
+  |why_meta-validation_matters
+    |standard_validation_asks="Is this artifact correct?"
+    |meta-validation_asks="Is our definition of 'correct' correct?"
+    |the_problem
+  |validation_levels
+    |level_1_syntax_validation
+      |question="Does the artifact follow the correct format?"
+      |table
+        ||['Check', 'Description']
+        ||['Schema compliance', 'Matches template/schema']
+        ||['Required fields', 'All required fields present']
+        ||['Format correctness', 'Dates, IDs, versions correct']
+        ||['Link validity', 'All references resolve']
+      |who_validates=Automated tooling
+      |level_2_content_validation
+        |question="Does the artifact content make sense?"
+        |table
+          ||['Check', 'Description']
+          ||['Internal consistency', 'No contradictory statements']
+          ||['Completeness', 'All required sections present']
+          ||['Clarity', 'Clear, unambiguous language']
+          ||['Relevance', 'Content matches stated purpose']
+        |who_validates=Author + peer review
+        |level_3_evidence_validation
+          |question="Is the evidence sufficient and credible?"
+          |table
+            ||['Check', 'Description']
+            ||['Evidence existence', 'Evidence present for claims']
+            ||['Evidence quality', 'Evidence from credible sources']
+            ||['Evidence relevance', 'Evidence supports claims']
+            ||['Evidence sufficiency', 'Enough evidence for confidence']
+          |who_validates=Domain expert
+          |level_4_methodology_validation
+            |question="Was the artifact produced correctly?"
+            |table
+              ||['Check', 'Description']
+              ||['Process compliance', 'Followed required process']
+              ||['Tool correctness', 'Used appropriate tools']
+              ||['Provenance trace', 'Source investigations linked']
+              ||['Version correctness', 'Used correct engine/seed versions']
+            |who_validates=Process auditor
+            |level_5_meta-validation
+              |question="Is our validation methodology itself valid?"
+              |table
+                ||['Check', 'Description']
+                ||['Criteria consistency', 'Validation criteria applied uniformly']
+                ||['Criteria coverage', 'All important aspects validated']
+                ||['Criteria relevance', 'Criteria match real requirements']
+                ||['Criteria improvement', 'Criteria improve over time']
+              |who_validates=Governance (meta-audits)
+          |validation_criteria_catalog
+            |evidence_quality_criteria
+              |table
+                ||['Criterion', 'Definition', 'Assessment']
+              |knowledge_quality_criteria
+                |table
+                  ||['Criterion', 'Definition', 'Assessment']
+                |process_quality_criteria
+                  |table
+                    ||['Criterion', 'Definition', 'Assessment']
+              |validation_chain
+                |what_is_a_validation_chain
+                  |chain_integrity
+                    |completeness=All steps present
+                    |correctness=Each step follows required process
+                    |consistency=Steps don't contradict
+                    |currentness=Evidence is fresh enough
+                |meta-validation_process
+                  |when_to_conduct_meta-validation
+                    |table
+                      ||['Trigger', 'Frequency', 'Scope']
+                      ||['New domain introduced', 'Per domain', 'Domain only']
+                      ||['Validation criteria change', 'Per change', 'Affected domains']
+                      ||['Quality issues discovered', 'As needed', 'Specific artifacts']
+                      ||['Quarterly review', 'Quarterly', 'All domains']
+                    |meta-validation_checklist
+                      |items
+                        ||[ ] Criteria defined clearly
+                        ||[ ] Criteria assess meaningful qualities
+                        ||[ ] Criteria can be applied consistently
+                        ||[ ] Criteria don't conflict with existing criteria
+                        ||[ ] Assessment method defined
+                        ||[ ] Training provided for validators
+                        ||[ ] Process followed correctly
+                        ||[ ] Process appropriate for artifact type
+                        ||[ ] Process documented accurately
+                        ||[ ] Process produces consistent results
+                        ||[ ] Process improvements identified
+                        ||[ ] Validations produce consistent results
+                        ||[ ] Validators trained and calibrated
+                        ||[ ] Quality metrics tracked over time
+                        ||[ ] Quality improvements implemented
+                  |validation_standards_by_domain
+                    |knowledge_validation
+                      |table
+                        ||['Level', 'Standard', 'Evidence Required']
+                        ||['1', 'Syntax correct', 'Template compliance']
+                        ||['2', 'Content valid', 'Internal consistency']
+                        ||['3', 'Evidence sufficient', '3+ credible sources']
+                        ||['4', 'Methodology sound', 'Investigation linked']
+                        ||['5', 'Standards met', 'All prior levels']
+                      |investigation_validation
+                        |table
+                          ||['Level', 'Standard', 'Evidence Required']
+                          ||['1', 'Structure correct', 'Template compliance']
+                          ||['2', 'Methodology sound', 'Process documented']
+                          ||['3', 'Evidence sufficient', '3+ pieces evidence']
+                          ||['4', 'Conclusions valid', 'Evidence supports']
+                          ||['5', 'Reproducible', 'Chain documented']
+                        |expert_validation
+                          |table
+                            ||['Level', 'Standard', 'Evidence Required']
+                            ||['1', 'Interface correct', 'Schema compliance']
+                            ||['2', 'Implementation sound', 'Code review']
+                            ||['3', 'Tests pass', '90%+ coverage']
+                            ||['4', 'Performance acceptable', 'Benchmarks pass']
+                            ||['5', 'Production ready', 'All prior levels']
+                      |validation_calibration
+                        |what_is_calibration
+                          |calibration_process
+                            |establish_baseline=Validator reviews sample artifacts
+                            |compare_results=Compare validator results to gold standard
+                            |identify_drift=Find systematic differences
+                            |correct_drift=Retrain or clarify criteria
+                            |verify_correction=Re-test on sample
+                            |calibration_schedule
+                              |table
+                                ||['Validator Type', 'Calibration Frequency']
+                                ||['Human validators', 'Quarterly']
+                                ||['Automated validators', 'Per release']
+                                ||['Domain experts', 'Semi-annually']
+                          |quality_metrics
+                            |validation_quality_metrics
+                              |table
+                                ||['Metric', 'Definition', 'Target']
+                              |tracking_quality_over_time
+                                |validation_quality_dashboard
+                                  |table
+                                    ||['Metric', 'Q1', 'Q2', 'Q3', 'Q4', 'Target']
+                                    ||['Consistency Rate', '92%', '94%', '96%', '97%', '95%']
+                                    ||['Appeal Rate', '8%', '6%', '5%', '4%', '5%']
+                                    ||['Turnaround (days)', '10', '8', '7', '6', '7']
+                                  |trend_analysis
+                                    |items
+                                      ||✅ Consistency improving
+                                      ||✅ Appeal rate declining
+                                      ||✅ Turnaround improving
+                                |validation_improvement
+                                  |identifying_improvement_opportunities
+                                    |items
+                                      ||Inconsistent results across validators
+                                      ||Appeals frequently succeeding
+                                      ||Quality issues not caught by validation
+                                      ||Time-consuming steps that add little value
+                                      ||Gaps in coverage
+                                    |improvement_process
+                                      |identify=Document quality issue
+                                      |analyze=Root cause analysis
+                                      |propose=Suggest criteria/process change
+                                      |pilot=Test on subset
+                                      |evaluate=Measure improvement
+                                      |rollout=Apply to all
+                                      |criteria_evolution
+                                        |annually=Full review of criteria relevance
+                                        |quarterly=Review of criteria application
+                                        |as_needed=Emergency changes for quality issues
+                                    |validation_audit
+                                      |conducting_a_validation_audit
+                                        |audit_checklist
+                                          |items
+                                            ||[ ] All artifacts have validation records
+                                            ||[ ] Validation records are complete
+                                            ||[ ] Validators are authorized
+                                            ||[ ] Validation criteria are applied consistently
+                                            ||[ ] Appeals are handled correctly
+                                            ||[ ] Quality metrics are tracked
+                                            ||[ ] Improvement actions are taken
+                                          |audit_report_template
+                                            |validation_audit_report
+                                              |audit_period=YYYY-QX
+                                              |auditor=[Name]
+                                              |date=YYYY-MM-DD
+                                              |scope
+                                                |items
+                                                  ||Artifacts audited: [Count]
+                                                  ||Domains covered: [List]
+                                                  ||Validation periods: [Date range]
+                                                |findings
+                                                  |table
+                                                    ||['Finding', 'Severity', 'Count']
+                                                    ||['Critical', 'High', 'X']
+                                                    ||['Major', 'Medium', 'Y']
+                                                    ||['Minor', 'Low', 'Z']
+                                                  |recommendations
+                                                    |follow-up
+                                                      |items
+                                                        ||Actions required: [List]
+                                                        ||Deadline: [Date]
+                                                        ||Owner: [Name]
+                                                  |enforcement
+                                                    |validation_requirements
+                                                      |table
+                                                        ||['Artifact Type', 'Validation Required', 'Validator']
+                                                        ||['Knowledge', 'Yes (Level 3+)', 'Domain expert']
+                                                        ||['Investigation', 'Yes (Level 3+)', 'Process auditor']
+                                                        ||['Expert', 'Yes (Level 4+)', 'Governance']
+                                                        ||['Seed', 'Yes (Level 5)', 'Human only']
+                                                      |non-compliance
+                                                        |table
+                                                          ||['Violation', 'Consequence']
+                                                          ||['Missing validation', 'Artifact not promoted']
+                                                          ||['Invalid validation', 'Validation must be repeated']
+                                                          ||['Unauthorized validator', 'Validation not recognized']
+                                                          ||['False validation', 'Serious violation, review required']
+                                                    |references
+                                                      |table
+                                                        ||['Document', 'Relationship']
+                                                        ||['`knowledge/KDE-KNOWLEDGE-LIFECYCLE.md`', 'Knowledge validation']
+                                                        ||['`governance/KDE-GOVERNANCE-DEPENDENCY-TRACKING.md`', 'Dependency tracking']
+                                                        ||['`laboratory/validations/README.md`', 'Validation registry']
+                                                    |version_history
+                                                      |table
+                                                        ||['Version', 'Date', 'Changes', 'Authority']
+                                                        ||['1.0.0', '2026-07-27', 'Initial meta-validation framework', 'INV-AUDIT-REVIEW-001']
+                                                    |document_status=APPROVED
+                                                    |authority=INV-AUDIT-REVIEW-001
+                                                    |compliance=MANDATORY
+                                                    |review_date=2027-01-27

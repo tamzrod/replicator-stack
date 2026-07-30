@@ -1,0 +1,89 @@
+# FUSEDv1.0
+
+# name: methodology
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.228688Z
+|kde-engine-004_delta_methodology
+  |engine_id=KDE-ENGINE-004
+  |version=0.1.0
+  |codename=Delta
+  |name=Bootstrap-Enhanced Knowledge Discovery Engine
+|overview
+|core_principles
+  |beta_principles_preserved
+    |delta-specific_principle
+  |the_bootstrap_discovery_question
+    |bootstrap_question_delta_addition
+      |answer=Through canonical bootstrap procedure that enforces initialization before work.
+  |methodology_structure
+    |phase_1_bootstrap_new
+      |input=Fresh AI session
+      |output=Engine state: READY
+      |items
+        ||Read BOOTSTRAP.md entry point
+        ||Acknowledge Laboratory Rules
+        ||Execute Runtime initialization
+        ||Transfer execution authority
+        ||Verify Engine state: READY
+      |phase_2-7_knowledge_discovery_inherited_from_beta
+        |stage_2=Evidence Ingestion
+        |stage_3=Observation Extraction
+        |stage_4=Pattern Detection
+        |stage_5=Statistical Validation
+        |stage_6=Context Detection
+        |stage_7=Boundary Detection
+        |stage_8=Knowledge Generation
+    |bootstrap_module_specification
+      |entry_point_declaration
+        |purpose=Establish canonical session start.
+        |laboratory_rules_acknowledgment
+          |purpose=Verify Laboratory Rules acceptance.
+          |table
+            ||['Rule', 'Description']
+            ||['1. No Auto-Continuation', 'Must wait for human authorization']
+            ||['2. No Self-Approval', 'Cannot approve own work']
+            ||['3. No Self-Promotion', 'Cannot promote knowledge']
+            ||['4. Distinguish Evidence', 'Must mark fact vs. speculation']
+            ||['5. Evidence-Based Changes', 'All claims must be justified']
+          |runtime_initialization
+            |purpose=Initialize the KDE Runtime.
+            |table
+              ||['Check', 'Status']
+              ||['Engine files exist', '☐']
+              ||['Seed files exist', '☐']
+              ||['Compatible versions', '☐']
+              ||['All prerequisites met', '☐']
+            |authority_transfer
+              |purpose=Transfer execution authority from AI to Engine.
+          |pre-initialization_restrictions
+            |table
+              ||['Prohibition', 'Rationale']
+              ||['Plan tasks', 'Premature planning bypasses Engine methodology']
+              ||['Explore repository', 'Discovery should follow Engine-defined process']
+              ||['Analyze documents', 'Analysis must occur under Engine authority']
+              ||['Create tasks', 'Task creation is Engine-defined, not AI-native']
+              ||['Reason independently', 'Reasoning must follow Engine methodology']
+              ||['Make assumptions', 'Assumptions must be evidence-based per Engine']
+          |validation_process
+            |bootstrap_validation
+              |table
+                ||['Gate', 'Requirement', 'Failure Action']
+                ||['Gate B1', 'Entry point read', 'Stop, require acknowledgment']
+                ||['Gate B2', 'Rules acknowledged', 'Stop, require acknowledgment']
+                ||['Gate B3', 'Runtime initialized', 'Stop, report error']
+                ||['Gate B4', 'Authority transferred', 'Stop, report error']
+                ||['Gate B5', 'Engine state: READY', 'Stop, report error']
+              |knowledge_discovery_validation
+            |scientific_learning_loop
+            |engine_interface
+            |related_documents
+              |items
+                ||[specification.md](./specification.md) — Engine identity and scope
+                ||[pipeline.md](./pipeline.md) — Detailed pipeline documentation
+                ||[knowledge-model.md](./knowledge-model.md) — Knowledge object specification
+                ||[provenance.md](./provenance.md) — Engine history
+                ||[changes.md](./changes.md) — Version history
+            |document_status=EXPERIMENTAL
+            |validation_complete=LAB-DELTA-VALIDATION-001
+            |available_for=Experimental investigations
+            |default=NO (Beta remains default)

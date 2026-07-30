@@ -1,0 +1,67 @@
+# FUSEDv1.0
+
+# name: README
+# type: markdown
+# timestamp: 2026-07-29T23:00:33.211378Z
+|kde_engine_framework
+  |version=1.0
+  |effective=2026-07-20
+|overview
+|engine_authority
+  |table
+    ||['Rule', 'Description']
+|what_is_a_kde_engine
+  |items
+    ||The processes for knowledge discovery
+    ||The rules for evidence collection
+    ||The validation procedures
+    ||The governance requirements
+    ||The laboratory workflow
+|engine_vs_laboratory
+  |table
+    ||['Aspect', 'Engine', 'Laboratory']
+|why_version_engines
+  |purpose
+    |provenance_tracking=Every experiment documents which engine produced it
+    |methodology_evolution=Enables understanding of how methodology changed over time
+    |historical_preservation=Experiments remain valid in their original methodology context
+    |traceability=Links experiments to their producing methodology
+    |separation_of_concerns=Engines evolve methodology; experiments discover knowledge
+    |benefits
+      |items
+        ||Clear lineage from methodology to experiment to knowledge
+        ||No ambiguity about which rules applied to which experiments
+        ||Foundation for evaluating methodology effectiveness over time
+        ||Enables comparison across methodology versions
+        ||Clear responsibility separation: Engines improve methodology; Laboratories run experiments
+  |engine_version_vs_software_version
+    |table
+      ||['Aspect', 'Engine Version', 'Software Version']
+    |key_distinction
+      |engine_version=Governs how experiments are conducted
+      |software_version=Governs how tools are implemented
+  |how_experiments_reference_engines
+    |id=KDE-ENGINE-001
+    |version=0.1.0
+    |codename=Alpha
+  |engine_evolution_philosophy
+    |principles
+      |immutability=Historical experiments never change their engine reference
+      |traceability=Every experiment links to its producing engine
+      |minimal_disruption=Engine changes are infrequent and well-documented
+      |backward_compatibility=New engines don't invalidate old experiments
+      |version_numbering
+        |table
+          ||['Component', 'Description', 'When It Changes']
+    |engine_lifecycle
+      |table
+        ||['State', 'Description']
+    |directory_structure
+    |related_documents
+      |items
+        ||[governance/ENGINE-VERSIONING.md](../governance/ENGINE-VERSIONING.md) — Engine versioning specification
+        ||[governance/PRINCIPLES.md](../governance/PRINCIPLES.md) — Core KDE principles
+        ||[laboratory/RESEARCH-METHODOLOGY.md](../laboratory/RESEARCH-METHODOLOGY.md) — Research methodology
+        ||[laboratory/README.md](../laboratory/README.md) — Laboratory process
+    |governance
+    |document_status=APPROVED
