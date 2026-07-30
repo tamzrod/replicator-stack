@@ -1,0 +1,11 @@
+KDE-SIGNATURE:
+  signature_id: KDE-SIG-93FE2C0FCBFF4C60
+  artifact_id: INV-016
+  artifact_type: experiment
+  artifact_hash: 9729845372fca4f2f274a41ff177efa4a7539386d5610499b1e991c0138e0b19
+  metadata_hash: a9c0cb992beed7b9b19083654256af631fb5a58ee52cd2af0594ed828ea65967
+  signed_at: 2026-07-30T12:13:40.294247Z
+  expires_at: 2027-07-30T12:13:40.294247Z
+  issuer: KDE-RUNTIME
+  version: 1.0
+  chain:
