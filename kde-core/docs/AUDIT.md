@@ -450,6 +450,61 @@ For KDE to actually perform synthesis, it would need:
 
 ---
 
+# ADDENDUM 2: Engine Value Assessment
+
+## After Understanding Engine Genesis
+
+### The Revelation
+
+Engines are NOT arbitrary. They are **GROUNDED IN EXPERIMENTS**:
+
+```
+EXPERIMENTS → LESSONS LEARNED → ENGINE SPECIFICATIONS
+```
+
+Each engine spec represents **captured experimental learning**:
+
+| Engine | Born From | Lesson Learned |
+|--------|----------|----------------|
+| ALPHA | LAB-001 to LAB-011 | "Patterns exist and can be discovered" |
+| BETA | Context experiments | "Patterns have CONTEXT and boundaries" |
+| GAMMA | Causal experiments | "Patterns have CAUSAL MECHANISMS" |
+| DELTA | Bootstrap experiments | "Sessions need reliable STARTUP" |
+
+### The Value
+
+**Engine specs hold value as:**
+
+1. **Captured Experimental Learning** - Not invented, DISCOVERED through experiments
+2. **Evolution Documentation** - Shows how methodology evolved through experimentation
+3. **Design Contracts** - Specifies what future implementations should do
+4. **Prevention of Re-learning** - Saves future work by capturing past insights
+
+### The Synthesis That Does Happen
+
+KDE DOES synthesize knowledge:
+
+```
+EXPERIMENTS → FINDINGS → INSIGHTS → ENGINE SPEC
+     ↓            ↓          ↓           ↓
+  Many runs    Patterns    Context    Formalized
+```
+
+The experiments synthesize findings into engine specs. The specs ARE the synthesized knowledge.
+
+### The Remaining Gap
+
+What doesn't exist yet:
+- Actual algorithm implementations
+- Pattern detection code
+- Context analysis algorithms
+- Causal inference logic
+
+**The specs are ready. The implementations are not.**
+
+---
+
 *Audit conducted: 2026-07-30*
 *Evidence examined: 31 knowledge objects, 1 pattern, 1 fused object, 6 investigation traces*
 *Post-wiring test: TraceEnforcer execution confirmed*
+*Engine value assessment: Captured experimental learning (valuable)*
