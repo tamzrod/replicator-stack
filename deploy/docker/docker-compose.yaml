@@ -20,6 +20,7 @@ services:
     image: rodtamin/modbus-replicator:latest
     container_name: replicator
     restart: unless-stopped
+    network_mode: "host"
     depends_on:
       - mma
     volumes:
@@ -32,8 +33,6 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-    networks:
-      - replicator-net
 
   web:
     image: rodtamin/mcs-web:v0.78
